@@ -644,7 +644,8 @@ class FileAnalyzer:
             
             # Extract model size/variant if possible
             if model_name == "FastVLM":
-                model_path = str(analyzer.model_path)
+                # Get model_path from config or default options
+                model_path = str(analyzer.config.get("model_path") or analyzer.model_info["model_options"]["default"])
                 if "0.5b" in model_path.lower():
                     model_size = "0.5B"
                 elif "1.5b" in model_path.lower():
