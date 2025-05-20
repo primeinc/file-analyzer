@@ -7,7 +7,7 @@
         "documents": [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]
     },
     "tool_options": {
-        "exiftool": ["-json", "-fast"],
+        "exiftool": ["-fast", "-n", "-q"],
         "tesseract": ["--dpi", "300"],
         "rg": ["-i", "--line-number", "--color", "never"]
     },

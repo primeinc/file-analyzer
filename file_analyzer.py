@@ -195,11 +195,19 @@ class FileAnalyzer:
         
     def run_command(self, command, shell=False):
         try:
+            if self.verbose:
+                print(f"Running command: {' '.join(str(c) for c in command)}")
             result = subprocess.run(command, shell=shell, check=True, 
                                   capture_output=True, text=True)
             return result.stdout
         except subprocess.CalledProcessError as e:
-            print(f"Error: {e.stderr}")
+            print(f"Error executing command: {' '.join(str(c) for c in command)}")
+            print(f"Return code: {e.returncode}")
+            print(f"Error output: {e.stderr}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error running command: {' '.join(str(c) for c in command)}")
+            print(f"Error: {str(e)}")
             return None
 
     def extract_metadata(self):
@@ -208,19 +216,67 @@ class FileAnalyzer:
             progress = ProgressIndicator("Extracting metadata")
             progress.start()
         
-        command = ["exiftool", "-json", "-r" if self.path.is_dir() else "", str(self.path)]
-        command = [c for c in command if c]  # Remove empty elements
+        # Get exiftool options from config
+        exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
+        command = ["exiftool", "-json"]
+        
+        # Check if -json is already in the config options to avoid duplication
+        filtered_options = [opt for opt in exiftool_options if opt != "-json"]
+        command.extend(filtered_options)
+        
+        if self.path.is_dir():
+            command.append("-r")
+        command.append(str(self.path))
+        
+        # Add debug information
+        if self.verbose:
+            print(f"Preparing to extract metadata with command: {' '.join(command)}")
         
         output = self.run_command(command)
         
         if not output:
             if self.verbose:
-                progress.stop("Failed")
-            self.results["analyses"]["metadata"] = {"status": "error"}
+                progress.stop("Failed to extract metadata")
+            self.results["analyses"]["metadata"] = {
+                "status": "error",
+                "message": "Command failed or returned no output"
+            }
             return None
             
         try:
-            metadata = json.loads(output)
+            # Try to parse JSON output
+            try:
+                # ExifTool might return warnings before the JSON data
+                # Try to find the start of the JSON data (opening bracket)
+                json_start = output.find('[')
+                if json_start >= 0:
+                    json_data = output[json_start:]
+                    metadata = json.loads(json_data)
+                else:
+                    raise json.JSONDecodeError("No JSON start marker found", output, 0)
+            except json.JSONDecodeError as e:
+                # If full parsing fails, try to get partial output
+                if self.verbose:
+                    print(f"JSON decode error: {str(e)}")
+                    print(f"First 500 characters of output: {output[:500]}")
+                
+                # Write the raw output for debugging
+                debug_file = self.output_dir / f"metadata_debug_{self.timestamp}.txt"
+                with open(debug_file, 'w') as f:
+                    f.write(output)
+                
+                if self.verbose:
+                    print(f"Wrote raw output to {debug_file} for debugging")
+                    progress.stop("Failed (JSON decode error)")
+                
+                self.results["analyses"]["metadata"] = {
+                    "status": "error",
+                    "message": f"JSON decode error: {str(e)}",
+                    "debug_file": str(debug_file)
+                }
+                return None
+            
+            # Save metadata to file
             output_file = self.output_dir / f"metadata_{self.timestamp}.json"
             with open(output_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
@@ -235,10 +291,14 @@ class FileAnalyzer:
                 "count": len(metadata)
             }
             return metadata
-        except json.JSONDecodeError:
+            
+        except Exception as e:
             if self.verbose:
-                progress.stop("Failed (JSON decode error)")
-            self.results["analyses"]["metadata"] = {"status": "error"}
+                progress.stop(f"Failed with error: {str(e)}")
+            self.results["analyses"]["metadata"] = {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}"
+            }
             return None
 
     def find_duplicates(self):
