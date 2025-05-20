@@ -88,6 +88,25 @@ Example configuration:
 
 ## Installation
 
+### Tool Installation
+
+You can install the File Analysis System to your PATH using the provided install script:
+
+```bash
+# Install to ~/bin (default)
+./install.sh
+
+# Or specify a custom installation directory
+./install.sh /usr/local/bin
+```
+
+This creates symbolic links to the tool in the specified directory. After installation, you can run the tool using:
+
+- `analyze-files` - for the shell script wrapper
+- `file-analyzer` - for the Python script directly
+
+### Dependencies Installation
+
 See [INSTALL.md](INSTALL.md) for detailed instructions on installing all required dependencies.
 
 ## Running Tests
