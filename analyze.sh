@@ -15,6 +15,7 @@ if [ $# -eq 0 ]; then
     echo "  -s, --search TEXT     Search content for TEXT"
     echo "  -b, --binary          Analyze binary files"
     echo "  -r, --results DIR     Output directory"
+    echo "  --skip-checks         Skip dependency checks"
     exit 1
 fi
 
@@ -63,6 +64,10 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_DIR="$2"
             OPTIONS="$OPTIONS --output \"$OUTPUT_DIR\""
             shift 2
+            ;;
+        --skip-checks)
+            OPTIONS="$OPTIONS --skip-dependency-check"
+            shift
             ;;
         -*)
             echo "Unknown option: $1"

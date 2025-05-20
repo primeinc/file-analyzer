@@ -16,9 +16,33 @@ import sys
 import subprocess
 import argparse
 import json
+import shutil
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+# Required external tools and their corresponding analysis types
+REQUIRED_TOOLS = {
+    "exiftool": "metadata",
+    "rdfind": "duplicates",
+    "tesseract": "ocr",
+    "clamscan": "malware",
+    "rg": "search",
+    "binwalk": "binary"
+}
+
+def check_dependencies(required_tools=None):
+    """Check if required external tools are installed and available in PATH."""
+    if required_tools is None:
+        required_tools = REQUIRED_TOOLS
+    
+    missing_tools = {}
+    
+    for tool, analysis_type in required_tools.items():
+        if shutil.which(tool) is None:
+            missing_tools[tool] = analysis_type
+    
+    return missing_tools
 
 
 class FileAnalyzer:
@@ -244,17 +268,45 @@ def main():
     parser.add_argument('--binary', '-b', action='store_true', help='Analyze binary')
     parser.add_argument('--all', '-a', action='store_true', help='All analyses')
     parser.add_argument('--output', '-r', help='Output directory')
+    parser.add_argument('--skip-dependency-check', action='store_true', 
+                        help='Skip checking for required external tools')
     
     args = parser.parse_args()
     
     try:
-        analyzer = FileAnalyzer(args.path, args.output)
-        
         # Determine which analyses to run
         run_all = args.all or not any([
             args.metadata, args.duplicates, args.ocr, 
             args.malware, args.search, args.binary
         ])
+        
+        # Check for required tools based on requested analyses
+        if not args.skip_dependency_check:
+            tools_to_check = {}
+            if run_all or args.metadata:
+                tools_to_check["exiftool"] = "metadata"
+            if run_all or args.duplicates:
+                tools_to_check["rdfind"] = "duplicates"
+            if run_all or args.ocr:
+                tools_to_check["tesseract"] = "ocr"
+            if run_all or args.malware:
+                tools_to_check["clamscan"] = "malware"
+            if args.search:
+                tools_to_check["rg"] = "search"
+            if (run_all or args.binary):
+                tools_to_check["binwalk"] = "binary"
+            
+            missing_tools = check_dependencies(tools_to_check)
+            
+            if missing_tools:
+                print("ERROR: Missing required tools for requested analyses:")
+                for tool, analysis in missing_tools.items():
+                    print(f"  - {tool}: required for {analysis} analysis")
+                print("\nPlease install the missing tools and try again.")
+                print("Installation instructions can be found in the project documentation.")
+                sys.exit(1)
+        
+        analyzer = FileAnalyzer(args.path, args.output)
         
         if run_all or args.metadata:
             analyzer.extract_metadata()
