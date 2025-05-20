@@ -11,7 +11,6 @@ import os
 import sys
 import time
 import json
-import re
 import argparse
 import logging
 from pathlib import Path
@@ -19,33 +18,18 @@ from pathlib import Path
 # Make sure our modules are in the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Import centralized JSON utilities
+from json_utils import JSONValidator, process_model_output, get_json_prompt
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# The JSON-formatted prompt template
-JSON_PROMPT_TEMPLATE = """Describe this image in a highly detailed, dense manner. 
-Output your answer ONLY as a valid JSON object with two fields:
-- 'description': a verbose, information-dense description.
-- 'tags': a list of all applicable tags as an array of strings.
-
-Your entire response MUST be a valid, parseable JSON object."""
-
+# For backward compatibility - this function now uses the centralized implementation
 def extract_json_from_text(text):
     """Attempt to extract JSON from text response if it's embedded in other content."""
-    # Try to find JSON-like structure using regex
-    json_pattern = r'\{[^\{\}]*\"description\"[^\{\}]*\"tags\"[^\{\}]*\}'  
-    # Basic pattern to find the likely JSON object with our expected fields
-    
-    match = re.search(json_pattern, text)
-    if match:
-        try:
-            potential_json = match.group(0)
-            return json.loads(potential_json)
-        except json.JSONDecodeError:
-            pass
-    return None
+    return JSONValidator.extract_json_from_text(text)
 
-def run_fastvlm_json_analysis(image_path, model_path, prompt=None, max_retries=3):
+def run_fastvlm_json_analysis(image_path, model_path, prompt=None, max_retries=3, mode="describe"):
     """
     Run FastVLM analysis with JSON output and retry logic.
     
@@ -60,6 +44,7 @@ def run_fastvlm_json_analysis(image_path, model_path, prompt=None, max_retries=3
         model_path (str): Path to the FastVLM model directory
         prompt (str, optional): Custom prompt for analysis. If None, uses JSON_PROMPT_TEMPLATE.
         max_retries (int, optional): Maximum number of retry attempts for invalid JSON. Default is 3.
+        mode (str, optional): Analysis mode - describe, detect, or document. Default is "describe".
         
     Returns:
         dict: JSON result with 'description', 'tags', and 'metadata' fields,
@@ -80,7 +65,7 @@ def run_fastvlm_json_analysis(image_path, model_path, prompt=None, max_retries=3
         
     # Use the JSON prompt template if not provided
     if not prompt:
-        prompt = JSON_PROMPT_TEMPLATE
+        prompt = get_json_prompt(mode, retry_attempt=0)
         
     # Get the predict.py script path
     ml_fastvlm_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml-fastvlm")
@@ -115,75 +100,84 @@ def run_fastvlm_json_analysis(image_path, model_path, prompt=None, max_retries=3
             # Process the output
             output = result.stdout.strip()
             
-            # Try to parse as JSON
+            # Try to parse and validate using the centralized utilities
+            # Prepare base metadata with key metrics
+            metadata = {
+                "response_time": response_time,
+                "model": "FastVLM 1.5B",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "attempts": attempt + 1
+            }
+            
+            # First, try direct JSON parsing
             try:
-                # Check if the output is already valid JSON
                 json_data = json.loads(output)
                 
-                # Validate the expected structure
-                if 'description' not in json_data or 'tags' not in json_data:
-                    if attempt < max_retries - 1:
-                        logging.warning("JSON missing required fields. Retrying...")
-                        # Strengthen the prompt to emphasize JSON format
-                        prompt = prompt + "\nYour response MUST be a JSON object with 'description' and 'tags' fields."
-                        cmd = base_cmd + ["--prompt", prompt]
-                        continue
-                    else:
-                        # Create proper structure if missing in final attempt
+                # Validate the expected structure using centralized validator
+                expected_fields = []
+                if mode == "detect":
+                    expected_fields = ["objects", "description"]
+                elif mode == "document":
+                    expected_fields = ["text", "document_type"]
+                else:  # Default to description mode
+                    expected_fields = ["description", "tags"]
+                    
+                if JSONValidator.validate_json_structure(json_data, expected_fields, mode):
+                    # Structure is valid, add metadata and return
+                    return JSONValidator.add_metadata(json_data, metadata)
+                    
+                # Missing required fields - try again with stronger prompt if not final attempt
+                if attempt < max_retries - 1:
+                    logging.warning("JSON missing required fields. Retrying...")
+                    prompt = get_json_prompt(mode, retry_attempt=attempt+1)
+                    cmd = base_cmd + ["--prompt", prompt]
+                    continue
+                else:
+                    # Create proper structure if missing in final attempt
+                    if mode == "describe":
                         if 'description' not in json_data:
                             json_data['description'] = "No description provided"
                         if 'tags' not in json_data:
                             json_data['tags'] = []
-                
-                # Add metadata
-                json_data["metadata"] = {
-                    "response_time": response_time,
-                    "model": "FastVLM 1.5B",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "attempts": attempt + 1
-                }
-                
-                logging.info(f"Successfully parsed JSON output on attempt {attempt+1}")
-                return json_data
-                
-            except json.JSONDecodeError:
-                # Try to extract JSON from the text
-                extracted_json = extract_json_from_text(output)
-                if extracted_json and attempt < max_retries - 1:
-                    logging.info("Successfully extracted JSON from text response")
-                    # Add metadata
-                    extracted_json["metadata"] = {
-                        "response_time": response_time,
-                        "model": "FastVLM 1.5B",
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "attempts": attempt + 1,
-                        "extracted": True
-                    }
-                    return extracted_json
+                    elif mode == "detect":
+                        if 'objects' not in json_data:
+                            json_data['objects'] = []
+                        if 'description' not in json_data:
+                            json_data['description'] = "No description provided"
+                    elif mode == "document":
+                        if 'text' not in json_data:
+                            json_data['text'] = "No text extracted"
+                        if 'document_type' not in json_data:
+                            json_data['document_type'] = "unknown"
+                            
+                    # Add metadata to result
+                    return JSONValidator.add_metadata(json_data, metadata)
                     
+            except json.JSONDecodeError:
+                # Try to extract JSON from text using advanced extraction
+                json_data = JSONValidator.extract_json_from_text(output)
+                
+                if json_data:
+                    logging.info("Successfully extracted JSON from text response")
+                    # Add extraction flag to metadata
+                    metadata["extracted"] = True
+                    
+                    # Add metadata and return
+                    return JSONValidator.add_metadata(json_data, metadata)
+                
+                # JSON extraction failed - retry with stronger prompt if not final attempt
                 if attempt < max_retries - 1:
                     logging.warning("Invalid JSON format. Retrying with stronger prompt...")
-                    # Make the JSON requirement even more explicit
-                    prompt = """Your ENTIRE response must be VALID JSON. Do NOT include any text before or after the JSON.
-                    Describe this image as a JSON object with exactly these fields:
-                    {"description": "detailed description here", "tags": ["tag1", "tag2", "etc"]}
-                    No other text, just the JSON object."""
+                    prompt = get_json_prompt(mode, retry_attempt=attempt+1)
                     cmd = base_cmd + ["--prompt", prompt]
                     continue
                 else:
                     # Final attempt failed, return structured error
                     logging.warning("All JSON parsing attempts failed. Returning as text.")
-                    return {
-                        "text": output,
-                        "metadata": {
-                            "response_time": response_time,
-                            "model": "FastVLM 1.5B",
-                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                            "json_parsing_failed": True,
-                            "attempts": max_retries
-                        }
-                    }
-                    
+                    # Add failure flags to metadata
+                    metadata["json_parsing_failed"] = True
+                    return JSONValidator.format_fallback_response(output, metadata)
+                
         except subprocess.SubprocessError as e:
             logging.error(f"Error running FastVLM: {e}")
             if hasattr(e, 'stderr') and e.stderr:
@@ -208,6 +202,8 @@ def main():
     parser.add_argument("--retries", type=int, default=3, 
                        help="Maximum number of retries for JSON validation")
     parser.add_argument("--prompt", help="Custom prompt (use with caution to ensure JSON output)")
+    parser.add_argument("--mode", choices=["describe", "detect", "document"], default="describe",
+                       help="Analysis mode (describe, detect, document)")
     parser.add_argument("--quiet", action="store_true", help="Reduce verbosity of output")
     
     args = parser.parse_args()
@@ -223,6 +219,7 @@ def main():
         print("="*60)
         print(f"Image: {args.image}")
         print(f"Model: {args.model}")
+        print(f"Mode: {args.mode}")
         print(f"Max retries: {args.retries}")
     
     # Run the analysis
@@ -233,7 +230,8 @@ def main():
         args.image, 
         args.model,
         prompt=args.prompt,  # This will be None if not provided
-        max_retries=args.retries
+        max_retries=args.retries,
+        mode=args.mode
     )
     
     if result:

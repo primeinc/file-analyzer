@@ -104,6 +104,72 @@ class TestFastVLMJsonOutput(unittest.TestCase):
         self.assertEqual(result["tags"], ["embedded", "json"])
         self.assertIn("metadata", result)
         self.assertTrue(result["metadata"]["extracted"])
+    
+    @patch('subprocess.run')
+    def test_json_fallback(self, mock_run):
+        """Test fallback to text output when all JSON parsing attempts fail."""
+        # Setup mocks for multiple failed attempts
+        # Each process will return invalid JSON
+        first_process = MagicMock()
+        first_process.stdout = "This is not valid JSON"
+        first_process.returncode = 0
+        
+        second_process = MagicMock()
+        second_process.stdout = "Still not valid JSON"
+        second_process.returncode = 0
+        
+        third_process = MagicMock()
+        third_process.stdout = "Final attempt, still not JSON"
+        third_process.returncode = 0
+        
+        # Set up the mock to return different values on successive calls
+        mock_run.side_effect = [first_process, second_process, third_process]
+        
+        # Test the function with 3 retry attempts
+        with patch('os.path.exists', return_value=True):
+            result = run_fastvlm_json_analysis("test.jpg", "model_path", max_retries=3)
+        
+        # Verify fallback to text format
+        self.assertIsNotNone(result)
+        self.assertIn("text", result)
+        self.assertEqual(result["text"], "Final attempt, still not JSON")
+        self.assertIn("metadata", result)
+        self.assertTrue(result["metadata"]["json_parsing_failed"])
+        self.assertEqual(result["metadata"]["attempts"], 3)
+    
+    @patch('subprocess.run')
+    def test_progressively_corrupted_json(self, mock_run):
+        """Test JSON validation with progressively corrupted inputs."""
+        # Setup mocks for multiple partially corrupted JSON attempts
+        first_process = MagicMock()
+        first_process.stdout = '{"description": "Almost valid", "tags": ["missing closing bracket"'
+        first_process.returncode = 0
+        
+        second_process = MagicMock()
+        second_process.stdout = 'Nearly JSON {"description": "Getting closer", "tags": []}'
+        second_process.returncode = 0
+        
+        third_process = MagicMock()
+        third_process.stdout = '{"description": "Valid now", "tags": ["success"]}'
+        third_process.returncode = 0
+        
+        # Set up the mock to return different values on successive calls
+        mock_run.side_effect = [first_process, second_process, third_process]
+        
+        # Test the function
+        with patch('os.path.exists', return_value=True):
+            result = run_fastvlm_json_analysis("test.jpg", "model_path", max_retries=3)
+        
+        # Either the second or third attempt might succeed depending on the extraction implementation
+        # Our new improved extractor is able to get JSON from the second attempt
+        self.assertIsNotNone(result)
+        self.assertIn("description", result)
+        self.assertIn("tags", result)
+        self.assertIn("metadata", result)
+        # Check that we have metadata indicating extraction
+        self.assertTrue(result["metadata"].get("extracted", False))
+        # We should have made at least 2 attempts
+        self.assertGreaterEqual(result["metadata"]["attempts"], 2)
 
 
 if __name__ == "__main__":

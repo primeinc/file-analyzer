@@ -6,6 +6,9 @@
 output_dir="analysis_results/vision_test_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$output_dir"
 
+# Test status tracking
+test_failures=0
+
 # Banner
 echo "===================================================="
 echo "   Vision Model Analysis Test (JSON Output)          "
@@ -44,12 +47,24 @@ if [ -f "$output_dir"/vision_analysis_*.json ]; then
       echo "✓ Correct JSON structure with description, tags, and metadata"
     else
       echo "✗ Incorrect JSON structure"
+      test_failures=$((test_failures + 1))
+      # Save error details for debugging
+      echo "ERROR: JSON structure validation failed" >> "$output_dir/errors.log"
+      python -c "import json; data=json.load(open('$vision_file')); print('Keys found:', list(data.values())[0].keys())" >> "$output_dir/errors.log" 2>&1
     fi
   else
     echo "✗ Invalid JSON format"
+    test_failures=$((test_failures + 1))
+    # Save error details for debugging
+    echo "ERROR: JSON format validation failed" >> "$output_dir/errors.log"
+    head -50 "$vision_file" >> "$output_dir/errors.log"
   fi
 else
   echo "✗ No JSON output file generated"
+  test_failures=$((test_failures + 1))
+  # Save error details for debugging
+  echo "ERROR: No JSON output file was generated" >> "$output_dir/errors.log"
+  ls -la "$output_dir" >> "$output_dir/errors.log" 2>&1
 fi
 echo
 
@@ -69,6 +84,9 @@ if [ ${#test_images[@]} -gt 0 ]; then
     echo "✓ Generated JSON output for document mode: $(basename "$vision_file")"
   else
     echo "✗ No JSON output file generated for document mode"
+    test_failures=$((test_failures + 1))
+    # Save error details for debugging
+    echo "ERROR: No document mode JSON output file was generated" >> "$output_dir/errors.log"
   fi
 fi
 echo
@@ -92,7 +110,19 @@ print(f'Average time per image: {data.get(\"average_time\", 0):.2f}s')
 "
 else
   echo "✗ No performance metrics file generated"
+  test_failures=$((test_failures + 1))
+  # Save error details for debugging
+  echo "ERROR: No performance metrics file was generated" >> "$output_dir/errors.log"
 fi
 
 echo
 echo "Test Complete! Results saved to $output_dir"
+
+# Return appropriate exit code based on test results
+if [ $test_failures -gt 0 ]; then
+  echo "FAILED: $test_failures test failures detected. Check $output_dir/errors.log for details."
+  exit 1
+else
+  echo "SUCCESS: All tests passed."
+  exit 0
+fi

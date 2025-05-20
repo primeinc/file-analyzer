@@ -163,17 +163,29 @@ All vision analysis results are provided in a structured JSON format:
 
 The system implements robust JSON validation for reliable output:
 
-1. **Automatic Retry Logic**
+1. **Advanced Extraction and Validation**
+   - Sophisticated JSON extraction with balanced bracket matching
+   - Handles nested objects and arrays correctly
+   - Multiple extraction strategies for different response patterns
+   - Centralized validation through dedicated `json_utils` module
+
+2. **Automatic Retry Logic**
    - Multiple retry attempts with progressively stronger JSON-forcing prompts
    - Ensures valid, well-structured output even when model responses vary
+   - Graceful fallback to text output when JSON parsing fails completely
+   - Detailed failure metadata for debugging purposes
 
-2. **Extraction Capabilities**
+3. **Extraction Capabilities**
    - Can extract valid JSON even from partially correct text responses
-   - Uses regex pattern matching to find embedded JSON objects
+   - Uses intelligent pattern matching to find embedded JSON objects
+   - Supports specialized patterns for different analysis modes (describe, detect, document)
+   - Preserves context and field relationships in extraction
 
-3. **Performance Metrics**
+4. **Performance Metrics**
    - Tracks response time and other performance indicators
+   - Records number of retry attempts needed for valid JSON
    - Provides detailed metrics in separate JSON file for benchmarking
+   - Standardized metadata format across all output types
 
 ## FastVLM Integration
 
