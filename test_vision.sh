@@ -1,24 +1,98 @@
 #!/bin/bash
-# Test script for vision analysis
+# Vision Model Test Script
+# Tests vision analysis capabilities with JSON output
 
-# Path to the test image
-TEST_IMAGE="test_data/images/Layer 3 Merge.png"
+# Set output directory
+output_dir="analysis_results/vision_test_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$output_dir"
 
-# Create a test directory if it doesn't exist
-mkdir -p test_dir
+# Banner
+echo "===================================================="
+echo "   Vision Model Analysis Test (JSON Output)          "
+echo "===================================================="
+echo
 
-echo "Testing vision analyzer..."
-echo "NOTE: This is a mock test since dependencies might not be installed"
+# Check if we have any test images
+# Specify a known test image to avoid path issues
+test_images=("test_data/images/Layer 3 Merge.png")
 
-# Run the vision analyzer directly
-echo "Testing standalone vision analyzer with default model..."
-./vision_analyzer.py --image "$TEST_IMAGE" --model fastvlm --mode describe
+if [ ${#test_images[@]} -eq 0 ]; then
+  echo "Error: No test images found in test_data directory"
+  exit 1
+fi
 
-echo "Testing integration with file_analyzer.py..."
-./file_analyzer.py --vision --skip-dependency-check --vision-model fastvlm "$TEST_IMAGE"
+echo "Found ${#test_images[@]} test images"
+echo
 
-echo "Test complete!"
-echo "Note: For actual testing, install the required dependencies:"
-echo "- For FastVLM: pip install mlx mlx-fastvlm"
-echo "- For BakLLaVA: llama.cpp with BakLLaVA-1-Q4_K_M.gguf model"
-echo "- For Qwen2-VL: pip install mlx-vlm"
+# Test 1: Basic vision analysis with JSON output
+echo "Test 1: Basic Vision Analysis with JSON Output"
+echo "---------------------------------------------"
+echo "Running: ./analyze.sh -V \"${test_images[0]}\" -r \"$output_dir\""
+./analyze.sh -V "${test_images[0]}" -r "$output_dir"
+
+# Check result
+if [ -f "$output_dir"/vision_analysis_*.json ]; then
+  vision_file=$(ls -t "$output_dir"/vision_analysis_*.json | head -1)
+  echo "✓ Generated JSON output: $(basename "$vision_file")"
+  
+  # Validate JSON
+  if python -c "import json; json.load(open('$vision_file'))" 2>/dev/null; then
+    echo "✓ Valid JSON format"
+    
+    # Check structure
+    if python -c "import json; data=json.load(open('$vision_file')); keys=list(data.values())[0].keys(); assert 'description' in keys and 'tags' in keys and 'metadata' in keys" 2>/dev/null; then
+      echo "✓ Correct JSON structure with description, tags, and metadata"
+    else
+      echo "✗ Incorrect JSON structure"
+    fi
+  else
+    echo "✗ Invalid JSON format"
+  fi
+else
+  echo "✗ No JSON output file generated"
+fi
+echo
+
+# Test 2: Different vision modes
+echo "Test 2: Vision Analysis Modes"
+echo "---------------------------"
+
+# Try different modes (always using the first test image)
+if [ ${#test_images[@]} -gt 0 ]; then
+  # Document mode
+  echo "Running document mode: ./analyze.sh -V --vision-mode document \"${test_images[0]}\""
+  ./analyze.sh -V --vision-mode document "${test_images[0]}" -r "$output_dir/document"
+  
+  # Check result
+  if [ -f "$output_dir"/document/vision_analysis_*.json ]; then
+    vision_file=$(ls -t "$output_dir"/document/vision_analysis_*.json | head -1)
+    echo "✓ Generated JSON output for document mode: $(basename "$vision_file")"
+  else
+    echo "✗ No JSON output file generated for document mode"
+  fi
+fi
+echo
+
+# Test 3: Performance metrics
+echo "Test 3: Performance Metrics"
+echo "-------------------------"
+metrics_file=$(ls -t "$output_dir"/vision_metrics_*.json 2>/dev/null | head -1)
+
+if [ -n "$metrics_file" ]; then
+  echo "✓ Generated performance metrics: $(basename "$metrics_file")"
+  
+  # Extract metrics
+  python -c "
+import json
+with open('$metrics_file') as f:
+    data = json.load(f)
+print(f'Model: {data.get(\"model\", \"Unknown\")}')
+print(f'Images processed: {data.get(\"images_processed\", 0)}')
+print(f'Average time per image: {data.get(\"average_time\", 0):.2f}s')
+"
+else
+  echo "✗ No performance metrics file generated"
+fi
+
+echo
+echo "Test Complete! Results saved to $output_dir"

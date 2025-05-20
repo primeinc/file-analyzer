@@ -59,6 +59,11 @@ venv.bak/
 analysis_results/
 test_results/
 test_data/test_results/
+vision_test_*/
+json_test_*/
+
+# FastVLM model directory (too large for git)
+ml-fastvlm/checkpoints/
 
 # System files
 .DS_Store

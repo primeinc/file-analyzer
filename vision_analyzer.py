@@ -7,7 +7,17 @@ Integrates with file_analyzer.py to provide vision model analysis capabilities:
 - BakLLaVA: Mature VLM with good performance
 - Qwen2-VL: Document analysis specialist
 
-Supports image description, object detection, and document understanding.
+Supports image description, object detection, and document understanding
+with robust JSON output capabilities:
+
+- Structured JSON output with standard fields (description, tags, metadata)
+- Automatic retry logic for handling invalid model responses
+- Extraction of JSON from text when possible
+- Performance metrics collection (response time, model info, etc.)
+- Support for different analysis modes (describe, detect, document)
+
+All vision analysis results are provided in a consistent JSON format
+for easy integration with other systems.
 """
 
 import os
@@ -20,6 +30,11 @@ import shutil
 from datetime import datetime
 import tempfile
 import time
+import re
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Try to import PIL for image preprocessing
 try:
@@ -76,10 +91,11 @@ DEFAULT_VISION_CONFIG = {
     "max_images": 10,
     "resolution": "512x512",
     "description_mode": "standard",  # standard, creative, detailed
-    "output_format": "text",         # text, json
+    "output_format": "json",         # text, json (default to json for better integration)
     "model_path": None,              # Custom model path
     "mmproj_path": None,             # For BakLLaVA CLIP model
-    "batch_processing": False
+    "batch_processing": False,
+    "max_retries": 3                 # Max retries for JSON validation
 }
 
 class VisionAnalyzer:
@@ -261,7 +277,58 @@ class VisionAnalyzer:
             
             model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
             creativity = 0.7 if self.config.get("description_mode") == "creative" else 0.0
+            output_format = self.config.get("output_format", "json")
+            max_retries = self.config.get("max_retries", 3)
             
+            # Check if we should use the JSON-specific implementation
+            if output_format == "json":
+                try:
+                    # Import the improved JSON module
+                    from fastvlm_json import run_fastvlm_json_analysis
+                    
+                    # Determine appropriate JSON prompt based on mode
+                    if mode == "describe":
+                        json_prompt = """Describe this image in a highly detailed, dense manner. 
+                        Output your answer ONLY as a valid JSON object with two fields:
+                        - 'description': a verbose, information-dense description.
+                        - 'tags': a list of all applicable tags as an array of strings.
+                        
+                        Your entire response MUST be a valid, parseable JSON object."""
+                    elif mode == "detect":
+                        json_prompt = """Analyze the objects in this image.
+                        Output your answer ONLY as a valid JSON object with these fields:
+                        - 'objects': an array of objects detected, each with 'name' and 'location' properties
+                        - 'description': a brief scene description
+                        
+                        Your entire response MUST be a valid, parseable JSON object."""
+                    elif mode == "document":
+                        json_prompt = """Extract all text content from this document image.
+                        Output your answer ONLY as a valid JSON object with these fields:
+                        - 'text': all the extracted text content, preserving layout where possible
+                        - 'document_type': the type of document detected
+                        
+                        Your entire response MUST be a valid, parseable JSON object."""
+                    
+                    # Use the improved JSON-specific implementation
+                    json_result = run_fastvlm_json_analysis(
+                        processed_image_path, 
+                        model_path, 
+                        prompt=json_prompt,
+                        max_retries=max_retries
+                    )
+                    
+                    if json_result:
+                        # Add mode to metadata
+                        if "metadata" in json_result:
+                            json_result["metadata"]["mode"] = mode
+                        
+                        # Return the result directly as a dictionary
+                        return json_result
+                        
+                except (ImportError, Exception) as e:
+                    logging.warning(f"Error using JSON-specific implementation: {e}. Falling back to standard method.")
+            
+            # Fallback to the original implementation
             # Check if we should use the direct predict.py script from ml-fastvlm
             ml_fastvlm_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml-fastvlm")
             predict_script = os.path.join(ml_fastvlm_dir, "predict.py")
@@ -281,9 +348,9 @@ class VisionAnalyzer:
                     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
                     result = result.stdout
                 except subprocess.SubprocessError as e:
-                    print(f"Error running FastVLM predict.py: {e}")
+                    logging.error(f"Error running FastVLM predict.py: {e}")
                     if hasattr(e, 'stderr'):
-                        print(f"Error output: {e.stderr}")
+                        logging.error(f"Error output: {e.stderr}")
                     result = None
             else:
                 # Fallback to command-line invocation
@@ -302,18 +369,47 @@ class VisionAnalyzer:
             end_time = time.time()
             if result:
                 analysis_time = end_time - start_time
-                try:
-                    # Try to format as JSON
-                    import json
-                    result_dict = json.loads(result)
-                    result_dict['metadata'] = {
-                        'analysis_time': analysis_time,
-                        'model': 'FastVLM',
-                        'mode': mode
-                    }
-                    result = json.dumps(result_dict, indent=2)
-                except (json.JSONDecodeError, TypeError):
-                    # If not JSON, add metrics as text
+                if output_format == "json":
+                    try:
+                        # Try to format as JSON
+                        import json
+                        result_dict = json.loads(result)
+                        result_dict['metadata'] = {
+                            'analysis_time': analysis_time,
+                            'model': 'FastVLM',
+                            'mode': mode
+                        }
+                        return result_dict  # Return as dictionary for better integration
+                    except (json.JSONDecodeError, TypeError):
+                        # Try to extract JSON from text
+                        json_pattern = r'\{[^\{\}]*\".*\"[^\{\}]*\}'  
+                        match = re.search(json_pattern, result)
+                        if match:
+                            try:
+                                potential_json = match.group(0)
+                                result_dict = json.loads(potential_json)
+                                result_dict['metadata'] = {
+                                    'analysis_time': analysis_time,
+                                    'model': 'FastVLM',
+                                    'mode': mode,
+                                    'extracted': True
+                                }
+                                return result_dict
+                            except json.JSONDecodeError:
+                                pass
+                        
+                        # If JSON parsing fails, return formatted response
+                        return {
+                            "text": result,
+                            "metadata": {
+                                'analysis_time': analysis_time,
+                                'model': 'FastVLM',
+                                'mode': mode,
+                                'json_parsing_failed': True
+                            }
+                        }
+                else:
+                    # Return text format with metrics
                     result = f"[FastVLM Analysis - {analysis_time:.2f}s]\n\n{result}"
             
         # BakLLaVA analysis
@@ -358,6 +454,32 @@ class VisionAnalyzer:
             ]
             result = self.run_command(cmd)
             
+        # Handle result return type consistency
+        if result and self.config.get("output_format") == "json":
+            # If we want JSON but have a string, try to convert it
+            if isinstance(result, str):
+                try:
+                    # Try to convert to dictionary
+                    result_dict = json.loads(result)
+                    return result_dict
+                except json.JSONDecodeError:
+                    # Return as structured data with text field
+                    return {
+                        "text": result,
+                        "metadata": {
+                            "model": self.model_name,
+                            "mode": mode,
+                            "json_parsing_failed": True
+                        }
+                    }
+            # If already a dict, ensure it has metadata
+            elif isinstance(result, dict) and "metadata" not in result:
+                result["metadata"] = {
+                    "model": self.model_name,
+                    "mode": mode,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
         return result
             
     def _batch_process_fastvlm(self, processed_images, output_dir, mode):
@@ -533,9 +655,16 @@ class VisionAnalyzer:
                     
                     # Save individual result
                     base_name = os.path.basename(image_file)
-                    output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}.txt")
+                    file_ext = ".json" if self.config.get("output_format") == "json" else ".txt"
+                    output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}{file_ext}")
+                    
                     with open(output_file, 'w') as f:
-                        f.write(result)
+                        if isinstance(result, dict):
+                            # Handle dict result properly for JSON format
+                            json.dump(result, f, indent=2)
+                        else:
+                            # Handle string result
+                            f.write(str(result))
                     
         return results
         
@@ -544,17 +673,112 @@ class VisionAnalyzer:
         if not results:
             return None
             
-        output_format = self.config.get("output_format", "text")
+        output_format = self.config.get("output_format", "json")  # Default to JSON
         output_file = Path(output_file)
         
+        # Ensure the file extension matches the format
+        if output_format == "json" and not str(output_file).endswith(".json"):
+            output_file = output_file.with_suffix(".json")
+        elif output_format == "markdown" and not str(output_file).endswith((".md", ".markdown")):
+            output_file = output_file.with_suffix(".md")
+        
         if output_format == "json":
+            # Ensure JSON serializable - handle any non-serializable objects
+            def clean_for_json(obj):
+                if isinstance(obj, dict):
+                    return {k: clean_for_json(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [clean_for_json(i) for i in obj]
+                elif isinstance(obj, (str, int, float, bool, type(None))):
+                    return obj
+                else:
+                    return str(obj)
+            
+            clean_results = clean_for_json(results)
+            
             with open(output_file, 'w') as f:
-                json.dump(results, f, indent=2)
-        else:
+                json.dump(clean_results, f, indent=2)
+                
+            # Validate the output file is valid JSON
+            try:
+                with open(output_file, 'r') as f:
+                    json.load(f)
+                logging.info(f"Successfully saved valid JSON to {output_file}")
+            except json.JSONDecodeError as e:
+                logging.error(f"Error: Generated invalid JSON in {output_file}: {e}")
+        
+        elif output_format == "markdown":
+            with open(output_file, 'w') as f:
+                f.write("# Vision Analysis Results\n\n")
+                f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Model: {self.model_info['name']}\n\n")
+                
+                for image_path, result in results.items():
+                    f.write(f"## Image: {os.path.basename(image_path)}\n\n")
+                    
+                    # Add image path as link that can work locally
+                    f.write(f"Path: [{image_path}]({image_path})\n\n")
+                    
+                    if isinstance(result, dict):
+                        # Format nicely in markdown
+                        if "description" in result:
+                            f.write("### Description\n\n")
+                            f.write(f"{result['description']}\n\n")
+                        
+                        if "tags" in result and isinstance(result["tags"], list):
+                            f.write("### Tags\n\n")
+                            for tag in result["tags"]:
+                                f.write(f"- {tag}\n")
+                            f.write("\n")
+                        
+                        if "objects" in result and isinstance(result["objects"], list):
+                            f.write("### Objects Detected\n\n")
+                            for obj in result["objects"]:
+                                if isinstance(obj, dict) and "name" in obj:
+                                    location = obj.get("location", "")
+                                    f.write(f"- **{obj['name']}**: {location}\n")
+                                else:
+                                    f.write(f"- {obj}\n")
+                            f.write("\n")
+                            
+                        if "text" in result:
+                            f.write("### Text Content\n\n")
+                            f.write("```\n")
+                            f.write(result["text"])
+                            f.write("\n```\n\n")
+                            
+                        if "metadata" in result:
+                            f.write("### Metadata\n\n")
+                            f.write("```json\n")
+                            f.write(json.dumps(result["metadata"], indent=2))
+                            f.write("\n```\n\n")
+                            
+                    else:
+                        # For plain text results
+                        f.write("### Analysis\n\n")
+                        f.write("```\n")
+                        f.write(str(result))
+                        f.write("\n```\n\n")
+                    
+                    f.write("---\n\n")
+                
+                # Add a summary section
+                f.write("## Summary\n\n")
+                f.write(f"- Total images analyzed: {len(results)}\n")
+                f.write(f"- Analysis mode: {self.config.get('vision_mode', 'describe')}\n")
+                
+        else:  # text format (default fallback)
             with open(output_file, 'w') as f:
                 for image_path, result in results.items():
                     f.write(f"=== {image_path} ===\n")
-                    f.write(result)
+                    if isinstance(result, dict):
+                        # Handle dictionary result in text mode
+                        if "text" in result:
+                            f.write(result["text"])
+                        else:
+                            f.write(json.dumps(result, indent=2))
+                    else:
+                        f.write(str(result))
                     f.write("\n\n")
                     
         return str(output_file)
@@ -596,14 +820,22 @@ if __name__ == "__main__":
         if result:
             if args.output:
                 with open(args.output, 'w') as f:
-                    f.write(result)
+                    if isinstance(result, dict):
+                        # Handle dict result properly for JSON format
+                        json.dump(result, f, indent=2)
+                    else:
+                        # Handle string result
+                        f.write(str(result))
                 print(f"Analysis saved to {args.output}")
             else:
-                # Try to pretty-print JSON if the result is JSON
+                # Try to pretty-print JSON if the result is JSON format
                 if args.format == "json":
                     try:
-                        result_dict = json.loads(result) if isinstance(result, str) else result
-                        print(json.dumps(result_dict, indent=2))
+                        if isinstance(result, dict):
+                            print(json.dumps(result, indent=2))
+                        else:
+                            result_dict = json.loads(result) if isinstance(result, str) else {"text": str(result)}
+                            print(json.dumps(result_dict, indent=2))
                     except (json.JSONDecodeError, TypeError):
                         print(result)
                 else:

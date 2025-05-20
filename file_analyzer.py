@@ -587,11 +587,11 @@ class FileAnalyzer:
         if not analyzer.check_dependencies():
             if self.verbose:
                 progress.stop("Missing vision model dependencies")
-                print(f"Required dependencies for {analyzer.model_info['name']} not installed.")
-                print(f"Run '{analyzer.model_info['install_cmd']}' to install.")
+                print(f"Required dependencies for {analyzer.model_info.get('name', 'vision model')} not installed.")
+                print(f"Run '{analyzer.model_info.get('install_cmd', 'pip install required_packages')}' to install.")
             self.results["analyses"]["vision"] = {
                 "status": "error", 
-                "message": f"Missing dependencies for {analyzer.model_info['name']}"
+                "message": f"Missing dependencies for {analyzer.model_info.get('name', 'vision model')}"
             }
             return None
             
@@ -634,7 +634,14 @@ class FileAnalyzer:
             
         # Save results to file
         if results:
-            output_file = self.output_dir / f"vision_analysis_{self.timestamp}.{vision_config.get('output_format', 'text')}" 
+            output_format = vision_config.get('output_format', 'json')
+            if output_format == 'json':
+                extension = 'json'
+            elif output_format == 'markdown':
+                extension = 'md'
+            else:
+                extension = 'txt'
+            output_file = self.output_dir / f"vision_analysis_{self.timestamp}.{extension}" 
             
             # Collect performance metrics
             total_time = 0
@@ -761,6 +768,9 @@ Examples:
   # Vision analysis with specific mode
   %(prog)s --vision --vision-mode document ~/Documents
   
+  # Vision analysis with custom output format
+  %(prog)s --vision --vision-format markdown ~/Pictures
+  
   # Include only specific file types
   %(prog)s --all --include "*.jpg" --include "*.png" ~/Pictures
   
@@ -799,6 +809,10 @@ Examples:
                         choices=['describe', 'detect', 'document'],
                         default='describe',
                         help='Vision analysis mode: describe (default), detect objects, or document OCR')
+    parser.add_argument('--vision-format',
+                        choices=['text', 'json', 'markdown'],
+                        default='json',
+                        help='Output format for vision analysis results: json (structured data), text (plain text), or markdown (formatted report)')
     parser.add_argument('--all', '-a', action='store_true', 
                         help='Run all analyses (equivalent to -m -d -o -v -b, does not include vision)')
     parser.add_argument('--output', '-r', 
@@ -860,6 +874,8 @@ Examples:
                 config["vision"] = DEFAULT_VISION_CONFIG.copy()
             if args.vision_model:
                 config["vision"]["model"] = args.vision_model
+            if args.vision_format:
+                config["vision"]["output_format"] = args.vision_format
         
         # Initialize file analyzer with configuration
         analyzer = FileAnalyzer(

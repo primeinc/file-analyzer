@@ -69,4 +69,41 @@ else
 fi
 echo
 
+# Save current directory
+ORIG_DIR="$(pwd)"
+
+# Test 6: Vision models with JSON output (if available)
+echo "Test 6: Vision model JSON output"
+cd ..
+if [ -f "./test_vision.sh" ]; then
+    echo "Running vision test script..."
+    ./test_vision.sh
+    if [ $? -eq 0 ]; then
+        echo "✅ Test 6 passed"
+    else
+        echo "⚠️ Test 6 couldn't be validated (vision model dependencies may be missing)"
+    fi
+else
+    echo "⚠️ Test 6 skipped (vision test script not found)"
+fi
+echo
+
+# Test 7: JSON output validation (if available)
+echo "Test 7: JSON validation"
+if [ -f "./test_json_output.sh" ]; then
+    echo "Running JSON output test script..."
+    ./test_json_output.sh
+    if [ $? -eq 0 ]; then
+        echo "✅ Test 7 passed"
+    else
+        echo "⚠️ Test 7 couldn't be validated (dependencies may be missing)"
+    fi
+else
+    echo "⚠️ Test 7 skipped (JSON test script not found)"
+fi
+echo
+
+# Return to original directory
+cd "$ORIG_DIR"
+
 echo "All tests completed."

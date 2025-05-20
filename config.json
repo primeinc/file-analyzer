@@ -19,7 +19,7 @@
         "max_images": 10,
         "resolution": "512x512",
         "description_mode": "standard",
-        "output_format": "text",
+        "output_format": "json",
         "model_path": null,
         "mmproj_path": null,
         "batch_processing": false

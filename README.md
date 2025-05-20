@@ -25,9 +25,10 @@ Unified tool for comprehensive file analysis combining:
 - `-v, --virus`: Scan for malware
 - `-s, --search TEXT`: Search content
 - `-b, --binary`: Analyze binary files
-- `-V, --vision`: Analyze images using AI vision models
+- `-V, --vision`: Analyze images using AI vision models (outputs JSON by default)
 - `--vision-model MODEL`: Select vision model (fastvlm, bakllava, qwen2vl)
 - `--vision-mode MODE`: Vision analysis mode (describe, detect, document)
+- `--vision-format FMT`: Vision output format (json, text) - json recommended
 - `-r, --results DIR`: Output directory
 - `-i, --include PATTERN`: Include only files matching pattern
 - `-x, --exclude PATTERN`: Exclude files matching pattern
@@ -67,6 +68,12 @@ Unified tool for comprehensive file analysis combining:
 
 # Use document analysis mode for extracting text
 ./analyze.sh -V --vision-mode document ~/Documents
+
+# Use custom format (JSON is default and recommended)
+./analyze.sh -V --vision-format json ~/Pictures
+
+# Examine the JSON output
+cat analysis_results/vision_analysis_*.json
 ```
 
 ## Output
@@ -80,7 +87,8 @@ Results are saved to the current directory (or specified output directory):
 - `malware_scan_[timestamp].txt`: Malware scan results
 - `search_[text]_[timestamp].txt`: Content search results
 - `binary_analysis_[timestamp].txt`: Binary analysis
-- `vision_analysis_[timestamp].(txt|json)`: AI vision model analysis
+- `vision_analysis_[timestamp].json`: AI vision model analysis (JSON format)
+- `vision_metrics_[timestamp].json`: Vision analysis performance metrics
 
 ## Configuration
 
@@ -101,9 +109,123 @@ Example configuration:
     "model": "fastvlm",
     "max_images": 10,
     "description_mode": "standard",
-    "output_format": "text"
+    "output_format": "json",
+    "max_retries": 3
   }
 }
+```
+
+## Vision Model Analysis
+
+The system includes advanced AI vision models for image analysis with robust JSON output:
+
+### Available Models
+
+- **FastVLM**: Apple's efficient vision model (default, fastest on Apple Silicon)
+  - Model variants: 0.5B (fastest), 1.5B (default), 7B (highest quality)
+  - Performance: Up to 85x faster Time-to-First-Token than alternatives
+  
+- **BakLLaVA**: Mature vision language model with good performance
+  - Works well on all platforms
+  - More mature with better handling of complex scenes
+  
+- **Qwen2-VL**: Document analysis specialist
+  - Optimized for text extraction from documents
+  - Good performance on structured content
+
+### Analysis Modes
+
+- **describe** (default): General image description with details and context
+- **detect**: Object detection with locations and relationships
+- **document**: Optimized for text extraction from documents/screenshots
+
+### JSON Output Structure
+
+All vision analysis results are provided in a structured JSON format:
+
+```json
+{
+  "/path/to/image.jpg": {
+    "description": "Detailed image description text...",
+    "tags": ["tag1", "tag2", "tag3"],
+    "metadata": {
+      "response_time": 1.25,
+      "model": "FastVLM 1.5B",
+      "timestamp": "2025-05-20 15:30:45",
+      "attempts": 1,
+      "mode": "describe"
+    }
+  }
+}
+```
+
+### JSON Validation Features
+
+The system implements robust JSON validation for reliable output:
+
+1. **Automatic Retry Logic**
+   - Multiple retry attempts with progressively stronger JSON-forcing prompts
+   - Ensures valid, well-structured output even when model responses vary
+
+2. **Extraction Capabilities**
+   - Can extract valid JSON even from partially correct text responses
+   - Uses regex pattern matching to find embedded JSON objects
+
+3. **Performance Metrics**
+   - Tracks response time and other performance indicators
+   - Provides detailed metrics in separate JSON file for benchmarking
+
+## FastVLM Integration
+
+FastVLM is Apple's efficient vision language model designed specifically for Apple Silicon.
+
+### Installation
+
+1. Install MLX framework for Apple Silicon optimization:
+   ```bash
+   pip install mlx
+   ```
+
+2. Clone the FastVLM repository and install dependencies:
+   ```bash
+   git clone https://github.com/apple/ml-fastvlm.git
+   cd ml-fastvlm
+   pip install -e .
+   ```
+
+3. Download model weights:
+   ```bash
+   cd ml-fastvlm
+   chmod +x get_models.sh
+   ./get_models.sh
+   ```
+
+### Optimization
+
+FastVLM includes several optimization features:
+
+- **Image Preprocessing**: Automatically resizes and optimizes images
+  - Description Mode: 512x512 resolution (default)
+  - Object Detection: 384x384 resolution
+  - Document Analysis: 768x768 resolution
+
+- **Memory Optimization**: 
+  - 4-bit quantization for efficient memory usage
+  - Metal acceleration for Apple Silicon
+  - Resolution customization based on analysis needs
+
+### Troubleshooting
+
+Common issues and solutions:
+
+1. **Out of Memory Errors**: Use a smaller model or reduce batch size
+2. **Slow Performance**: Ensure Metal acceleration is enabled
+3. **Model Loading Failures**: Check model files with `fastvlm_errors.py`
+4. **Image Format Errors**: Ensure images are in supported formats (JPG, PNG)
+
+For more detailed error diagnostics, run:
+```bash
+./fastvlm_errors.py
 ```
 
 ## Installation
@@ -154,8 +276,11 @@ The project includes a comprehensive test suite:
 # Run the automated test suite
 cd test_data && ./run_tests.sh
 
-# Test vision analysis capabilities
+# Test vision analysis capabilities with JSON validation
 ./test_vision.sh
+
+# Test JSON output formatting and validation
+./test_json_output.sh
 ```
 
 The test suite verifies:
@@ -163,7 +288,8 @@ The test suite verifies:
 - Duplicate file detection
 - Content searching capabilities  
 - File filtering with include/exclude patterns
-- Vision model integration (when dependencies are installed)
+- Vision model integration with JSON validation
+- Performance metrics collection
 
 ## Using the Python Script Directly
 
@@ -172,3 +298,33 @@ The test suite verifies:
 ```
 
 Options are the same as the shell wrapper but use full format (e.g., `--metadata` instead of `-m`).
+
+## Contributing
+
+### Adding New Features
+
+When adding new capabilities to the File Analyzer system, please follow these conventions:
+
+1. **Modular Design**: Add new analysis types as separate methods in the `FileAnalyzer` class.
+2. **CLI Integration**: Update both `file_analyzer.py` and `analyze.sh` with new options.
+3. **Documentation**: Update the README.md with descriptions and examples of the new feature.
+4. **Tests**: Add appropriate test cases in the test suite.
+5. **Configuration**: Add relevant configuration options in config.json.
+
+### Code Conventions
+
+- **Error Handling**: Use consistent error handling with try/except blocks.
+- **Status Reporting**: Update the `self.results` dictionary with status information.
+- **Output Format**: For structured data, prefer JSON output with consistent fields.
+- **Dependencies**: Document any new external dependencies in INSTALL.md.
+- **Performance**: Use multithreading for CPU-bound operations when appropriate.
+
+### JSON Output Standards
+
+When adding new analysis types that produce JSON output:
+
+1. Include a `status` field ("success", "error", or "skipped")
+2. Include a `timestamp` field with the analysis time
+3. For ML models, include performance metrics
+4. Implement validation to ensure output is always valid JSON
+5. Use consistent field naming across different analysis types
