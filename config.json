@@ -1,0 +1,16 @@
+{
+    "default_output_dir": "analysis_results",
+    "max_threads": 4,
+    "max_ocr_images": 50,
+    "file_extensions": {
+        "images": [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"],
+        "documents": [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]
+    },
+    "tool_options": {
+        "exiftool": ["-json", "-fast"],
+        "tesseract": ["--dpi", "300"],
+        "rg": ["-i", "--line-number", "--color", "never"]
+    },
+    "default_include_patterns": [],
+    "default_exclude_patterns": ["*.log", "*.tmp", "*.bak", "*.DS_Store"]
+}

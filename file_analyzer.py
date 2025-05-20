@@ -33,6 +33,51 @@ REQUIRED_TOOLS = {
     "binwalk": "binary"
 }
 
+# Default configuration
+DEFAULT_CONFIG = {
+    "default_output_dir": "analysis_results",
+    "max_threads": os.cpu_count(),
+    "max_ocr_images": 50,
+    "file_extensions": {
+        "images": [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"]
+    },
+    "tool_options": {},
+    "default_include_patterns": [],
+    "default_exclude_patterns": []
+}
+
+def load_config(config_path=None):
+    """Load configuration from a JSON file with fallback to defaults."""
+    config = DEFAULT_CONFIG.copy()
+    
+    # Look for config file in default locations if not specified
+    if not config_path:
+        # Try current directory first
+        if Path("config.json").exists():
+            config_path = "config.json"
+        # Then try user's home directory
+        elif Path.home().joinpath(".config/file_analyzer/config.json").exists():
+            config_path = Path.home().joinpath(".config/file_analyzer/config.json")
+    
+    # Load config from file if available
+    if config_path and Path(config_path).exists():
+        try:
+            with open(config_path, 'r') as f:
+                file_config = json.load(f)
+                
+            # Update default config with file config
+            for key, value in file_config.items():
+                if key in config and isinstance(config[key], dict) and isinstance(value, dict):
+                    config[key].update(value)
+                else:
+                    config[key] = value
+                    
+            print(f"Loaded configuration from {config_path}")
+        except Exception as e:
+            print(f"Error loading configuration: {str(e)}")
+    
+    return config
+
 def check_dependencies(required_tools=None):
     """Check if required external tools are installed and available in PATH."""
     if required_tools is None:
@@ -92,12 +137,22 @@ class ProgressIndicator:
 
 
 class FileAnalyzer:
-    def __init__(self, path, output_dir=None, verbose=True, include_patterns=None, exclude_patterns=None):
+    def __init__(self, path, output_dir=None, verbose=True, include_patterns=None, exclude_patterns=None, config=None):
         self.path = Path(path).expanduser().absolute()
         if not self.path.exists():
             raise FileNotFoundError(f"Path does not exist: {self.path}")
         
-        self.output_dir = Path(output_dir) if output_dir else Path.cwd()
+        # Load configuration
+        self.config = config or load_config()
+        
+        # Set output directory
+        if output_dir:
+            self.output_dir = Path(output_dir)
+        elif "default_output_dir" in self.config:
+            self.output_dir = Path(self.config["default_output_dir"])
+        else:
+            self.output_dir = Path.cwd()
+            
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -106,10 +161,23 @@ class FileAnalyzer:
             "time": datetime.now().isoformat(),
             "analyses": {}
         }
-        self.image_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.gif'}
+        
+        # Set file extensions from config
+        if "file_extensions" in self.config and "images" in self.config["file_extensions"]:
+            self.image_extensions = set(self.config["file_extensions"]["images"])
+        else:
+            self.image_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.gif'}
+            
         self.verbose = verbose
-        self.include_patterns = include_patterns or []
-        self.exclude_patterns = exclude_patterns or []
+        
+        # Combine user-specified patterns with defaults from config
+        self.include_patterns = list(include_patterns or [])
+        if not self.include_patterns and "default_include_patterns" in self.config:
+            self.include_patterns = list(self.config["default_include_patterns"])
+            
+        self.exclude_patterns = list(exclude_patterns or [])
+        if not self.exclude_patterns and "default_exclude_patterns" in self.config:
+            self.exclude_patterns = list(self.config["default_exclude_patterns"])
         
     def should_process_file(self, file_path):
         """Determine if a file should be processed based on include/exclude patterns."""
@@ -224,18 +292,28 @@ class FileAnalyzer:
             progress = ProgressIndicator(f"Processing {min(len(image_files), 50)} images")
             progress.start()
         
-        # Process images (limit to 50 for performance)
+        # Get max images from config (default to 50)
+        max_ocr_images = self.config.get("max_ocr_images", 50)
+        max_threads = self.config.get("max_threads", os.cpu_count())
+        
+        # Process images with limits
         ocr_results = {}
         
         def process_image(img_path):
             try:
-                output = self.run_command(["tesseract", str(img_path), "stdout"])
+                # Get tesseract options from config
+                tesseract_options = self.config.get("tool_options", {}).get("tesseract", [])
+                command = ["tesseract"]
+                command.extend(tesseract_options)
+                command.extend([str(img_path), "stdout"])
+                
+                output = self.run_command(command)
                 return str(img_path), output.strip() if output else "No text extracted"
             except Exception as e:
                 return str(img_path), f"Error: {str(e)}"
         
-        with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-            for img_path, text in executor.map(process_image, image_files[:50]):
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            for img_path, text in executor.map(process_image, image_files[:max_ocr_images]):
                 ocr_results[img_path] = text
         
         # Save results
@@ -383,6 +461,7 @@ def main():
                         help='Include only files matching pattern (can be used multiple times)')
     parser.add_argument('--exclude', '-x', action='append',
                         help='Exclude files matching pattern (can be used multiple times)')
+    parser.add_argument('--config', '-c', help='Path to custom configuration file')
     
     args = parser.parse_args()
     
@@ -419,13 +498,17 @@ def main():
                 print("Installation instructions can be found in the project documentation.")
                 sys.exit(1)
         
-        # Initialize file analyzer with include/exclude patterns
+        # Load configuration
+        config = load_config(args.config)
+        
+        # Initialize file analyzer with configuration
         analyzer = FileAnalyzer(
             args.path, 
             args.output, 
             verbose=not args.quiet,
             include_patterns=args.include,
-            exclude_patterns=args.exclude
+            exclude_patterns=args.exclude,
+            config=config
         )
         
         if run_all or args.metadata:

@@ -19,6 +19,7 @@ if [ $# -eq 0 ]; then
     echo "  -q, --quiet           Quiet mode with minimal output"
     echo "  -i, --include PATTERN Include only files matching pattern (can be used multiple times)"
     echo "  -x, --exclude PATTERN Exclude files matching pattern (can be used multiple times)"
+    echo "  -c, --config FILE     Path to custom configuration file"
     exit 1
 fi
 
@@ -82,6 +83,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -x|--exclude)
             OPTIONS="$OPTIONS --exclude \"$2\""
+            shift 2
+            ;;
+        -c|--config)
+            OPTIONS="$OPTIONS --config \"$2\""
             shift 2
             ;;
         -*)
