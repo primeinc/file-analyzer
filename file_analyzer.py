@@ -443,25 +443,66 @@ class FileAnalyzer:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='File Analysis System')
+    # Create a parser with more detailed help
+    parser = argparse.ArgumentParser(
+        description='File Analysis System - Comprehensive file analysis tool',
+        epilog='''
+Examples:
+  # Run all analyses on a directory
+  %(prog)s --all ~/Documents
+  
+  # Extract metadata and find duplicates
+  %(prog)s --metadata --duplicates ~/Pictures
+  
+  # Search for specific content
+  %(prog)s --search "password" ~/Downloads
+  
+  # OCR images in a directory
+  %(prog)s --ocr ~/Screenshots
+  
+  # Include only specific file types
+  %(prog)s --all --include "*.jpg" --include "*.png" ~/Pictures
+  
+  # Exclude specific patterns
+  %(prog)s --all --exclude "*.log" --exclude "*.tmp" ~/Documents
+  
+  # Use a custom config file and quiet mode
+  %(prog)s --all --config ~/my_config.json --quiet ~/Documents
+  
+  # Metadata extraction with custom output directory
+  %(prog)s --metadata --output ~/analysis_results ~/Documents
+''',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    # Add arguments with more detailed help
     parser.add_argument('path', help='Path to file/directory to analyze')
-    parser.add_argument('--metadata', '-m', action='store_true', help='Extract metadata')
-    parser.add_argument('--duplicates', '-d', action='store_true', help='Find duplicates')
-    parser.add_argument('--ocr', '-o', action='store_true', help='Perform OCR')
-    parser.add_argument('--malware', '-v', action='store_true', help='Scan for malware')
-    parser.add_argument('--search', '-s', help='Search content')
-    parser.add_argument('--binary', '-b', action='store_true', help='Analyze binary')
-    parser.add_argument('--all', '-a', action='store_true', help='All analyses')
-    parser.add_argument('--output', '-r', help='Output directory')
+    parser.add_argument('--metadata', '-m', action='store_true', 
+                        help='Extract metadata using ExifTool (file type, dates, camera info, etc.)')
+    parser.add_argument('--duplicates', '-d', action='store_true', 
+                        help='Find duplicate files using rdfind (only works on directories)')
+    parser.add_argument('--ocr', '-o', action='store_true', 
+                        help='Perform OCR on images using Tesseract (extracts text from images)')
+    parser.add_argument('--malware', '-v', action='store_true', 
+                        help='Scan for malware using ClamAV (virus detection)')
+    parser.add_argument('--search', '-s', 
+                        help='Search content using ripgrep (find text in files)')
+    parser.add_argument('--binary', '-b', action='store_true', 
+                        help='Analyze binary content using binwalk (identify embedded files)')
+    parser.add_argument('--all', '-a', action='store_true', 
+                        help='Run all analyses (equivalent to -m -d -o -v -b)')
+    parser.add_argument('--output', '-r', 
+                        help='Output directory for results (default: current directory or config)')
     parser.add_argument('--skip-dependency-check', action='store_true', 
-                        help='Skip checking for required external tools')
+                        help='Skip checking for required external tools (use if tools are installed but not in PATH)')
     parser.add_argument('--quiet', '-q', action='store_true',
-                        help='Quiet mode with minimal output')
+                        help='Quiet mode with minimal output (no progress indicators)')
     parser.add_argument('--include', '-i', action='append', 
-                        help='Include only files matching pattern (can be used multiple times)')
+                        help='Include only files matching pattern (glob syntax, can be used multiple times)')
     parser.add_argument('--exclude', '-x', action='append',
-                        help='Exclude files matching pattern (can be used multiple times)')
-    parser.add_argument('--config', '-c', help='Path to custom configuration file')
+                        help='Exclude files matching pattern (glob syntax, can be used multiple times)')
+    parser.add_argument('--config', '-c', 
+                        help='Path to custom configuration file (JSON format)')
     
     args = parser.parse_args()
     
