@@ -13,5 +13,15 @@
         "rg": ["-i", "--line-number", "--color", "never"]
     },
     "default_include_patterns": [],
-    "default_exclude_patterns": ["*.log", "*.tmp", "*.bak", "*.DS_Store"]
+    "default_exclude_patterns": ["*.log", "*.tmp", "*.bak", "*.DS_Store"],
+    "vision": {
+        "model": "fastvlm",
+        "max_images": 10,
+        "resolution": "512x512",
+        "description_mode": "standard",
+        "output_format": "text",
+        "model_path": null,
+        "mmproj_path": null,
+        "batch_processing": false
+    }
 }

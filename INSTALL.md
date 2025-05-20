@@ -10,6 +10,7 @@ The File Analysis System requires several external tools to be installed on your
 - **ClamAV**: Malware scanning
 - **ripgrep (rg)**: Content searching
 - **binwalk**: Binary analysis
+- **Python 3.8+**: Required for vision model analysis
 
 ## macOS (using Homebrew)
 
@@ -70,6 +71,51 @@ After installation, you can verify that all tools are properly installed and ava
 
 If any tools are missing, the system will show an error message indicating which tools need to be installed.
 
+## Vision Model Dependencies (Optional)
+
+For using the AI-powered vision analysis features, additional dependencies are required:
+
+### FastVLM (Recommended for Apple Silicon)
+
+```bash
+# Install MLX framework and FastVLM model
+pip install mlx mlx-fastvlm
+
+# Download the model (automatic when first used)
+fastvlm download apple/fastvlm-1.5b-instruct
+```
+
+### Qwen2-VL (Best for Document Analysis)
+
+```bash
+# Install MLX-VLM framework
+pip install mlx-vlm
+```
+
+### BakLLaVA (For Video Processing)
+
+Option 1: Using llama.cpp (recommended for most users):
+
+```bash
+# Clone and build llama.cpp
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+make
+
+# Download the required model files (manual step)
+# - BakLLaVA-1-Q4_K_M.gguf: The main model
+# - BakLLaVA-1-clip-model.gguf: The vision encoder
+```
+
+Option 2: Using Fuzzy-Search implementation (for video processing):
+
+```bash
+# Clone and build realtime-bakllava
+git clone https://github.com/Fuzzy-Search/realtime-bakllava
+cd realtime-bakllava
+make
+```
+
 ## Troubleshooting
 
 If you encounter issues with any of the tools:
@@ -80,3 +126,7 @@ If you encounter issues with any of the tools:
 4. **Tesseract language packs**: For OCR in languages other than English, install additional language packs:
    - macOS: `brew install tesseract-lang`
    - Debian/Ubuntu: `sudo apt install tesseract-ocr-all`
+5. **Vision model errors**: Vision models require specific Python packages. If you encounter errors:
+   - Ensure Python 3.8+ is installed
+   - Install dependencies for your chosen model as described above
+   - For faster performance on Apple Silicon, ensure MLX is properly installed

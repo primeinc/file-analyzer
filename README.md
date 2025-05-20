@@ -8,6 +8,7 @@ Unified tool for comprehensive file analysis combining:
 - ClamAV: Malware scanning
 - ripgrep: Content searching
 - binwalk: Binary analysis
+- Vision Models: AI-powered image analysis (FastVLM, BakLLaVA, Qwen2-VL)
 
 ## Usage
 
@@ -24,6 +25,9 @@ Unified tool for comprehensive file analysis combining:
 - `-v, --virus`: Scan for malware
 - `-s, --search TEXT`: Search content
 - `-b, --binary`: Analyze binary files
+- `-V, --vision`: Analyze images using AI vision models
+- `--vision-model MODEL`: Select vision model (fastvlm, bakllava, qwen2vl)
+- `--vision-mode MODE`: Vision analysis mode (describe, detect, document)
 - `-r, --results DIR`: Output directory
 - `-i, --include PATTERN`: Include only files matching pattern
 - `-x, --exclude PATTERN`: Exclude files matching pattern
@@ -54,6 +58,15 @@ Unified tool for comprehensive file analysis combining:
 
 # Use a custom config file
 ./analyze.sh -a -c ~/my_config.json ~/Documents
+
+# Analyze images with AI vision models
+./analyze.sh -V ~/Pictures
+
+# Use a specific vision model
+./analyze.sh -V --vision-model fastvlm ~/Pictures
+
+# Use document analysis mode for extracting text
+./analyze.sh -V --vision-mode document ~/Documents
 ```
 
 ## Output
@@ -67,6 +80,7 @@ Results are saved to the current directory (or specified output directory):
 - `malware_scan_[timestamp].txt`: Malware scan results
 - `search_[text]_[timestamp].txt`: Content search results
 - `binary_analysis_[timestamp].txt`: Binary analysis
+- `vision_analysis_[timestamp].(txt|json)`: AI vision model analysis
 
 ## Configuration
 
@@ -82,7 +96,13 @@ Example configuration:
   "file_extensions": {
     "images": [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"]
   },
-  "default_exclude_patterns": ["*.log", "*.tmp", "*.bak"]
+  "default_exclude_patterns": ["*.log", "*.tmp", "*.bak"],
+  "vision": {
+    "model": "fastvlm",
+    "max_images": 10,
+    "description_mode": "standard",
+    "output_format": "text"
+  }
 }
 ```
 
@@ -109,6 +129,23 @@ This creates symbolic links to the tool in the specified directory. After instal
 
 See [INSTALL.md](INSTALL.md) for detailed instructions on installing all required dependencies.
 
+#### Vision Model Dependencies
+
+For vision analysis capabilities, additional dependencies are required:
+
+```bash
+# For FastVLM (recommended for Apple Silicon)
+pip install mlx mlx-fastvlm
+
+# For Qwen2-VL (good for document analysis)
+pip install mlx-vlm
+
+# For BakLLaVA
+# Requires llama.cpp with BakLLaVA-1-Q4_K_M.gguf model
+git clone https://github.com/Fuzzy-Search/realtime-bakllava
+cd realtime-bakllava && make
+```
+
 ## Running Tests
 
 The project includes a comprehensive test suite:
@@ -116,6 +153,9 @@ The project includes a comprehensive test suite:
 ```bash
 # Run the automated test suite
 cd test_data && ./run_tests.sh
+
+# Test vision analysis capabilities
+./test_vision.sh
 ```
 
 The test suite verifies:
@@ -123,6 +163,7 @@ The test suite verifies:
 - Duplicate file detection
 - Content searching capabilities  
 - File filtering with include/exclude patterns
+- Vision model integration (when dependencies are installed)
 
 ## Using the Python Script Directly
 

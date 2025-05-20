@@ -22,6 +22,9 @@ if [ $# -eq 0 ]; then
     echo "  -v, --virus           Scan for malware"
     echo "  -s, --search TEXT     Search content for TEXT"
     echo "  -b, --binary          Analyze binary files"
+    echo "  -V, --vision          Analyze images with AI vision models"
+    echo "  --vision-model MODEL  Select vision model (fastvlm, bakllava, qwen2vl)"
+    echo "  --vision-mode MODE    Vision analysis mode (describe, detect, document)"
     echo "  -r, --results DIR     Output directory"
     echo "  --skip-checks         Skip dependency checks"
     echo "  -q, --quiet           Quiet mode with minimal output"
@@ -71,6 +74,18 @@ while [[ $# -gt 0 ]]; do
         -b|--binary)
             OPTIONS="$OPTIONS --binary"
             shift
+            ;;
+        -V|--vision)
+            OPTIONS="$OPTIONS --vision"
+            shift
+            ;;
+        --vision-model)
+            OPTIONS="$OPTIONS --vision-model $2"
+            shift 2
+            ;;
+        --vision-mode)
+            OPTIONS="$OPTIONS --vision-mode $2"
+            shift 2
             ;;
         -r|--results)
             OUTPUT_DIR="$2"

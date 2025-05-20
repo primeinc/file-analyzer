@@ -9,6 +9,7 @@ Combines multiple tools for comprehensive file analysis:
 - ClamAV: Malware scanning
 - ripgrep: Content searching
 - binwalk: Binary analysis
+- Vision Models: AI-powered image analysis (FastVLM, BakLLaVA, Qwen2-VL)
 """
 
 import os
@@ -23,6 +24,13 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+# Import vision analyzer module
+try:
+    from vision_analyzer import VisionAnalyzer, DEFAULT_VISION_CONFIG, VISION_MODELS
+    VISION_AVAILABLE = True
+except ImportError:
+    VISION_AVAILABLE = False
+
 # Required external tools and their corresponding analysis types
 REQUIRED_TOOLS = {
     "exiftool": "metadata",
@@ -30,7 +38,8 @@ REQUIRED_TOOLS = {
     "tesseract": "ocr",
     "clamscan": "malware",
     "rg": "search",
-    "binwalk": "binary"
+    "binwalk": "binary",
+    "python": "vision"  # Python is required for vision analysis
 }
 
 # Default configuration
@@ -43,7 +52,8 @@ DEFAULT_CONFIG = {
     },
     "tool_options": {},
     "default_include_patterns": [],
-    "default_exclude_patterns": []
+    "default_exclude_patterns": [],
+    "vision": {} if not VISION_AVAILABLE else DEFAULT_VISION_CONFIG
 }
 
 def load_config(config_path=None):
@@ -539,6 +549,115 @@ class FileAnalyzer:
         else:
             self.results["analyses"]["binary"] = {"status": "error"}
             return None
+            
+    def analyze_images_with_vision(self, mode="describe"):
+        """Analyze images using vision models."""
+        if not VISION_AVAILABLE:
+            print("Vision analysis module not available.")
+            self.results["analyses"]["vision"] = {"status": "skipped", "message": "Vision module not available"}
+            return None
+            
+        if self.verbose:
+            print(f"Analyzing images in {self.path} with vision models...")
+            progress = ProgressIndicator("Initializing vision analysis")
+            progress.start()
+            
+        # Find image files
+        image_files = []
+        if self.path.is_dir():
+            for root, _, files in os.walk(self.path):
+                for file in files:
+                    file_path = Path(root) / file
+                    if file_path.suffix.lower() in self.image_extensions and self.should_process_file(file_path):
+                        image_files.append(file_path)
+        elif self.path.suffix.lower() in self.image_extensions and self.should_process_file(self.path):
+            image_files.append(self.path)
+            
+        if not image_files:
+            if self.verbose:
+                progress.stop("No images found")
+            self.results["analyses"]["vision"] = {"status": "skipped", "message": "No images found"}
+            return None
+            
+        # Set up vision analyzer with configuration
+        vision_config = self.config.get("vision", {})
+        analyzer = VisionAnalyzer(vision_config)
+        
+        # Check dependencies
+        if not analyzer.check_dependencies():
+            if self.verbose:
+                progress.stop("Missing vision model dependencies")
+                print(f"Required dependencies for {analyzer.model_info['name']} not installed.")
+                print(f"Run '{analyzer.model_info['install_cmd']}' to install.")
+            self.results["analyses"]["vision"] = {
+                "status": "error", 
+                "message": f"Missing dependencies for {analyzer.model_info['name']}"
+            }
+            return None
+            
+        if self.verbose:
+            progress.stop(f"Found {len(image_files)} image(s)")
+            model_name = analyzer.model_info["name"]
+            print(f"Using {model_name} model for vision analysis")
+            progress = ProgressIndicator(f"Analyzing images with {model_name}")
+            progress.start()
+            
+        # Determine if batch processing or individual
+        results = {}
+        max_images = vision_config.get("max_images", 10)  # Limit the number of images to process
+        
+        if len(image_files) > max_images:
+            if self.verbose:
+                print(f"Limiting to {max_images} images (out of {len(image_files)})")
+            image_files = image_files[:max_images]
+            
+        # Process images based on configuration
+        if self.path.is_dir() and vision_config.get("batch_processing", False):
+            # Batch processing for directory
+            batch_output_dir = Path(self.output_dir) / f"vision_{self.timestamp}"
+            batch_output_dir.mkdir(exist_ok=True, parents=True)
+            results = analyzer.batch_analyze(str(self.path), str(batch_output_dir), mode)
+        else:
+            # Process each image individually
+            for image_path in image_files:
+                if self.verbose:
+                    print(f"Analyzing image: {image_path}")
+                result = analyzer.analyze_image(str(image_path), mode=mode)
+                if result:
+                    results[str(image_path)] = result
+                    
+        if not results:
+            if self.verbose:
+                progress.stop("Analysis failed")
+            self.results["analyses"]["vision"] = {"status": "error", "message": "Analysis failed"}
+            return None
+            
+        # Save results to file
+        if results:
+            output_file = self.output_dir / f"vision_analysis_{self.timestamp}.{vision_config.get('output_format', 'text')}" 
+            saved_file = analyzer.save_results(results, output_file)
+            
+            if self.verbose:
+                progress.stop(f"Completed analysis of {len(results)} images")
+                if saved_file:
+                    print(f"Vision analysis results saved to {saved_file}")
+                else:
+                    print("No results were saved")
+        else:
+            if self.verbose:
+                progress.stop("No results to save")
+            self.results["analyses"]["vision"] = {"status": "completed", "message": "No results to save"}
+            return None
+            
+        self.results["analyses"]["vision"] = {
+            "status": "success",
+            "file": str(output_file),
+            "model": analyzer.model_info["name"],
+            "mode": mode,
+            "count": len(results)
+        }
+        
+        return results
 
     def save_results(self):
         results_file = self.output_dir / f"analysis_summary_{self.timestamp}.json"
@@ -566,6 +685,12 @@ Examples:
   
   # OCR images in a directory
   %(prog)s --ocr ~/Screenshots
+  
+  # Analyze images with vision models
+  %(prog)s --vision ~/Pictures
+  
+  # Vision analysis with specific mode
+  %(prog)s --vision --vision-mode document ~/Documents
   
   # Include only specific file types
   %(prog)s --all --include "*.jpg" --include "*.png" ~/Pictures
@@ -596,8 +721,17 @@ Examples:
                         help='Search content using ripgrep (find text in files)')
     parser.add_argument('--binary', '-b', action='store_true', 
                         help='Analyze binary content using binwalk (identify embedded files)')
+    parser.add_argument('--vision', '-V', action='store_true',
+                        help='Analyze images using AI vision models (FastVLM, BakLLaVA, etc.)')
+    parser.add_argument('--vision-model', 
+                        choices=['fastvlm', 'bakllava', 'qwen2vl'] if VISION_AVAILABLE else None,
+                        help='Specify which vision model to use for analysis')
+    parser.add_argument('--vision-mode',
+                        choices=['describe', 'detect', 'document'],
+                        default='describe',
+                        help='Vision analysis mode: describe (default), detect objects, or document OCR')
     parser.add_argument('--all', '-a', action='store_true', 
-                        help='Run all analyses (equivalent to -m -d -o -v -b)')
+                        help='Run all analyses (equivalent to -m -d -o -v -b, does not include vision)')
     parser.add_argument('--output', '-r', 
                         help='Output directory for results (default: current directory or config)')
     parser.add_argument('--skip-dependency-check', action='store_true', 
@@ -617,7 +751,7 @@ Examples:
         # Determine which analyses to run
         run_all = args.all or not any([
             args.metadata, args.duplicates, args.ocr, 
-            args.malware, args.search, args.binary
+            args.malware, args.search, args.binary, args.vision
         ])
         
         # Check for required tools based on requested analyses
@@ -635,6 +769,8 @@ Examples:
                 tools_to_check["rg"] = "search"
             if (run_all or args.binary):
                 tools_to_check["binwalk"] = "binary"
+            if args.vision:
+                tools_to_check["python"] = "vision"
             
             missing_tools = check_dependencies(tools_to_check)
             
@@ -648,6 +784,13 @@ Examples:
         
         # Load configuration
         config = load_config(args.config)
+        
+        # Update vision-specific configuration if needed
+        if args.vision and VISION_AVAILABLE:
+            if "vision" not in config:
+                config["vision"] = DEFAULT_VISION_CONFIG.copy()
+            if args.vision_model:
+                config["vision"]["model"] = args.vision_model
         
         # Initialize file analyzer with configuration
         analyzer = FileAnalyzer(
@@ -676,6 +819,9 @@ Examples:
         
         if (run_all or args.binary) and not args.path.is_dir():
             analyzer.analyze_binary()
+            
+        if args.vision and VISION_AVAILABLE:
+            analyzer.analyze_images_with_vision(args.vision_mode)
         
         analyzer.save_results()
         
