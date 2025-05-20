@@ -133,3 +133,60 @@ The system uses a consistent error handling pattern:
 - Exceptions are caught and reported
 - Analysis methods return None on error
 - The results dictionary tracks status as "success", "error", or "skipped"
+
+## JSON Validation System
+
+The File Analysis System includes a robust JSON validation system for handling vision model outputs:
+
+### JSON Utilities Module
+
+The `json_utils.py` module centralizes JSON handling operations:
+
+- **JSONValidator** class with methods for:
+  - Extracting valid JSON from text responses using multiple strategies
+  - Validating JSON structure against expected fields
+  - Adding standardized metadata to JSON results
+  - Formatting fallback responses when JSON parsing fails
+
+- **Common prompt templates** for different analysis modes:
+  - `describe`: General image description with tags
+  - `detect`: Object detection with locations
+  - `document`: Text extraction and document type identification
+  - `retry`: Stronger prompts for retry attempts
+
+### JSON Extraction Features
+
+The system employs a multi-stage approach to extract JSON from potentially malformed text:
+
+1. **Direct parsing** - Simple `json.loads()` attempt
+2. **Pattern matching** - Regex search for field-specific patterns
+3. **Balanced bracket search** - Character-by-character parsing with stack-based tracking
+4. **Embedded JSON detection** - Finds JSON objects embedded within larger text
+
+The extraction can handle nested objects, arrays, and quoted strings properly.
+
+### Retry Logic
+
+For vision model outputs that fail JSON validation:
+
+1. Initial attempt uses a standard JSON-formatted prompt
+2. If validation fails, a stronger prompt specifically emphasizing JSON format is used
+3. Multiple retry attempts with progressively stricter prompts
+4. Graceful fallback to structured text output with appropriate metadata
+
+### Test Infrastructure
+
+The JSON validation system includes comprehensive testing:
+
+- Unit tests for JSON extraction from various text formats
+- Tests for progressively corrupted JSON inputs
+- Tests for complete JSON parsing failure scenarios
+- Integration tests for the full validation pipeline
+
+### Error Reporting
+
+Test scripts include enhanced error reporting:
+
+- Detailed error logs for debugging failed validations
+- Non-zero exit codes for CI/CD integration
+- Visual indicators (✓/✗) for test status feedback
