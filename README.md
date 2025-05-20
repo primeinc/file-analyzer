@@ -111,11 +111,18 @@ See [INSTALL.md](INSTALL.md) for detailed instructions on installing all require
 
 ## Running Tests
 
-Basic tests can be run using:
+The project includes a comprehensive test suite:
 
 ```bash
-./tests/test_basic.sh
+# Run the automated test suite
+cd test_data && ./run_tests.sh
 ```
+
+The test suite verifies:
+- Metadata extraction functionality
+- Duplicate file detection
+- Content searching capabilities  
+- File filtering with include/exclude patterns
 
 ## Using the Python Script Directly
 

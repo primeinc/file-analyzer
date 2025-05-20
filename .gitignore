@@ -54,3 +54,11 @@ venv.bak/
 # Generated output files
 *_[0-9]*.json
 *_[0-9]*.txt
+
+# Analysis results directories
+analysis_results/
+test_results/
+test_data/test_results/
+
+# System files
+.DS_Store
