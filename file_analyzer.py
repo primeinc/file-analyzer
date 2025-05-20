@@ -241,20 +241,17 @@ class FileAnalyzer:
                 
             # Process collected files directly
             if files_to_process:
-                temp_dir = self.output_dir / f"temp_{self.timestamp}"
-                temp_dir.mkdir(exist_ok=True)
-                file_list_path = temp_dir / "files.txt"
-                with open(file_list_path, 'w') as f:
-                    for file_path in files_to_process:
-                        f.write(f"{file_path}\n")
-                
                 # Get exiftool options from config
                 exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
-                command = ["exiftool", "-json", "-@ ", str(file_list_path)]
+                command = ["exiftool", "-json"]
                 
                 # Check if -json is already in the config options to avoid duplication
                 filtered_options = [opt for opt in exiftool_options if opt != "-json"]
                 command.extend(filtered_options)
+                
+                # Add all files to process
+                for file_path in files_to_process:
+                    command.append(str(file_path))
             else:
                 if self.verbose:
                     progress.stop("No matching files found")
