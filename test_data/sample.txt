@@ -1,0 +1,8 @@
+This is a sample text file for file-analyzer testing.
+It contains various patterns that can be searched for:
+- TEST PATTERN
+- sample text
+- file analysis
+- metadata extraction
+
+This file should be included in all search tests.
