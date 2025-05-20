@@ -17,6 +17,8 @@ if [ $# -eq 0 ]; then
     echo "  -r, --results DIR     Output directory"
     echo "  --skip-checks         Skip dependency checks"
     echo "  -q, --quiet           Quiet mode with minimal output"
+    echo "  -i, --include PATTERN Include only files matching pattern (can be used multiple times)"
+    echo "  -x, --exclude PATTERN Exclude files matching pattern (can be used multiple times)"
     exit 1
 fi
 
@@ -73,6 +75,14 @@ while [[ $# -gt 0 ]]; do
         -q|--quiet)
             OPTIONS="$OPTIONS --quiet"
             shift
+            ;;
+        -i|--include)
+            OPTIONS="$OPTIONS --include \"$2\""
+            shift 2
+            ;;
+        -x|--exclude)
+            OPTIONS="$OPTIONS --exclude \"$2\""
+            shift 2
             ;;
         -*)
             echo "Unknown option: $1"

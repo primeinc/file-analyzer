@@ -18,6 +18,7 @@ import argparse
 import json
 import shutil
 import time
+import fnmatch
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -91,7 +92,7 @@ class ProgressIndicator:
 
 
 class FileAnalyzer:
-    def __init__(self, path, output_dir=None, verbose=True):
+    def __init__(self, path, output_dir=None, verbose=True, include_patterns=None, exclude_patterns=None):
         self.path = Path(path).expanduser().absolute()
         if not self.path.exists():
             raise FileNotFoundError(f"Path does not exist: {self.path}")
@@ -107,6 +108,22 @@ class FileAnalyzer:
         }
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.gif'}
         self.verbose = verbose
+        self.include_patterns = include_patterns or []
+        self.exclude_patterns = exclude_patterns or []
+        
+    def should_process_file(self, file_path):
+        """Determine if a file should be processed based on include/exclude patterns."""
+        file_path_str = str(file_path)
+        
+        # If we have include patterns, file must match at least one
+        if self.include_patterns and not any(fnmatch.fnmatch(file_path_str, pattern) for pattern in self.include_patterns):
+            return False
+        
+        # If file matches any exclude pattern, skip it
+        if any(fnmatch.fnmatch(file_path_str, pattern) for pattern in self.exclude_patterns):
+            return False
+            
+        return True
         
     def run_command(self, command, shell=False):
         try:
@@ -191,9 +208,9 @@ class FileAnalyzer:
             for root, _, files in os.walk(self.path):
                 for file in files:
                     file_path = Path(root) / file
-                    if file_path.suffix.lower() in self.image_extensions:
+                    if file_path.suffix.lower() in self.image_extensions and self.should_process_file(file_path):
                         image_files.append(file_path)
-        elif self.path.suffix.lower() in self.image_extensions:
+        elif self.path.suffix.lower() in self.image_extensions and self.should_process_file(self.path):
             image_files.append(self.path)
         
         if not image_files:
@@ -260,13 +277,28 @@ class FileAnalyzer:
             return None
 
     def search_content(self, search_text):
-        print(f"Searching for '{search_text}' in {self.path}...")
+        if self.verbose:
+            print(f"Searching for '{search_text}' in {self.path}...")
+            progress = ProgressIndicator("Searching content")
+            progress.start()
         
         if not search_text:
+            if self.verbose:
+                progress.stop("No search text provided")
             self.results["analyses"]["search"] = {"status": "skipped"}
             return None
         
         command = ["rg", "-i", "--line-number", search_text, str(self.path)]
+        
+        # Apply file type filtering
+        if self.include_patterns:
+            for pattern in self.include_patterns:
+                command.extend(["-g", pattern])
+        
+        if self.exclude_patterns:
+            for pattern in self.exclude_patterns:
+                command.extend(["-g", f"!{pattern}"])
+        
         output = self.run_command(command)
         
         if output:
@@ -275,7 +307,10 @@ class FileAnalyzer:
                 f.write(output)
             
             match_count = len(output.splitlines())
-            print(f"Found {match_count} matches. Results saved to {output_file}")
+            if self.verbose:
+                progress.stop(f"Found {match_count} matches")
+                print(f"Results saved to {output_file}")
+                
             self.results["analyses"]["search"] = {
                 "status": "success", 
                 "query": search_text,
@@ -284,6 +319,9 @@ class FileAnalyzer:
             }
             return output
         else:
+            if self.verbose:
+                progress.stop("No matches found")
+                
             self.results["analyses"]["search"] = {
                 "status": "completed",
                 "query": search_text,
@@ -341,6 +379,10 @@ def main():
                         help='Skip checking for required external tools')
     parser.add_argument('--quiet', '-q', action='store_true',
                         help='Quiet mode with minimal output')
+    parser.add_argument('--include', '-i', action='append', 
+                        help='Include only files matching pattern (can be used multiple times)')
+    parser.add_argument('--exclude', '-x', action='append',
+                        help='Exclude files matching pattern (can be used multiple times)')
     
     args = parser.parse_args()
     
@@ -377,7 +419,14 @@ def main():
                 print("Installation instructions can be found in the project documentation.")
                 sys.exit(1)
         
-        analyzer = FileAnalyzer(args.path, args.output, verbose=not args.quiet)
+        # Initialize file analyzer with include/exclude patterns
+        analyzer = FileAnalyzer(
+            args.path, 
+            args.output, 
+            verbose=not args.quiet,
+            include_patterns=args.include,
+            exclude_patterns=args.exclude
+        )
         
         if run_all or args.metadata:
             analyzer.extract_metadata()
