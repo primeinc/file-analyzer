@@ -61,10 +61,22 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     fi
 fi
 
-# Create symbolic link
+# Create symbolic links with absolute paths
 echo "Creating symbolic links in $BIN_DIR"
 ln -sf "$ANALYZE_SCRIPT" "$BIN_DIR/analyze-files"
 ln -sf "$ANALYZER_SCRIPT" "$BIN_DIR/file-analyzer"
+
+# Create a wrapper script for analyze-files to ensure it can find the Python script
+WRAPPER_SCRIPT="$BIN_DIR/analyze-files-wrapper"
+cat > "$WRAPPER_SCRIPT" << EOL
+#!/bin/bash
+# Wrapper script for analyze.sh that ensures correct directory resolution
+"${ANALYZE_SCRIPT}" "\$@"
+EOL
+chmod +x "$WRAPPER_SCRIPT"
+
+# Update the analyze-files symlink to point to the wrapper
+ln -sf "$WRAPPER_SCRIPT" "$BIN_DIR/analyze-files"
 
 echo "Installation complete!"
 echo "You can now run the tool using 'analyze-files' or 'file-analyzer' commands."
