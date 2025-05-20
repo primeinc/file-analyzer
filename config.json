@@ -2,6 +2,7 @@
     "default_output_dir": "analysis_results",
     "max_threads": 4,
     "max_ocr_images": 50,
+    "max_metadata_files": 20,
     "file_extensions": {
         "images": [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"],
         "documents": [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]

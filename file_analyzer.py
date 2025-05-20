@@ -216,17 +216,67 @@ class FileAnalyzer:
             progress = ProgressIndicator("Extracting metadata")
             progress.start()
         
-        # Get exiftool options from config
-        exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
-        command = ["exiftool", "-json"]
-        
-        # Check if -json is already in the config options to avoid duplication
-        filtered_options = [opt for opt in exiftool_options if opt != "-json"]
-        command.extend(filtered_options)
-        
+        # Get list of files to process if it's a directory
+        files_to_process = []
         if self.path.is_dir():
-            command.append("-r")
-        command.append(str(self.path))
+            # If we're processing a directory, collect files first with filtering
+            if self.verbose:
+                print("Collecting files to process...")
+            
+            for root, _, files in os.walk(self.path):
+                for file in files:
+                    file_path = Path(root) / file
+                    if self.should_process_file(file_path):
+                        files_to_process.append(file_path)
+            
+            if self.verbose:
+                print(f"Found {len(files_to_process)} files to process")
+                
+            # Limit the number of files to process
+            max_files = self.config.get("max_metadata_files", 50)
+            if len(files_to_process) > max_files:
+                if self.verbose:
+                    print(f"Limiting to {max_files} files")
+                files_to_process = files_to_process[:max_files]
+                
+            # Process collected files directly
+            if files_to_process:
+                temp_dir = self.output_dir / f"temp_{self.timestamp}"
+                temp_dir.mkdir(exist_ok=True)
+                file_list_path = temp_dir / "files.txt"
+                with open(file_list_path, 'w') as f:
+                    for file_path in files_to_process:
+                        f.write(f"{file_path}\n")
+                
+                # Get exiftool options from config
+                exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
+                command = ["exiftool", "-json", "-@ ", str(file_list_path)]
+                
+                # Check if -json is already in the config options to avoid duplication
+                filtered_options = [opt for opt in exiftool_options if opt != "-json"]
+                command.extend(filtered_options)
+            else:
+                if self.verbose:
+                    progress.stop("No matching files found")
+                self.results["analyses"]["metadata"] = {"status": "skipped"}
+                return None
+        else:
+            # If it's a single file, just process it directly
+            if not self.should_process_file(self.path):
+                if self.verbose:
+                    progress.stop("File excluded by pattern")
+                self.results["analyses"]["metadata"] = {"status": "skipped"}
+                return None
+                
+            # Get exiftool options from config
+            exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
+            command = ["exiftool", "-json"]
+            
+            # Check if -json is already in the config options to avoid duplication
+            filtered_options = [opt for opt in exiftool_options if opt != "-json"]
+            command.extend(filtered_options)
+            
+            command.append(str(self.path))
         
         # Add debug information
         if self.verbose:
