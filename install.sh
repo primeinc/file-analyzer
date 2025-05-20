@@ -29,11 +29,36 @@ if [ ! -d "$BIN_DIR" ]; then
     mkdir -p "$BIN_DIR"
 fi
 
-# Check if bin directory is in PATH
+# Check if bin directory is in PATH and try to add it automatically on macOS
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    echo "Warning: $BIN_DIR is not in your PATH."
-    echo "Consider adding the following line to your ~/.bashrc or ~/.zshrc:"
-    echo "  export PATH=\"\$PATH:$BIN_DIR\""
+    # Detect shell and profile file
+    if [[ "$OSTYPE" == "darwin"* ]]; then  # macOS
+        SHELL_NAME=$(basename "$SHELL")
+        if [ "$SHELL_NAME" = "zsh" ]; then
+            PROFILE_FILE="$HOME/.zshrc"
+        elif [ "$SHELL_NAME" = "bash" ]; then
+            PROFILE_FILE="$HOME/.bash_profile"
+        fi
+        
+        if [ -n "$PROFILE_FILE" ]; then
+            # Check if we already have a PATH line for this directory
+            if ! grep -q "export PATH=.*$BIN_DIR" "$PROFILE_FILE" 2>/dev/null; then
+                echo "Adding $BIN_DIR to your PATH in $PROFILE_FILE"
+                echo "" >> "$PROFILE_FILE"
+                echo "# Added by file-analyzer install script" >> "$PROFILE_FILE"
+                echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$PROFILE_FILE"
+                echo "PATH updated in $PROFILE_FILE. Please run: source $PROFILE_FILE"
+            fi
+        else
+            echo "Warning: $BIN_DIR is not in your PATH."
+            echo "Please add the following line to your shell profile:"
+            echo "  export PATH=\"\$PATH:$BIN_DIR\""
+        fi
+    else
+        echo "Warning: $BIN_DIR is not in your PATH."
+        echo "Please add the following line to your shell profile:"
+        echo "  export PATH=\"\$PATH:$BIN_DIR\""
+    fi
 fi
 
 # Create symbolic link
