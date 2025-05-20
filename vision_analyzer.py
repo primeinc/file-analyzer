@@ -19,17 +19,33 @@ from pathlib import Path
 import shutil
 from datetime import datetime
 import tempfile
+import time
+
+# Try to import PIL for image preprocessing
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 # Vision model options
 VISION_MODELS = {
     "fastvlm": {
         "name": "FastVLM",
         "description": "Apple's native vision model (fastest option)",
-        "install_cmd": "pip install mlx mlx-fastvlm",
-        "check_cmd": "python -c \"import mlx_fastvlm\"",
-        "bin": "fastvlm",
+        "install_cmd": "pip install mlx Pillow && git clone https://github.com/apple/ml-fastvlm.git && cd ml-fastvlm && pip install -e .",
+        "check_cmd": "python -c \"import mlx\"",
+        "bin": "ml-fastvlm/predict.py",
         "model_options": {
-            "default": "apple/fastvlm-1.5b-instruct"
+            "default": "ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
+            "small": "ml-fastvlm/checkpoints/llava-fastvithd_0.5b_stage3",
+            "medium": "ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
+            "large": "ml-fastvlm/checkpoints/llava-fastvithd_7b_stage3"
+        },
+        "resolution": {
+            "default": "512x512",
+            "text": "768x768",  # Better for document analysis
+            "objects": "384x384" # Sufficient for object detection
         }
     },
     "bakllava": {
@@ -74,6 +90,14 @@ class VisionAnalyzer:
         self.config = config or DEFAULT_VISION_CONFIG.copy()
         self.model_name = self.config.get("model", "fastvlm")
         self.model_info = VISION_MODELS.get(self.model_name, VISION_MODELS["fastvlm"])
+        
+        # Set up image processing parameters
+        resolution = self.config.get("resolution")
+        if not resolution and "resolution" in self.model_info:
+            resolution_options = self.model_info.get("resolution", {})
+            resolution = resolution_options.get("default")
+        
+        self.resolution = resolution or "512x512"
         
     def check_dependencies(self):
         """Check if the required dependencies for the selected vision model are installed."""
@@ -126,6 +150,70 @@ class VisionAnalyzer:
             print(f"Error: {str(e)}")
             return None
 
+    def preprocess_image(self, image_path, mode="describe"):
+        """
+        Preprocess an image for optimal performance with vision models.
+        
+        Args:
+            image_path: Path to the image file
+            mode: Analysis mode to determine optimal preprocessing
+            
+        Returns:
+            Path to preprocessed image (or original if preprocessing not available)
+        """
+        if not PIL_AVAILABLE:
+            # Skip preprocessing if PIL is not available
+            return image_path
+            
+        try:
+            # Get resolution based on mode
+            resolution = self.resolution
+            if "resolution" in self.model_info:
+                resolution_options = self.model_info.get("resolution", {})
+                if mode == "document" and "text" in resolution_options:
+                    resolution = resolution_options.get("text")
+                elif mode == "detect" and "objects" in resolution_options:
+                    resolution = resolution_options.get("objects")
+            
+            # Parse resolution
+            try:
+                width, height = map(int, resolution.split("x"))
+            except (ValueError, AttributeError):
+                width, height = 512, 512
+                
+            # Open and resize image
+            img = Image.open(image_path)
+            
+            # Skip processing if image is already optimal size
+            orig_width, orig_height = img.size
+            if orig_width == width and orig_height == height:
+                return image_path
+                
+            # Preserve aspect ratio
+            if orig_width > orig_height:
+                new_width = width
+                new_height = int(orig_height * (width / orig_width))
+            else:
+                new_height = height
+                new_width = int(orig_width * (height / orig_height))
+                
+            # Resize image
+            resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+            
+            # Create a new image with the target size and paste resized image
+            new_img = Image.new("RGB", (width, height), (0, 0, 0))
+            new_img.paste(resized_img, ((width - new_width) // 2, (height - new_height) // 2))
+            
+            # Save to a temporary file
+            temp_dir = tempfile.gettempdir()
+            temp_path = os.path.join(temp_dir, f"fastvlm_temp_{os.path.basename(image_path)}")
+            new_img.save(temp_path)
+            
+            return temp_path
+        except Exception as e:
+            print(f"Error preprocessing image: {e}")
+            return image_path
+    
     def analyze_image(self, image_path, prompt=None, mode="describe"):
         """
         Analyze an image using the selected vision model.
@@ -147,6 +235,9 @@ class VisionAnalyzer:
             print(f"Run `{self.model_info['install_cmd']}` to install them.")
             return None
             
+        # Preprocess image for optimal performance
+        processed_image_path = self.preprocess_image(image_path, mode)
+            
         model_name = self.model_name
         
         # Set default prompt based on mode if not provided
@@ -162,19 +253,69 @@ class VisionAnalyzer:
         
         # FastVLM analysis
         if model_name == "fastvlm":
+            import sys
+            import time
+            
+            # Track performance metrics
+            start_time = time.time()
+            
             model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
             creativity = 0.7 if self.config.get("description_mode") == "creative" else 0.0
             
-            if mode == "describe":
-                cmd = ["fastvlm", "describe", "--model", model_path, "--image", image_path]
-                if creativity > 0:
-                    cmd.extend(["--creative", str(creativity)])
-            elif mode == "detect":
-                cmd = ["fastvlm", "detect", "--model", model_path, "--image", image_path, "--threshold", "0.6"]
-            else:  # document mode
-                cmd = ["fastvlm", "describe", "--model", model_path, "--image", image_path]
+            # Check if we should use the direct predict.py script from ml-fastvlm
+            ml_fastvlm_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml-fastvlm")
+            predict_script = os.path.join(ml_fastvlm_dir, "predict.py")
+            
+            if os.path.exists(predict_script):
+                # Try to use the direct predict.py script
+                import subprocess
+                cmd = [
+                    sys.executable,
+                    predict_script,
+                    "--model-path", model_path,
+                    "--image-file", processed_image_path,
+                    "--prompt", prompt
+                ]
                 
-            result = self.run_command(cmd)
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                    result = result.stdout
+                except subprocess.SubprocessError as e:
+                    print(f"Error running FastVLM predict.py: {e}")
+                    if hasattr(e, 'stderr'):
+                        print(f"Error output: {e.stderr}")
+                    result = None
+            else:
+                # Fallback to command-line invocation
+                if mode == "describe":
+                    cmd = ["fastvlm", "describe", "--model", model_path, "--image", processed_image_path]
+                    if creativity > 0:
+                        cmd.extend(["--creative", str(creativity)])
+                elif mode == "detect":
+                    cmd = ["fastvlm", "detect", "--model", model_path, "--image", processed_image_path, "--threshold", "0.6"]
+                else:  # document mode
+                    cmd = ["fastvlm", "describe", "--model", model_path, "--image", processed_image_path]
+                    
+                result = self.run_command(cmd)
+                
+            # Add performance metrics if successful
+            end_time = time.time()
+            if result:
+                analysis_time = end_time - start_time
+                try:
+                    # Try to format as JSON
+                    import json
+                    result_dict = json.loads(result)
+                    result_dict['metadata'] = {
+                        'analysis_time': analysis_time,
+                        'model': 'FastVLM',
+                        'mode': mode
+                    }
+                    result = json.dumps(result_dict, indent=2)
+                except (json.JSONDecodeError, TypeError):
+                    # If not JSON, add metrics as text
+                    result = f"[FastVLM Analysis - {analysis_time:.2f}s]
+\n{result}"
             
         # BakLLaVA analysis
         elif model_name == "bakllava":
@@ -220,6 +361,88 @@ class VisionAnalyzer:
             
         return result
             
+    def _batch_process_fastvlm(self, processed_images, output_dir, mode):
+        """
+        Specialized batch processing method for FastVLM models.
+        
+        Args:
+            processed_images: Dict mapping original paths to preprocessed image paths
+            output_dir: Directory to save results
+            mode: Analysis mode
+            
+        Returns:
+            Dict mapping image paths to analysis results
+        """
+        results = {}
+        ml_fastvlm_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml-fastvlm")
+        
+        # Check if we can use the batch processing capability
+        if os.path.exists(os.path.join(ml_fastvlm_dir, "batch_predict.py")):
+            # FastVLM batch processing
+            try:
+                import sys
+                import subprocess
+                
+                # Create a temporary file listing all images to process
+                temp_list = os.path.join(tempfile.gettempdir(), "fastvlm_batch_list.txt")
+                with open(temp_list, 'w') as f:
+                    for orig_path, proc_path in processed_images.items():
+                        f.write(f"{proc_path}\n")
+                
+                # Get model path
+                model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
+                
+                # Run batch processing
+                cmd = [
+                    sys.executable,
+                    os.path.join(ml_fastvlm_dir, "batch_predict.py"),
+                    "--model-path", model_path,
+                    "--image-list", temp_list,
+                    "--output-dir", output_dir,
+                    "--prompt", self._get_prompt_for_mode(mode)
+                ]
+                
+                print(f"Running FastVLM batch processing...")
+                subprocess.run(cmd, check=True)
+                
+                # Read results from output files
+                for orig_path in processed_images.keys():
+                    base_name = os.path.basename(orig_path)
+                    result_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_result.txt")
+                    if os.path.exists(result_file):
+                        with open(result_file, 'r') as f:
+                            results[orig_path] = f.read()
+                
+                return results
+            except Exception as e:
+                print(f"Error in batch processing: {e}")
+                # Fall back to individual processing
+        
+        # Individual processing as fallback
+        for orig_path, proc_path in processed_images.items():
+            print(f"Analyzing: {orig_path}")
+            result = self.analyze_image(proc_path, mode=mode)
+            if result:
+                results[orig_path] = result
+                
+                # Save individual result
+                base_name = os.path.basename(orig_path)
+                output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}.txt")
+                with open(output_file, 'w') as f:
+                    f.write(result)
+        
+        return results
+    
+    def _get_prompt_for_mode(self, mode):
+        """Get appropriate prompt based on analysis mode."""
+        if mode == "describe":
+            return "Describe this image in detail."
+        elif mode == "detect":
+            return "List all objects visible in this image with their approximate locations."
+        elif mode == "document":
+            return "Extract all text from this document and format it properly."
+        return "Describe this image."
+    
     def batch_analyze(self, image_dir, output_dir, mode="describe"):
         """
         Batch analyze all images in a directory.
@@ -258,6 +481,20 @@ class VisionAnalyzer:
             print(f"Limiting to {max_images} images (out of {len(image_files)} found)")
             image_files = image_files[:max_images]
             
+        # First preprocess all images in parallel
+        from concurrent.futures import ThreadPoolExecutor
+        max_workers = self.config.get("max_threads", os.cpu_count() or 4)
+        
+        # Define preprocessing function
+        def preprocess_batch_image(img_path):
+            return img_path, self.preprocess_image(img_path, mode)
+            
+        print(f"Preprocessing {len(image_files)} images using {max_workers} threads...")
+        processed_images = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for orig_path, proc_path in executor.map(preprocess_batch_image, image_files):
+                processed_images[orig_path] = proc_path
+            
         # FastVLM batch processing
         if self.model_name == "fastvlm" and self.config.get("batch_processing", False):
             model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
@@ -280,19 +517,26 @@ class VisionAnalyzer:
                         
             return results
         
-        # Process each image individually
+        # Process images with better performance for FastVLM
         results = {}
-        for image_file in image_files:
-            print(f"Analyzing: {image_file}")
-            result = self.analyze_image(image_file, mode=mode)
-            if result:
-                results[image_file] = result
-                
-                # Save individual result
-                base_name = os.path.basename(image_file)
-                output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}.txt")
-                with open(output_file, 'w') as f:
-                    f.write(result)
+        
+        # Check if we're using FastVLM for more efficient batch processing
+        if self.model_name == "fastvlm" and hasattr(self, "_batch_process_fastvlm"):
+            # Use specialized batch processing for FastVLM
+            results = self._batch_process_fastvlm(processed_images, output_dir, mode)
+        else:
+            # Process each image individually
+            for image_file, processed_image in processed_images.items():
+                print(f"Analyzing: {image_file}")
+                result = self.analyze_image(processed_image, mode=mode)
+                if result:
+                    results[image_file] = result
+                    
+                    # Save individual result
+                    base_name = os.path.basename(image_file)
+                    output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}.txt")
+                    with open(output_file, 'w') as f:
+                        f.write(result)
                     
         return results
         
@@ -319,6 +563,7 @@ class VisionAnalyzer:
 # Simple example usage if run directly
 if __name__ == "__main__":
     import argparse
+    import json
     
     parser = argparse.ArgumentParser(description="Vision Model Analysis")
     parser.add_argument("--image", required=True, help="Path to image file or directory")
@@ -326,12 +571,19 @@ if __name__ == "__main__":
     parser.add_argument("--mode", default="describe", choices=["describe", "detect", "document"], help="Analysis mode")
     parser.add_argument("--output", help="Output file or directory")
     parser.add_argument("--batch", action="store_true", help="Process directory in batch mode")
+    parser.add_argument("--prompt", help="Custom prompt for analysis")
+    parser.add_argument("--model-path", help="Path to model weights")
+    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
     
     args = parser.parse_args()
     
     config = DEFAULT_VISION_CONFIG.copy()
     config["model"] = args.model
     config["batch_processing"] = args.batch
+    config["output_format"] = args.format
+    
+    if args.model_path:
+        config["model_path"] = args.model_path
     
     analyzer = VisionAnalyzer(config)
     
@@ -341,11 +593,19 @@ if __name__ == "__main__":
         if results:
             print(f"Batch processing complete. Results saved to {output_dir}")
     else:
-        result = analyzer.analyze_image(args.image, mode=args.mode)
+        result = analyzer.analyze_image(args.image, args.prompt, mode=args.mode)
         if result:
             if args.output:
                 with open(args.output, 'w') as f:
                     f.write(result)
                 print(f"Analysis saved to {args.output}")
             else:
-                print(result)
+                # Try to pretty-print JSON if the result is JSON
+                if args.format == "json":
+                    try:
+                        result_dict = json.loads(result) if isinstance(result, str) else result
+                        print(json.dumps(result_dict, indent=2))
+                    except (json.JSONDecodeError, TypeError):
+                        print(result)
+                else:
+                    print(result)

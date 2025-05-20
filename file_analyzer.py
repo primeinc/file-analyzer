@@ -635,14 +635,82 @@ class FileAnalyzer:
         # Save results to file
         if results:
             output_file = self.output_dir / f"vision_analysis_{self.timestamp}.{vision_config.get('output_format', 'text')}" 
+            
+            # Collect performance metrics
+            total_time = 0
+            avg_time = 0
+            model_name = analyzer.model_info["name"]
+            model_size = ""
+            
+            # Extract model size/variant if possible
+            if model_name == "FastVLM":
+                model_path = str(analyzer.model_path)
+                if "0.5b" in model_path.lower():
+                    model_size = "0.5B"
+                elif "1.5b" in model_path.lower():
+                    model_size = "1.5B"
+                elif "7b" in model_path.lower():
+                    model_size = "7B"
+            
+            # Calculate metrics
+            for result_text in results.values():
+                # Try to extract timing information
+                try:
+                    if isinstance(result_text, dict) and "metadata" in result_text:
+                        if "analysis_time" in result_text["metadata"]:
+                            total_time += result_text["metadata"]["analysis_time"]
+                    elif isinstance(result_text, str) and "Analysis - " in result_text:
+                        # Extract time from formatted string
+                        time_str = result_text.split("Analysis - ")[1].split("s")[0]
+                        total_time += float(time_str)
+                except (ValueError, IndexError, KeyError, AttributeError):
+                    pass
+            
+            # Calculate average time
+            if results:
+                avg_time = total_time / len(results)
+            
+            # Add to results metadata
+            performance_metrics = {
+                "model": f"{model_name}{' ' + model_size if model_size else ''}",
+                "total_time": total_time,
+                "average_time": avg_time,
+                "images_processed": len(results)
+            }
+            
+            # Add to summary results
+            performance_summary = f"\nPerformance Metrics:\n"
+            performance_summary += f"  Model: {performance_metrics['model']}\n"
+            performance_summary += f"  Total processing time: {total_time:.2f}s\n"
+            performance_summary += f"  Average per image: {avg_time:.2f}s\n"
+            performance_summary += f"  Images processed: {performance_metrics['images_processed']}\n"
+            
+            # Save results with performance metrics
             saved_file = analyzer.save_results(results, output_file)
+            
+            # Save performance metrics separately
+            metrics_file = self.output_dir / f"vision_metrics_{self.timestamp}.json"
+            with open(metrics_file, 'w') as f:
+                json.dump(performance_metrics, f, indent=2)
             
             if self.verbose:
                 progress.stop(f"Completed analysis of {len(results)} images")
                 if saved_file:
                     print(f"Vision analysis results saved to {saved_file}")
+                    print(performance_summary)
+                    print(f"Detailed metrics saved to {metrics_file}")
                 else:
                     print("No results were saved")
+            
+            # Include metrics in the results
+            self.results["analyses"]["vision"] = {
+                "status": "success",
+                "file": str(saved_file) if saved_file else None,
+                "model": performance_metrics["model"],
+                "mode": mode,
+                "count": len(results),
+                "performance": performance_metrics
+            }
         else:
             if self.verbose:
                 progress.stop("No results to save")
