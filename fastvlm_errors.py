@@ -31,8 +31,8 @@ class FastVLMErrorHandler:
         # Check MLX installation
         try:
             import mlx
-            mlx_version = mlx.__version__
-            if not hasattr(mlx, "core"):
+            mlx_version = getattr(mlx, "__version__", "unknown")
+            if not hasattr(mlx, "core") and not hasattr(mlx, "array"):
                 issues.append({
                     "severity": "error",
                     "message": f"MLX installation is incomplete or corrupted (version {mlx_version}).",

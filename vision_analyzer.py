@@ -314,8 +314,7 @@ class VisionAnalyzer:
                     result = json.dumps(result_dict, indent=2)
                 except (json.JSONDecodeError, TypeError):
                     # If not JSON, add metrics as text
-                    result = f"[FastVLM Analysis - {analysis_time:.2f}s]
-\n{result}"
+                    result = f"[FastVLM Analysis - {analysis_time:.2f}s]\n\n{result}"
             
         # BakLLaVA analysis
         elif model_name == "bakllava":
