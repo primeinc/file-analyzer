@@ -190,3 +190,102 @@ Test scripts include enhanced error reporting:
 - Detailed error logs for debugging failed validations
 - Non-zero exit codes for CI/CD integration
 - Visual indicators (✓/✗) for test status feedback
+
+## GitHub CLI Integration
+
+### Authentication and Token Management
+
+The GitHub CLI (gh) provides several methods to authenticate with GitHub's API:
+
+- **Authentication token retrieval**: Use `gh auth token` to display your current authentication token
+- **Environment variables**: Set `GH_TOKEN` for automation scenarios
+- **Automatic token refresh**: GitHub CLI manages token lifecycle automatically
+
+```bash
+# Get current authentication token
+TOKEN=$(gh auth token)
+
+# Print token status
+gh auth status
+```
+
+### Working with Pull Requests
+
+You can interact with pull requests directly using built-in commands or the API:
+
+#### Using Built-in Commands
+
+```bash
+# Comment on a pull request
+gh pr comment 1 --body "Great improvements!"
+
+# View PR details
+gh pr view 1 --json number,title,body,comments
+
+# Checkout a PR
+gh pr checkout 1
+```
+
+#### Using the GitHub API
+
+The `gh api` command allows direct access to GitHub's REST API:
+
+```bash
+# Get PR comments
+gh api repos/{owner}/{repo}/issues/1/comments
+
+# Post a comment on a PR
+gh api -X POST repos/{owner}/{repo}/issues/1/comments -f body="Nice work!"
+
+# Get detailed PR information
+gh api repos/{owner}/{repo}/pulls/1 --jq '.title, .body'
+```
+
+### Comment Types and Placement
+
+GitHub supports different types of comments on pull requests:
+
+1. **Regular PR comments**: Comments on the main PR conversation thread
+   ```bash
+   gh api -X POST repos/{owner}/{repo}/issues/{pr_number}/comments \
+     -f body="General comment on the PR"
+   ```
+
+2. **Line-specific review comments**: Comments on specific code in the diff
+   ```bash
+   gh api -X POST repos/{owner}/{repo}/pulls/{pr_number}/comments \
+     -f body="Comment on specific code" \
+     -f commit_id="{commit_sha}" \
+     -f path="path/to/file.py" \
+     -f line=42 \
+     -f side="RIGHT"
+   ```
+
+3. **Reply to an existing comment**: Thread comments
+   ```bash
+   gh api -X POST repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
+     -f body="Reply to previous comment"
+   ```
+
+### Automated PR Reviews
+
+You can use the GitHub CLI to automate PR review workflows:
+
+```bash
+# Approve a PR
+gh pr review 1 --approve
+
+# Request changes on a PR
+gh pr review 1 --request-changes --body "Please fix the tests"
+
+# Comment on a PR without approval/rejection
+gh pr review 1 --comment --body "Some suggestions to consider"
+```
+
+### Authentication Best Practices
+
+- Create separate tokens for different use cases to limit access scope
+- Store tokens securely using environment variables or GitHub Secrets
+- For GitHub Actions, use the built-in `GITHUB_TOKEN` when possible
+- Regularly rotate tokens used in automation workflows
+- Use fine-grained tokens with minimal permissions required
