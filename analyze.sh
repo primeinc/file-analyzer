@@ -16,6 +16,7 @@ if [ $# -eq 0 ]; then
     echo "  -b, --binary          Analyze binary files"
     echo "  -r, --results DIR     Output directory"
     echo "  --skip-checks         Skip dependency checks"
+    echo "  -q, --quiet           Quiet mode with minimal output"
     exit 1
 fi
 
@@ -67,6 +68,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-checks)
             OPTIONS="$OPTIONS --skip-dependency-check"
+            shift
+            ;;
+        -q|--quiet)
+            OPTIONS="$OPTIONS --quiet"
             shift
             ;;
         -*)

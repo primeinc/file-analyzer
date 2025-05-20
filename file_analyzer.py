@@ -17,6 +17,7 @@ import subprocess
 import argparse
 import json
 import shutil
+import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -44,9 +45,53 @@ def check_dependencies(required_tools=None):
     
     return missing_tools
 
+class ProgressIndicator:
+    """Simple progress indicator for long-running operations."""
+    
+    def __init__(self, description="Processing", interval=0.2):
+        self.description = description
+        self.interval = interval
+        self.running = False
+        self.spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+        self.current_index = 0
+        self.start_time = None
+    
+    def start(self):
+        """Start displaying the progress indicator."""
+        self.running = True
+        self.start_time = time.time()
+        self._update()
+    
+    def stop(self, message="Done"):
+        """Stop the progress indicator and display a completion message."""
+        self.running = False
+        elapsed = time.time() - self.start_time if self.start_time else 0
+        sys.stdout.write(f"\r{self.description}: {message} (took {elapsed:.1f}s)       \n")
+    
+    def _update(self):
+        """Update the spinner animation."""
+        if not self.running:
+            return
+        
+        spinner = self.spinner_chars[self.current_index]
+        sys.stdout.write(f"\r{self.description}: {spinner} ")
+        sys.stdout.flush()
+        
+        self.current_index = (self.current_index + 1) % len(self.spinner_chars)
+        
+        # Schedule the next update
+        def _next_update():
+            if self.running:
+                time.sleep(self.interval)
+                self._update()
+        
+        # Use a separate thread to avoid blocking
+        import threading
+        threading.Thread(target=_next_update).start()
+
 
 class FileAnalyzer:
-    def __init__(self, path, output_dir=None):
+    def __init__(self, path, output_dir=None, verbose=True):
         self.path = Path(path).expanduser().absolute()
         if not self.path.exists():
             raise FileNotFoundError(f"Path does not exist: {self.path}")
@@ -61,6 +106,7 @@ class FileAnalyzer:
             "analyses": {}
         }
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.gif'}
+        self.verbose = verbose
         
     def run_command(self, command, shell=False):
         try:
@@ -72,13 +118,19 @@ class FileAnalyzer:
             return None
 
     def extract_metadata(self):
-        print(f"Extracting metadata from {self.path}...")
+        if self.verbose:
+            print(f"Extracting metadata from {self.path}...")
+            progress = ProgressIndicator("Extracting metadata")
+            progress.start()
         
         command = ["exiftool", "-json", "-r" if self.path.is_dir() else "", str(self.path)]
         command = [c for c in command if c]  # Remove empty elements
         
         output = self.run_command(command)
+        
         if not output:
+            if self.verbose:
+                progress.stop("Failed")
             self.results["analyses"]["metadata"] = {"status": "error"}
             return None
             
@@ -88,7 +140,10 @@ class FileAnalyzer:
             with open(output_file, 'w') as f:
                 json.dump(metadata, f, indent=2)
             
-            print(f"Metadata saved to {output_file}")
+            if self.verbose:
+                progress.stop(f"Complete ({len(metadata)} items)")
+                print(f"Metadata saved to {output_file}")
+                
             self.results["analyses"]["metadata"] = {
                 "status": "success",
                 "file": str(output_file),
@@ -96,6 +151,8 @@ class FileAnalyzer:
             }
             return metadata
         except json.JSONDecodeError:
+            if self.verbose:
+                progress.stop("Failed (JSON decode error)")
             self.results["analyses"]["metadata"] = {"status": "error"}
             return None
 
@@ -123,7 +180,10 @@ class FileAnalyzer:
             return None
 
     def perform_ocr(self):
-        print(f"Performing OCR on images in {self.path}...")
+        if self.verbose:
+            print(f"Performing OCR on images in {self.path}...")
+            progress = ProgressIndicator("Searching for image files")
+            progress.start()
         
         # Find image files
         image_files = []
@@ -137,9 +197,15 @@ class FileAnalyzer:
             image_files.append(self.path)
         
         if not image_files:
-            print("No supported image files found.")
+            if self.verbose:
+                progress.stop("No images found")
             self.results["analyses"]["ocr"] = {"status": "skipped"}
             return None
+        
+        if self.verbose:
+            progress.stop(f"Found {len(image_files)} image(s)")
+            progress = ProgressIndicator(f"Processing {min(len(image_files), 50)} images")
+            progress.start()
         
         # Process images (limit to 50 for performance)
         ocr_results = {}
@@ -160,7 +226,10 @@ class FileAnalyzer:
         with open(output_file, 'w') as f:
             json.dump(ocr_results, f, indent=2)
         
-        print(f"OCR results saved to {output_file}")
+        if self.verbose:
+            progress.stop(f"Completed OCR on {len(ocr_results)} images")
+            print(f"OCR results saved to {output_file}")
+            
         self.results["analyses"]["ocr"] = {
             "status": "success",
             "file": str(output_file),
@@ -270,6 +339,8 @@ def main():
     parser.add_argument('--output', '-r', help='Output directory')
     parser.add_argument('--skip-dependency-check', action='store_true', 
                         help='Skip checking for required external tools')
+    parser.add_argument('--quiet', '-q', action='store_true',
+                        help='Quiet mode with minimal output')
     
     args = parser.parse_args()
     
@@ -306,7 +377,7 @@ def main():
                 print("Installation instructions can be found in the project documentation.")
                 sys.exit(1)
         
-        analyzer = FileAnalyzer(args.path, args.output)
+        analyzer = FileAnalyzer(args.path, args.output, verbose=not args.quiet)
         
         if run_all or args.metadata:
             analyzer.extract_metadata()
