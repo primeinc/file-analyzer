@@ -1,0 +1,82 @@
+name: Setup Dependencies
+
+on:
+  workflow_call:  # This allows other workflows to call this one
+    inputs:
+      model_size:
+        description: 'Size of the FastVLM model to use'
+        required: false
+        default: '0.5b'
+        type: string
+      cache_models:
+        description: 'Whether to cache models between runs'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  setup-fastvlm:
+    runs-on: macos-latest  # FastVLM with MLX works best on macOS
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          
+      - name: Install MLX
+        run: |
+          python -m pip install --upgrade pip
+          pip install mlx
+
+      - name: Setup artifact directories
+        run: |
+          python src/artifact_guard_cli.py setup
+
+      - name: Cache FastVLM Models
+        if: inputs.cache_models
+        uses: actions/cache@v3
+        id: model-cache
+        with:
+          path: ~/.local/share/fastvlm
+          key: fastvlm-models-${{ inputs.model_size }}-${{ hashFiles('src/model_config.py') }}
+          restore-keys: |
+            fastvlm-models-${{ inputs.model_size }}-
+            fastvlm-models-
+          
+      - name: Create libs directory structure
+        run: |
+          mkdir -p libs/ml-fastvlm
+          
+      - name: Clone FastVLM repository with pinned version
+        run: |
+          cd libs/ml-fastvlm
+          git clone https://github.com/apple/ml-fastvlm.git .
+          git checkout main  # Use the latest version
+          
+      - name: Setup FastVLM Environment
+        run: |
+          ./tools/setup_fastvlm.sh
+        env:
+          ARTIFACT_QUIET: 1
+
+      - name: Download FastVLM Model (if not cached)
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: |
+          python tools/download_models.py download --size ${{ inputs.model_size }}
+        
+      - name: Verify Model Setup
+        run: |
+          python tools/download_models.py list
+          python tools/download_models.py info --size ${{ inputs.model_size }}
+          
+      - name: Cache FastVLM Repository
+        uses: actions/cache@v3
+        with:
+          path: libs/ml-fastvlm
+          key: fastvlm-repo-${{ github.sha }}
+          restore-keys: |
+            fastvlm-repo-

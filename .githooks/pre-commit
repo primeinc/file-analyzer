@@ -1,0 +1,80 @@
+#!/bin/bash
+# Pre-commit hook to enforce artifact discipline and project structure
+
+# Exit on first error
+set -e
+
+# Determine repo root
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "Checking artifact discipline..."
+
+# 1. Run preflight check for artifact discipline
+if ! ./preflight.sh --no-tmp-clean; then
+  echo "❌ Pre-commit hook failed: Artifact discipline violations detected."
+  echo
+  echo "🔍 Run './preflight.sh' to see details about the violations."
+  echo "✅ Fix the issues and try committing again."
+  exit 1
+fi
+
+# 2. Run script conformity check on changed bash scripts
+if [[ -n "$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.sh$' || true)" ]]; then
+  echo "Checking artifact guard sourcing in changed scripts..."
+  git diff --cached --name-only --diff-filter=ACMR | grep -E '\.sh$' | while IFS= read -r script; do
+    if [[ -f "$script" ]]; then
+      echo "Checking $script"
+      ./check_script_conformity.sh "$script" || {
+        echo "ERROR: $script does not conform to artifact discipline requirements."
+        echo "Please source artifact_guard_py_adapter.sh at the top of the script."
+        exit 1
+      }
+    fi
+  done
+fi
+
+# Legacy pattern checks removed to simplify the system
+
+# 4. Check for correct project structure
+STRUCTURE_VIOLATIONS=0
+
+# Check if new Python files are in the correct location
+if [[ -n "$(git diff --cached --name-only --diff-filter=A | grep -E '\.py$' | grep -v "^src/" | grep -v "^tools/" | grep -v "^tests/" || true)" ]]; then
+  echo "ERROR: New Python files should be added to src/, tools/, or tests/ directories:"
+  git diff --cached --name-only --diff-filter=A | grep -E '\.py$' | grep -v "^src/" | grep -v "^tools/" | grep -v "^tests/" | while IFS= read -r pyfile; do
+    echo "  $pyfile"
+    ((STRUCTURE_VIOLATIONS++))
+  done
+fi
+
+# Check if new Bash scripts are in the correct location
+if [[ -n "$(git diff --cached --name-only --diff-filter=A | grep -E '\.sh$' | grep -v "^tools/" | grep -v "^tests/" || true)" ]]; then
+  # Allow specific root-level scripts
+  ALLOWED_ROOT_SCRIPTS=("preflight.sh" "cleanup.sh" "migrate_artifacts.sh" "check_script_conformity.sh" "artifact_guard_py_adapter.sh" "check_all_scripts.sh")
+  
+  git diff --cached --name-only --diff-filter=A | grep -E '\.sh$' | grep -v "^tools/" | grep -v "^tests/" | while IFS= read -r script; do
+    script_name=$(basename "$script")
+    is_allowed=false
+    
+    for allowed in "${ALLOWED_ROOT_SCRIPTS[@]}"; do
+      if [[ "$script_name" == "$allowed" ]]; then
+        is_allowed=true
+        break
+      fi
+    done
+    
+    if [[ "$is_allowed" == "false" ]]; then
+      echo "ERROR: New Bash script $script should be added to tools/ or tests/ directory"
+      ((STRUCTURE_VIOLATIONS++))
+    fi
+  done
+fi
+
+if [[ "$STRUCTURE_VIOLATIONS" -gt 0 ]]; then
+  echo "Please follow the project structure guidelines in MIGRATION.md"
+  exit 1
+fi
+
+echo "✅ Artifact discipline and project structure check passed."
+exit 0

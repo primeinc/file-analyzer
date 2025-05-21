@@ -1,0 +1,27 @@
+{
+    "default_output_dir": "artifacts/analysis",
+    "max_threads": 4,
+    "max_ocr_images": 50,
+    "max_metadata_files": 20,
+    "file_extensions": {
+        "images": [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"],
+        "documents": [".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"]
+    },
+    "tool_options": {
+        "exiftool": ["-fast", "-n", "-q"],
+        "tesseract": ["--dpi", "300"],
+        "rg": ["-i", "--line-number", "--color", "never"]
+    },
+    "default_include_patterns": [],
+    "default_exclude_patterns": ["*.log", "*.tmp", "*.bak", "*.DS_Store"],
+    "vision": {
+        "model": "fastvlm",
+        "max_images": 10,
+        "resolution": "512x512",
+        "description_mode": "standard",
+        "output_format": "json",
+        "model_path": null,
+        "mmproj_path": null,
+        "batch_processing": false
+    }
+}

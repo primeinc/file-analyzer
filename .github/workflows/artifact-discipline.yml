@@ -1,0 +1,98 @@
+name: Artifact Discipline Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # Setup dependencies first
+  setup-dependencies:
+    uses: ./.github/workflows/setup-dependencies.yml
+    with:
+      model_size: "0.5b"
+      cache_models: true
+
+  # Main discipline check job - depends on setup
+  check-artifact-discipline:
+    needs: setup-dependencies
+    runs-on: macos-latest  # Use macOS for MLX compatibility
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      # Restore cached dependencies
+      - name: Restore FastVLM repository
+        uses: actions/cache@v3
+        with:
+          path: libs/ml-fastvlm
+          key: fastvlm-repo-${{ github.sha }}
+          restore-keys: |
+            fastvlm-repo-
+            
+      # Restore cached models
+      - name: Restore FastVLM models
+        uses: actions/cache@v3
+        with:
+          path: ~/.local/share/fastvlm
+          key: fastvlm-models-0.5b-${{ hashFiles('src/model_config.py') }}
+          restore-keys: |
+            fastvlm-models-0.5b-
+            fastvlm-models-
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install MLX
+        run: |
+          python -m pip install --upgrade pip
+          pip install mlx
+      
+      - name: Set up environment
+        run: |
+          chmod +x ./preflight.sh
+          chmod +x ./cleanup.sh
+          chmod +x ./artifact_guard_py_adapter.sh
+          chmod +x ./tools/setup_fastvlm.sh
+      
+      - name: Run preflight check with strict enforcement
+        run: |
+          # During transition, allow legacy directories but enforce script discipline
+          ./preflight.sh --allow-legacy-dirs
+      
+      - name: Verify artifact structure exists
+        run: |
+          # Create artifact structure if needed
+          python src/artifact_guard_cli.py setup
+          
+          # Ensure proper artifact directories exist
+          ls -la artifacts/
+          ls -la artifacts/test
+          ls -la artifacts/analysis
+          ls -la artifacts/vision
+          ls -la artifacts/benchmark
+          ls -la artifacts/tmp
+      
+      - name: Test script with path enforcement
+        run: |
+          # Run a test script to verify path enforcement works
+          chmod +x ./tests/test_path_enforcement.sh
+          ./tests/test_path_enforcement.sh
+      
+      - name: Test FastVLM integration
+        run: |
+          # Run the model checks
+          python tools/download_models.py list
+          
+          # Test the fastvlm adapter
+          python tests/test_fastvlm.sh test-image.jpg
+      
+      - name: Verify no new non-canonical artifacts were created
+        run: |
+          # Check for artifact sprawl outside the canonical structure
+          ./cleanup.sh --check

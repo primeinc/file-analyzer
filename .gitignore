@@ -54,3 +54,49 @@ venv.bak/
 # Generated output files
 *_[0-9]*.json
 *_[0-9]*.txt
+
+# Analysis results directories
+analysis_results/
+test_results/
+test_data/test_results/
+vision_test_*/
+json_test_*/
+
+# FastVLM model directory (too large for git)
+ml-fastvlm/checkpoints/
+
+# System files
+.DS_Store
+
+# Artifacts directory (canonical artifact storage)
+artifacts/
+artifacts.env
+
+# Log files
+cleanup.log
+*.log
+
+# Local documentation
+github_api_guide.md
+pr_review_responses.md
+
+# User-level model storage (local cache)
+# Note: Users should add the following path to their global gitignore
+# ~/.local/share/fastvlm/
+.fastvlm/
+
+# External libraries - don't ignore libs directory, only model files
+libs/**/checkpoints/**/*.mlx
+libs/**/checkpoints/**/*.gguf
+libs/**/checkpoints/**/*.bin
+libs/**/checkpoints/**/*.pth
+libs/ml-fastvlm/checkpoints/*/params.json
+
+# Model files in general (wherever they might be)
+*.mlx
+*.gguf
+*.mlmodel
+*.ggml
+*.bin
+# Uncomment if using git-lfs for large model files
+# *.gguf
