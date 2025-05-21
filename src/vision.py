@@ -28,7 +28,6 @@ import base64
 from pathlib import Path
 import shutil
 from datetime import datetime
-import tempfile
 import time
 import re
 import logging
@@ -224,8 +223,9 @@ class VisionAnalyzer:
         print(f"PREPROCESSING IMAGE: {image_path}")
         
         # Check if this image has already been preprocessed to avoid duplicate preprocessing
-        # Images in temp directory with our prefix are already preprocessed
-        if "fastvlm_temp_" in os.path.basename(image_path):
+        # Images in our canonical temp directory with our prefix are already preprocessed
+        canonical_tmp_dir = get_canonical_artifact_path("tmp", "preprocessed_images")
+        if "fastvlm_temp_" in os.path.basename(image_path) and canonical_tmp_dir in image_path:
             print(f"Image already preprocessed, skipping duplicate preprocessing")
             return image_path
         
@@ -285,9 +285,11 @@ class VisionAnalyzer:
             new_img = Image.new("RGB", (width, height), (0, 0, 0))
             new_img.paste(resized_img, ((width - new_width) // 2, (height - new_height) // 2))
             
-            # Save to a temporary file
-            temp_dir = tempfile.gettempdir()
+            # Save to a canonical artifact path instead of system temp directory
+            temp_dir = get_canonical_artifact_path("tmp", "preprocessed_images")
             temp_path = os.path.join(temp_dir, f"fastvlm_temp_{os.path.basename(image_path)}")
+            # Ensure the directory exists
+            os.makedirs(temp_dir, exist_ok=True)
             new_img.save(temp_path)
             
             # Log size reduction
