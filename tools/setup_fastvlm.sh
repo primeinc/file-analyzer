@@ -267,10 +267,13 @@ fi
 # Create checkpoints directory
 mkdir -p "$FASTVLM_DIR/checkpoints"
 
-# Clean up duplicate downloads if they exist
-log "Cleaning up any duplicate downloads..."
+# Clean up all downloaded files that might be corrupt or incomplete
+log "Cleaning up any existing downloads..."
+# Remove all numbered zip files
 find "$FASTVLM_DIR/checkpoints" -name "*.zip.*" -type f -exec rm -f {} \;
-[ $? -eq 0 ] && log "✓ Cleaned up duplicate downloads"
+# Also remove the main zip files which might be corrupt
+find "$FASTVLM_DIR/checkpoints" -name "*.zip" -type f -exec rm -f {} \;
+[ $? -eq 0 ] && log "✓ Cleaned up existing downloads"
 
 # Download the default model directly
 log "Downloading the default model (0.5b) directly..."
@@ -288,19 +291,15 @@ mkdir -p "$MODEL_DIR"
 if [ -d "$MODEL_DIR" ] && [ "$(find "$MODEL_DIR" -type f | wc -l)" -gt 5 ]; then
     log "Model already exists in $MODEL_DIR. Skipping download."
 else
-    # Download model if needed
-    if [ -f "$ZIP_PATH" ]; then
-        log "Using existing download at $ZIP_PATH"
-    else
-        log "Downloading $MODEL_SIZE model from $MODEL_URL"
-        # Download to final location directly
-        curl -L "$MODEL_URL" -o "$ZIP_PATH"
-        
-        if [ $? -ne 0 ]; then
-            log "Download failed!"
-            exit 1
-        fi
+    log "Downloading $MODEL_SIZE model from $MODEL_URL"
+    curl -L "$MODEL_URL" -o "$ZIP_PATH.partial"
+    if [ $? -ne 0 ]; then
+        log "Download failed!"
+        rm -f "$ZIP_PATH.partial"
+        exit 1
     fi
+    
+    mv "$ZIP_PATH.partial" "$ZIP_PATH"
     
     # Extract model
     log "Extracting model to $MODEL_DIR"
