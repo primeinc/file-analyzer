@@ -28,7 +28,7 @@ Unified tool for comprehensive file analysis combining:
 - `-V, --vision`: Analyze images using AI vision models (outputs JSON by default)
 - `--vision-model MODEL`: Select vision model (fastvlm, bakllava, qwen2vl)
 - `--vision-mode MODE`: Vision analysis mode (describe, detect, document)
-- `--vision-format FMT`: Vision output format (json, text) - json recommended
+- `--vision-format FMT`: Vision output format (json, text, markdown) - json recommended
 - `-r, --results DIR`: Output directory
 - `-i, --include PATTERN`: Include only files matching pattern
 - `-x, --exclude PATTERN`: Exclude files matching pattern
