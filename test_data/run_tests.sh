@@ -38,7 +38,7 @@ echo
 echo "Test 3: Content search"
 $ANALYZER --search "TEST PATTERN" --output "$OUTPUT_DIR" --skip-dependency-check "$TEST_DIR"
 if [ $? -eq 0 ]; then
-    grep -q "TEST PATTERN" "$OUTPUT_DIR/search_TEST PATTERN"*.txt
+    grep -q "TEST PATTERN" "$OUTPUT_DIR/search_TEST PATTERN_"*.txt
     if [ $? -eq 0 ]; then
         echo "✅ Test 3 passed"
     else
