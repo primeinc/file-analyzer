@@ -56,8 +56,12 @@ vision = [
 fa = "src.cli.main:app"
 
 [tool.setuptools]
+# Use find-packages for more reliable package discovery
 package-dir = {"" = "."}
-packages = ["src", "src.cli", "src.cli.analyze", "src.cli.test", "src.cli.validate", "src.cli.common"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
 
 [tool.setuptools.package-data]
 "schemas" = ["**/*.json"]
