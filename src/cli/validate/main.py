@@ -195,9 +195,17 @@ def images(
     method: str = typer.Option(
         "pixel", "--method", "-m", help="Comparison method: pixel, hash, or ssim"
     ),
+    pixel_color_threshold: float = typer.Option(
+        0.05, "--pixel-threshold", "--color-threshold", 
+        help="Color difference tolerance for pixel comparison (0.0-1.0). Lower values are more strict - requires pixels to be more similar."
+    ),
+    max_difference_percent: float = typer.Option(
+        5.0, "--max-difference", "-d", 
+        help="Maximum allowed percentage of different pixels (0.0-100.0). Lower values are more strict - allows fewer different pixels."
+    ),
     threshold: float = typer.Option(
         0.1, "--threshold", "-t", 
-        help="Comparison tolerance (0.0-1.0): For 'pixel' mode, higher values are more strict. For 'hash' and 'ssim' modes, higher values are less strict (allow more differences)."
+        help="Comparison tolerance (0.0-1.0) for 'hash' and 'ssim' modes. Higher values are less strict (allow more differences)."
     ),
     strict: bool = typer.Option(
         False, "--strict", help="Fail on any difference (exact match required)"
@@ -228,12 +236,18 @@ def images(
     result = {
         "success": False,
         "method": method,
-        "threshold": threshold,
         "image1": image1,
         "image2": image2,
         "output_dir": output_dir,
         "details": {}
     }
+    
+    # Add appropriate thresholds to result based on method
+    if method == "pixel":
+        result["pixel_color_threshold"] = pixel_color_threshold
+        result["max_difference_percent"] = max_difference_percent
+    else:
+        result["threshold"] = threshold
     
     try:
         from PIL import Image
@@ -267,7 +281,7 @@ def images(
                 mismatch_count = pixelmatch(
                     img1, img2, img_diff,
                     includeAA=True, 
-                    threshold=threshold
+                    threshold=pixel_color_threshold  # Use specific pixel color threshold
                 )
                 
                 # Save diff image
@@ -292,11 +306,11 @@ def images(
                         console.print(f"[red]✗[/red] Images differ by {mismatch_count} pixels ({mismatch_percent:.2f}%)")
                         result["success"] = False
                     else:
-                        if mismatch_percent < threshold * 100:
-                            console.print(f"[green]✓[/green] Images are similar (differ by {mismatch_percent:.2f}% which is below threshold {threshold * 100:.2f}%)")
+                        if mismatch_percent <= max_difference_percent:
+                            console.print(f"[green]✓[/green] Images are similar (differ by {mismatch_percent:.2f}% which is below maximum allowed difference {max_difference_percent:.2f}%)")
                             result["success"] = True
                         else:
-                            console.print(f"[red]✗[/red] Images differ by {mismatch_percent:.2f}% which exceeds threshold {threshold * 100:.2f}%")
+                            console.print(f"[red]✗[/red] Images differ by {mismatch_percent:.2f}% which exceeds maximum allowed difference {max_difference_percent:.2f}%")
                             result["success"] = False
                             
                 console.print(f"Diff image saved to {diff_output_path}")

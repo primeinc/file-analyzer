@@ -12,7 +12,7 @@ import json
 import logging
 import platform
 from pathlib import Path
-from typing import Dict, Optional, Any, List, Tuple
+from typing import Dict, Optional, Any, List, Tuple, Union
 
 # Import model configuration
 from src.model_config import (
@@ -43,43 +43,49 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Helper function to find the project root directory
-def find_project_root(marker: str = "config.json", fallback: bool = True) -> Optional[Path]:
+def find_project_root(markers: Tuple[str, ...] = ("pyproject.toml", ".git", "config.json", "setup.py", "setup.cfg", "README.md"), 
+                     fallback: bool = True) -> Optional[Path]:
     """
-    Find the project root directory by looking for a marker file.
+    Find the project root directory by looking for common marker files or directories.
     
     Args:
-        marker: A file that indicates the project root (default: config.json)
-        fallback: Whether to use fallback paths if marker isn't found
+        markers: A tuple of files/directories that indicate the project root 
+                (default: common project files like pyproject.toml, .git, etc.)
+        fallback: Whether to use fallback paths if no markers are found
         
     Returns:
-        Path to the project root directory, or None if marker isn't found and fallback=False
+        Path to the project root directory, or None if no markers are found and fallback=False
     """
     current_path = Path(__file__).resolve()
     
-    # Try to find marker in parent directories
+    # Try to find any marker in parent directories
     for parent in current_path.parents:
-        if (parent / marker).exists():
-            return parent
+        for marker in markers:
+            if (parent / marker).exists():
+                logger.debug(f"Found project root marker '{marker}' at {parent}")
+                return parent
             
-    # If marker not found and fallback is enabled
+    # If no markers found and fallback is enabled
     if fallback:
-        logger.warning(f"Project root marker '{marker}' not found. Using fallback paths.")
+        logger.warning(f"No project root markers {markers} found. Using fallback paths.")
         
         # First fallback: Use parent dir of src
         for parent in current_path.parents:
             if parent.name == "src" and parent.parent:
+                logger.debug(f"Using 'src' parent directory as project root: {parent.parent}")
                 return parent.parent
         
         # Second fallback: Use 3 levels up from current file (typical CLI structure)
         if len(current_path.parents) >= 3:
+            logger.debug(f"Using 3 levels up as project root: {current_path.parents[2]}")
             return current_path.parents[2]
         
         # Last resort: Use current working directory
         logger.warning("Using current working directory as fallback project root")
         return Path.cwd()
     
-    # Return None if no marker found and fallback disabled
-    logger.warning(f"Project root marker '{marker}' not found and fallback disabled")
+    # Return None if no markers found and fallback disabled
+    logger.warning(f"No project root markers {markers} found and fallback disabled")
     return None
 
 # Project root directory with graceful fallback

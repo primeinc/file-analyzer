@@ -184,21 +184,18 @@ def main(
     # Show version and exit if requested
     if version:
         from importlib.metadata import version as get_version
+        from importlib.metadata import PackageNotFoundError
         try:
             v = get_version("file-analyzer")
             typer.echo(f"File Analyzer CLI v{v}")
-        except:
+        except PackageNotFoundError:
             typer.echo("File Analyzer CLI (version unknown)")
+        
+        # Also show Python version for diagnostic purposes
+        typer.echo(f"Python {sys.version.split()[0]}")
+        typer.echo(f"Platform: {platform.platform()}")
         raise typer.Exit()
     
-    # Set up logging based on verbosity
-    if quiet:
-        log_level = logging.ERROR
-    elif verbose:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
-        
     # Configure logging and console with color settings
     configured_console, logger = setup_logging(
         verbose=verbose, 
@@ -216,21 +213,8 @@ def main(
     # Load subcommands
     load_commands()
 
-# Add version command as a simple alternative to --version
-@app.command()
-def version():
-    """Show version information."""
-    # Global console is already initialized at module level
-    from importlib.metadata import version as get_version
-    from importlib.metadata import PackageNotFoundError
-    try:
-        v = get_version("file-analyzer")
-        console.print(f"File Analyzer CLI v{v}")
-    except PackageNotFoundError:
-        console.print("File Analyzer CLI (version unknown)")
-    
-    # Show Python version
-    console.print(f"Python {sys.version}")
+# We're removing the version command and only using the --version flag option
+# to avoid confusing users with two different ways to get version information.
 
 if __name__ == "__main__":
     app()
