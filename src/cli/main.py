@@ -128,7 +128,7 @@ def load_commands():
         # Register test if available
         if 'test' in entry_map:
             try:
-                from src.cli.test.main import app as test_app
+                from src.cli.test.hook import app as test_app
                 app.add_typer(test_app, name='test')
                 logger.debug("Registered test command")
             except Exception as e:
@@ -337,6 +337,7 @@ def main(
     # Show available commands (only in debug mode)
     if verbose:
         logger.debug(f"Registered subcommands: {[typer_instance.name for typer_instance in app.registered_typer_instances]}")
+    # The prior debug log statement is sufficient, we don't need to print to stdout
 
 # We're removing the version command and only using the --version flag option
 # to avoid confusing users with two different ways to get version information.

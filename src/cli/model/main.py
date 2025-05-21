@@ -12,6 +12,7 @@ import logging
 import hashlib
 import tempfile
 import zipfile
+import shutil
 import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -252,7 +253,7 @@ def list_models(
             # Format status
             if model_exists:
                 # Check for safetensors file as a simple existence check
-                safetensors_file = os.path.join(model_path, f"{info['name']}", "model.safetensors")
+                safetensors_file = os.path.join(model_path, "model.safetensors")
                 if os.path.exists(safetensors_file):
                     status = "[green]Installed[/green]"
                 else:
@@ -366,7 +367,7 @@ def download_model_cmd(
         os.remove(tmp_path)
         
         # Verify the model was extracted correctly
-        safetensors_file = os.path.join(model_path, model_name, "model.safetensors")
+        safetensors_file = os.path.join(model_path, "model.safetensors")
         if not os.path.exists(safetensors_file):
             console.print(f"[red]Model extraction appears incomplete. Missing expected files.[/red]")
             return 1

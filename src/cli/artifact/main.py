@@ -148,8 +148,8 @@ def _setup_artifact_lock():
             # Check if process is still running
             try:
                 if platform.system() == "Windows":
-                    # Windows - use tasklist
-                    output = subprocess.check_output(f"tasklist /FI \"PID eq {pid}\"", shell=True)
+                    # Windows - use tasklist with safer list arguments
+                    output = subprocess.check_output(["tasklist", "/FI", f"PID eq {pid}"])
                     if str(pid) in output.decode():
                         return False, f"Another cleanup process is already running (PID: {pid})"
                 else:
@@ -509,13 +509,34 @@ def report(
             if not os.path.exists(dir_path):
                 continue
                 
-            # Calculate size
+            # Calculate size more efficiently
             dir_size_kb = 0
-            for root, dirs, files in os.walk(dir_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    if os.path.exists(file_path) and not os.path.islink(file_path):
-                        dir_size_kb += os.path.getsize(file_path) // 1024
+            try:
+                if platform.system() != "Windows":
+                    # Use 'du' on Unix-like systems for better performance
+                    result = subprocess.run(
+                        ["du", "-sk", dir_path], 
+                        capture_output=True, 
+                        text=True, 
+                        check=True
+                    )
+                    # Parse the output - first field is size in KB
+                    dir_size_kb = int(result.stdout.strip().split()[0])
+                else:
+                    # Fallback to Python implementation on Windows
+                    for root, dirs, files in os.walk(dir_path):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            if os.path.exists(file_path) and not os.path.islink(file_path):
+                                dir_size_kb += os.path.getsize(file_path) // 1024
+            except (subprocess.SubprocessError, ValueError, IndexError):
+                # Fallback to Python implementation if du fails
+                dir_size_kb = 0
+                for root, dirs, files in os.walk(dir_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        if os.path.exists(file_path) and not os.path.islink(file_path):
+                            dir_size_kb += os.path.getsize(file_path) // 1024
             
             # Calculate human-readable size
             if dir_size_kb > 1048576:  # 1 GB in KB
@@ -559,13 +580,34 @@ def report(
             for item in os.listdir(type_dir):
                 item_path = os.path.join(type_dir, item)
                 if os.path.isdir(item_path) and not item.startswith('.'):
-                    # Calculate size
+                    # Calculate size efficiently
                     size_kb = 0
-                    for root, dirs, files in os.walk(item_path):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            if os.path.exists(file_path) and not os.path.islink(file_path):
-                                size_kb += os.path.getsize(file_path) // 1024
+                    try:
+                        if platform.system() != "Windows":
+                            # Use 'du' on Unix-like systems for better performance
+                            result = subprocess.run(
+                                ["du", "-sk", item_path], 
+                                capture_output=True, 
+                                text=True, 
+                                check=True
+                            )
+                            # Parse the output - first field is size in KB
+                            size_kb = int(result.stdout.strip().split()[0])
+                        else:
+                            # Fallback to Python implementation on Windows
+                            for root, dirs, files in os.walk(item_path):
+                                for file in files:
+                                    file_path = os.path.join(root, file)
+                                    if os.path.exists(file_path) and not os.path.islink(file_path):
+                                        size_kb += os.path.getsize(file_path) // 1024
+                    except (subprocess.SubprocessError, ValueError, IndexError):
+                        # Fallback to Python implementation if du fails
+                        size_kb = 0
+                        for root, dirs, files in os.walk(item_path):
+                            for file in files:
+                                file_path = os.path.join(root, file)
+                                if os.path.exists(file_path) and not os.path.islink(file_path):
+                                    size_kb += os.path.getsize(file_path) // 1024
                     
                     largest_dirs.append((item_path, size_kb))
         
