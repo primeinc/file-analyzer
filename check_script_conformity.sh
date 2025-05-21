@@ -27,8 +27,7 @@ check_script() {
   done
   
   # Look for any sourcing of artifact_guard.sh or artifact_guard_py_adapter.sh in the script
-  if grep -q "source.*artifact_guard.sh" "$script" || grep -q "\. .*artifact_guard.sh" "$script" || 
-     grep -q "source.*artifact_guard_py_adapter.sh" "$script" || grep -q "\. .*artifact_guard_py_adapter.sh" "$script"; then
+  if grep -Eq "^(source|\.) +.*artifact_guard(_py_adapter)?\.sh" "$script"; then
     echo -e "${GREEN}${BOLD}PASS${NC}: $script"
     return 0
   else

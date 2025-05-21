@@ -1,15 +1,40 @@
-# Simplified Artifact Structure
+# Artifact Structure
 
-This directory contains all outputs and artifacts produced by the file analyzer system. 
+This directory contains all outputs and artifacts produced by the file analyzer system.
 
-## Key Design Principles
+## Structure Types
 
-1. **Simplified Organization**: We use distinct subdirectories for logical artifact types. Timestamps in directory names are generally discouraged but may be used in specific cases, such as for retention purposes.
-2. **No Ephemeral Timestamps**: Files are versioned with dates only when needed for retention.
-3. **Standard Locations**: Each script uses consistent, predictable paths.
-4. **Flat Structure**: Avoid nested timestamp-based directories when possible.
+The artifact system supports two complementary approaches for organizing outputs:
 
-## Directory Structure
+### 1. Automated Canonical Paths (Recommended)
+
+When using the `get_canonical_artifact_path()` function (as documented in ARTIFACTS.md), the system automatically creates unique directories with full context information:
+
+```
+artifacts/<type>/<context>_<git_hash>_<job_id>_<pid>_<timestamp>/
+```
+
+Example:
+```
+artifacts/test/path_enforcement_c0451da_local_will_22787_20250520_223409/
+```
+
+**Note:** If the `context` ends with an underscore (`_`), a double underscore (`__`) is used between the `context` and the hash.
+
+Examples:
+```
+# Standard case
+artifacts/test/path_enforcement_c0451da_local_will_22787_20250520_223409/
+
+# Special case where context ends with an underscore
+artifacts/test/path_enforcement__c0451da_local_will_22787_20250520_223409/
+```
+
+These paths are recommended for most use cases and provide full traceability with manifest files.
+
+### 2. Simple Type-Based Structure
+
+For simpler output needs, the system also supports a flatter structure where appropriate:
 
 ```
 artifacts/
@@ -22,18 +47,16 @@ artifacts/
 
 ## Best Practices
 
-1. **Avoid Timestamps in Directories**: Use descriptive names instead of timestamps for directories
-2. **Use Namespaces in Filenames**: Include a scope/component prefix in filenames
-3. **Use Timestamp Suffixes When Needed**: Add date suffix to filenames only when needed for versioning
-4. **Clean Up After Tests**: Remove temporary test outputs when done
+1. **Use Automated Canonical Paths**: For most artifacts, use `get_canonical_artifact_path()` to create fully traceable outputs
+2. **Use Descriptive Context Names**: Choose clear, specific context strings that describe the artifact's purpose
+3. **Clean Up After Tests**: Remove temporary test outputs when no longer needed
+4. **Group Related Artifacts**: Keep related outputs in the same canonical artifact directory
 
 ## Example Patterns
 
+✅ Best: `artifacts/test/vision_basic_5de7f1a_local_will_32156_20250520_162249/results.json`  
 ✅ Good: `artifacts/test/vision_basic_results.json`  
-❌ Bad: `artifacts/test/vision_test_20250520_162249/basic_test.json`
-
-✅ Good: `artifacts/vision/fastvlm_benchmark.json`  
-❌ Bad: `fastvlm_test_results_20250520_162249/benchmark_results.json`
+❌ Bad: `test_results_20250520_162249/vision_basic_test.json`
 
 ## Retention Policy
 

@@ -148,20 +148,20 @@ mkdir_guard() {
   done
   
   # If we get here, all paths are valid, execute the original command
-  command mkdir $options "${dirs[@]}"
+  command mkdir "${options[@]}" "${dirs[@]}"
 }
 
 # FUNCTION: touch_guard
 # Override touch to validate paths first
 touch_guard() {
   local files=()
-  local options=""
+  local options=()
   
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -*)
-        options+=" $1"
+        options+=("$1")
         shift
         ;;
       *)
@@ -181,7 +181,7 @@ touch_guard() {
   done
   
   # If we get here, all paths are valid, execute the original command
-  command touch $options "${files[@]}"
+  command touch "${options[@]}" "${files[@]}"
 }
 
 # FUNCTION: cp_guard
