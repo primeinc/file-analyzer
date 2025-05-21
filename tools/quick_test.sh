@@ -1,5 +1,5 @@
 #!/bin/bash
-source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard_py_adapter.sh"
 # Quick test script for running FastVLM benchmark
 # This script automatically runs the benchmark script with default parameters
 # and includes tests with both local and downloaded sample images
