@@ -80,7 +80,22 @@ cleanup.log
 github_api_guide.md
 pr_review_responses.md
 
-# External libraries - ignore only specific large content
-libs/ml-fastvlm/checkpoints/
+# User-level model storage (local cache)
+~/.local/share/fastvlm/
+.fastvlm/
+
+# External libraries - don't ignore libs directory, only model files
+libs/**/checkpoints/**/*.mlx
+libs/**/checkpoints/**/*.gguf
+libs/**/checkpoints/**/*.bin
+libs/**/checkpoints/**/*.pth
+libs/ml-fastvlm/checkpoints/*/params.json
+
+# Model files in general (wherever they might be)
+*.mlx
+*.gguf
+*.mlmodel
+*.ggml
+*.bin
 # Uncomment if using git-lfs for large model files
 # *.gguf

@@ -16,12 +16,17 @@ Unified tool for comprehensive file analysis combining:
 ├── src/                        # Core source code (Python modules)
 │   ├── analyzer.py             # Main analyzer module
 │   ├── vision.py               # Vision analysis module
-│   └── json_utils.py           # JSON processing utilities
+│   ├── json_utils.py           # JSON processing utilities
+│   ├── model_config.py         # Model management configuration
+│   ├── fastvlm_adapter.py      # FastVLM model adapter
+│   └── artifact_guard.py       # Artifact path discipline
 │
 ├── tools/                      # Command-line tools and utilities
 │   ├── analyze.sh              # Main CLI wrapper
 │   ├── vision_test.sh          # Vision model testing
 │   ├── json_test.sh            # JSON output testing
+│   ├── download_models.py      # Model download utility
+│   ├── setup_fastvlm.sh        # FastVLM environment setup
 │   ├── benchmark_fastvlm.py    # Model benchmarking tools
 │   └── ...                     # Other utility scripts
 │
@@ -40,7 +45,9 @@ Unified tool for comprehensive file analysis combining:
 │
 ├── artifact_guard_py_adapter.sh # Runtime path enforcement
 └── libs/                      # External libraries
-    └── ml-fastvlm/              # FastVLM vision library
+    └── ml-fastvlm/              # FastVLM vision library (CODE ONLY)
+    
+Model files are stored in ~/.local/share/fastvlm/ (see MODELS.md)
 ```
 
 ## Usage
@@ -217,43 +224,70 @@ The system implements robust JSON validation for reliable output:
    - Provides detailed metrics in separate JSON file for benchmarking
    - Standardized metadata format across all output types
 
+## Model Management System
+
+The File Analyzer uses a centralized model management system for handling AI model files. This system keeps large model files outside the git repository while providing a consistent interface for model access.
+
+For complete details, see [MODELS.md](MODELS.md).
+
+### Key Features
+
+- **Centralized storage**: Models are stored in `~/.local/share/fastvlm/`
+- **Automatic download**: Models are downloaded automatically when needed
+- **Multiple model sizes**: Support for 0.5B (small), 1.5B (medium), and 7B (large) models
+- **CI integration**: GitHub Actions workflows for model caching
+
+### Setup and Usage
+
+```bash
+# Set up the environment
+./tools/setup_fastvlm.sh
+
+# List available models
+python tools/download_models.py list
+
+# Download a specific model
+python tools/download_models.py download --size 0.5b
+
+# Get model information
+python tools/download_models.py info --size 0.5b
+```
+
+### Model Adapter
+
+The system includes a unified adapter interface for model access:
+
+```python
+from src.fastvlm_adapter import create_adapter
+
+# Create adapter
+adapter = create_adapter(model_size="0.5b")
+
+# Run prediction
+result = adapter.predict(image_path="path/to/image.jpg", 
+                         prompt="Describe this image.",
+                         mode="describe")
+```
+
 ## FastVLM Integration
 
 FastVLM is Apple's efficient vision language model designed specifically for Apple Silicon.
 
 ### Installation
 
-```bash
-# Install MLX framework and FastVLM model 
-pip install mlx mlx-fastvlm
+The simplest way to set up FastVLM is to use our setup script:
 
-# Download the model (automatic when first used)
-fastvlm download apple/fastvlm-1.5b-instruct
+```bash
+# Run the setup script
+./tools/setup_fastvlm.sh
+
+# This will:
+# 1. Install MLX if needed
+# 2. Clone the FastVLM repository
+# 3. Download the 0.5B model by default
 ```
 
-#### Alternative Manual Installation
-
-If you prefer more control over the installation process:
-
-1. Install MLX framework for Apple Silicon optimization:
-   ```bash
-   pip install mlx
-   ```
-
-2. Clone the FastVLM repository and install dependencies:
-   ```bash
-   mkdir -p libs
-   git clone https://github.com/apple/ml-fastvlm.git libs/ml-fastvlm
-   cd libs/ml-fastvlm
-   pip install -e .
-   ```
-
-3. Download model weights:
-   ```bash
-   cd libs/ml-fastvlm
-   chmod +x get_models.sh
-   ./get_models.sh
-   ```
+For more advanced options, see [MODELS.md](MODELS.md).
 
 ### Optimization
 
