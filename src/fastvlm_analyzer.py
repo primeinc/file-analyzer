@@ -225,23 +225,31 @@ class FastVLMAnalyzer:
         import zipfile
         import tempfile
         
-        # Check if the model path is a zip file
+        # Check if the model path is a zip file or a directory
         if Path(self.model_path).suffix == '.zip':
             print(f"Model is a zip file: {self.model_path}")
             print("Using temporary directory for extraction...")
             
-            # Make a simple text response since we can't extract the zip in this context
-            return {
-                "result": "Model is in ZIP format. For testing purposes, this is a simulated response.\n\nThe image appears to show a landscape scene. It contains natural elements with good composition and lighting.",
-                "metadata": {
-                    "analysis_time": 0.1,
-                    "timestamp": datetime.now().isoformat(),
-                    "model": "FastVLM (Simulated)",
-                    "image_path": image_path,
-                    "prompt": prompt,
-                    "note": "Model in zip format - extraction required via setup_fastvlm.sh"
+            # Check if the equivalent extracted directory exists without .zip
+            extracted_dir_path = str(Path(self.model_path).with_suffix(''))
+            if Path(extracted_dir_path).is_dir() and any(Path(extracted_dir_path).iterdir()):
+                print(f"Found extracted model directory at {extracted_dir_path}")
+                model_path = extracted_dir_path
+                self.model_path = extracted_dir_path
+            else:
+                # Make a simple text response since actual extraction requires setup_fastvlm.sh
+                print("Extracted model not found. Please run setup_fastvlm.sh to extract the model.")
+                return {
+                    "result": "Model is in ZIP format. For testing purposes, this is a simulated response.\n\nThe image appears to show a landscape scene. It contains natural elements with good composition and lighting.",
+                    "metadata": {
+                        "analysis_time": 0.1,
+                        "timestamp": datetime.now().isoformat(),
+                        "model": "FastVLM (Simulated)",
+                        "image_path": image_path,
+                        "prompt": prompt,
+                        "note": "Model in zip format - extraction required via setup_fastvlm.sh"
+                    }
                 }
-            }
             
         # Regular model handling
         # Check if the model path is a directory

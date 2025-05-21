@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 
 # Test image
 TEST_IMAGE="test_data/images/test.jpg"
-MODEL_DIR="libs/ml-fastvlm/checkpoints/llava-fastvithd_0.5b_stage2.zip"
+MODEL_DIR="libs/ml-fastvlm/checkpoints/llava-fastvithd_0.5b_stage3"
 
 echo -e "${BLUE}=== FastVLM Direct Test ===${NC}"
 echo -e "${BLUE}Model: ${MODEL_DIR}${NC}"

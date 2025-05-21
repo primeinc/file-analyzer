@@ -156,13 +156,13 @@ mkdir -p "$CHECKPOINTS_DIR"
 
 # Download the specified model
 if [ "$MODEL_SIZE" == "0.5b" ]; then
-    MODEL_DIR="$CHECKPOINTS_DIR/llava-fastvithd_0.5b_stage3"
+    MODEL_NAME="llava-fastvithd_0.5b_stage3"
     MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage3.zip"
 elif [ "$MODEL_SIZE" == "1.5b" ]; then
-    MODEL_DIR="$CHECKPOINTS_DIR/llava-fastvithd_1.5b_stage3"
+    MODEL_NAME="llava-fastvithd_1.5b_stage3"
     MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage3.zip"
 elif [ "$MODEL_SIZE" == "7b" ]; then
-    MODEL_DIR="$CHECKPOINTS_DIR/llava-fastvithd_7b_stage3"
+    MODEL_NAME="llava-fastvithd_7b_stage3"
     MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_7b_stage3.zip"
 else
     echo "Unknown model size: $MODEL_SIZE"
@@ -170,15 +170,41 @@ else
     exit 1
 fi
 
+MODEL_DIR="$CHECKPOINTS_DIR/$MODEL_NAME"
+ZIP_PATH="$CHECKPOINTS_DIR/${MODEL_NAME}.zip"
+
+# Check if model directory already exists and contains files
+if [ -d "$MODEL_DIR" ] && [ "$(find "$MODEL_DIR" -type f | wc -l)" -gt 5 ]; then
+    echo "Model already exists at $MODEL_DIR"
+    echo "Skipping download"
+    
+    # Delete any existing zip files
+    if [ -f "$ZIP_PATH" ]; then
+        echo "Removing existing zip file $ZIP_PATH"
+        rm -f "$ZIP_PATH"
+    fi
+    exit 0
+fi
+
 # Create model directory
 mkdir -p "$MODEL_DIR"
 
-# Download and extract model
-echo "Downloading $MODEL_SIZE model from $MODEL_URL"
-TEMP_FILE=$(mktemp /tmp/fastvlm_model.XXXXXX.zip)
-curl -L "$MODEL_URL" -o "$TEMP_FILE"
-unzip -o "$TEMP_FILE" -d "$MODEL_DIR"
-rm "$TEMP_FILE"
+# Check if we already have the zip file
+if [ -f "$ZIP_PATH" ]; then
+    echo "Using existing download at $ZIP_PATH"
+else
+    # Download model
+    echo "Downloading $MODEL_SIZE model from $MODEL_URL"
+    curl -L "$MODEL_URL" -o "$ZIP_PATH"
+fi
+
+# Extract model
+echo "Extracting model to $MODEL_DIR"
+unzip -o "$ZIP_PATH" -d "$MODEL_DIR"
+
+# Remove zip file after successful extraction
+echo "Removing zip file after extraction"
+rm -f "$ZIP_PATH"
 
 # Create necessary files for tokenizer
 # Ensure required files exist
