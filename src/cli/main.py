@@ -164,7 +164,7 @@ def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output except errors"),
     ci: bool = typer.Option(False, "--ci", help="Run in non-interactive CI mode"),
-    log_json: bool = typer.Option(False, "--log-json", help="Output logs in JSON format"),
+    json_logs: bool = typer.Option(False, "--log-json", help="Output logs in JSON format"),
     log_file: Optional[str] = typer.Option(None, "--log-file", help="Path to log file"),
     no_color: bool = typer.Option(False, "--no-color", help="Disable colored output"),
     version: bool = typer.Option(False, "--version", help="Show version and exit"),
@@ -200,7 +200,7 @@ def main(
     configured_console, logger = setup_logging(
         verbose=verbose, 
         quiet=quiet,
-        json_logs=log_json,
+        json_logs=json_logs,
         log_file=log_file,
         no_color=no_color,
         ci=ci

@@ -115,12 +115,19 @@ class Config:
         Initialize configuration.
         
         Args:
-            config_file: Path to configuration file (defaults to config.json in project root)
+            config_file: Path to configuration file (defaults to config.json in project root,
+                         or the value of FA_CONFIG_FILE environment variable if set)
                          Can be None if no config file is available
         """
-        # Handle the case where config_file is provided
+        # Check for environment variable first
+        env_config_file = os.getenv('FA_CONFIG_FILE')
+        
+        # Priority: 1. Explicit config_file parameter, 2. FA_CONFIG_FILE env var, 3. Default config file
         if config_file:
             self.config_file = Path(config_file)
+        elif env_config_file and Path(env_config_file).exists():
+            logger.debug(f"Using config file from FA_CONFIG_FILE: {env_config_file}")
+            self.config_file = Path(env_config_file)
         # Handle case where DEFAULT_CONFIG_FILE might point to a missing file
         elif DEFAULT_CONFIG_FILE and Path(DEFAULT_CONFIG_FILE).exists():
             self.config_file = DEFAULT_CONFIG_FILE
@@ -352,10 +359,14 @@ class Config:
             os.makedirs(output_dir, exist_ok=True)
             return output_dir
             
-        except Exception as e:
-            # Ultimate fallback: temporary directory
+        except (OSError, PermissionError, FileNotFoundError) as e:
+            # Ultimate fallback: temporary directory - capture filesystem-related errors
             logger.error(f"Error creating artifact path: {e}")
             logger.warning("Using fallback temporary directory for artifacts")
+        except Exception as e:
+            # Unexpected errors should be re-raised after logging
+            logger.critical(f"Unexpected error creating artifact path: {e}")
+            raise
             
             import tempfile
             temp_dir = tempfile.mkdtemp(prefix=f"file_analyzer_{artifact_type}_")
