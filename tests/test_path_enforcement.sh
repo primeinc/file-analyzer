@@ -2,7 +2,7 @@
 # Test script to verify path enforcement
 
 # Source the artifact guard
-source ./artifact_guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard_py_adapter.sh"
 
 echo "Attempting to create a directory outside the canonical structure..."
 mkdir -p test_bad_path 2>&1 || echo "CORRECTLY PREVENTED: Directory creation outside canonical structure"

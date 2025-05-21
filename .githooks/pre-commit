@@ -28,7 +28,7 @@ if [[ -n "$CHANGED_SCRIPTS" ]]; then
       echo "Checking $script"
       ./check_script_conformity.sh "$script" || {
         echo "ERROR: $script does not conform to artifact discipline requirements."
-        echo "Please source artifact_guard.sh at the top of the script."
+        echo "Please source artifact_guard_py_adapter.sh at the top of the script."
         exit 1
       }
     fi
