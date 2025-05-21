@@ -25,18 +25,20 @@ app = typer.Typer(help="Analyze files and directories")
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
-    Configure and return the logger for analyze commands.
+    Get the logger for analyze commands and update log level if needed.
     
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
         
     Returns:
-        Configured logger instance
+        Logger instance
     """
-    log_level = logging.DEBUG if verbose else (logging.ERROR if quiet else logging.INFO)
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Import the setup_logging function from main module
+    from src.cli.main import setup_logging
+    
+    # Update the logging configuration based on current verbose/quiet flags
+    _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
 
 @app.callback()
