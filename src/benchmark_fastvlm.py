@@ -30,7 +30,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import local modules
-from src.fastvlm_test import FastVLMAnalyzer
+from src.fastvlm_analyzer import FastVLMAnalyzer
 
 # Check if PIL is available
 try:

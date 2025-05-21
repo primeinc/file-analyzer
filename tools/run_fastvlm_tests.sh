@@ -101,7 +101,7 @@ check_result "Benchmark" "continue"
 
 # Test direct script usage
 print_header "TESTING DIRECT SCRIPT USAGE"
-python "$PROJECT_ROOT/src/fastvlm_test.py" --image "$TEST_IMAGE" --prompt "Describe this image in detail" | tee "$OUTPUT_DIR/direct_usage.txt"
+python "$PROJECT_ROOT/src/fastvlm_analyzer.py" --image "$TEST_IMAGE" --prompt "Describe this image in detail" | tee "$OUTPUT_DIR/direct_usage.txt"
 check_result "Direct script usage" "continue"
 
 # Final summary

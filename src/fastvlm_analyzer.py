@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-FastVLM Test Script
+FastVLM Analyzer Component
 
-This script demonstrates how to use FastVLM for image analysis with the file-analyzer project.
-It uses the Apple ML-FastVLM model for efficient vision language processing on Apple Silicon.
+This module provides the FastVLMAnalyzer class for interacting with FastVLM models.
+It handles model initialization, image preprocessing, and prediction functionality.
 """
 
 import os

@@ -18,15 +18,15 @@ echo -e "${BLUE}Image: ${TEST_IMAGE}${NC}"
 
 # Run direct test with different prompts
 echo -e "\n${YELLOW}Testing with description prompt:${NC}"
-python "$(dirname "${BASH_SOURCE[0]}")/../src/fastvlm_test.py" --image "$TEST_IMAGE" --model "$MODEL_DIR" \
+python "$(dirname "${BASH_SOURCE[0]}")/../src/fastvlm_analyzer.py" --image "$TEST_IMAGE" --model "$MODEL_DIR" \
   --prompt "Describe this image in detail." --direct
 
 echo -e "\n${YELLOW}Testing with architectural analysis prompt:${NC}"
-python "$(dirname "${BASH_SOURCE[0]}")/../src/fastvlm_test.py" --image "$TEST_IMAGE" --model "$MODEL_DIR" \
+python "$(dirname "${BASH_SOURCE[0]}")/../src/fastvlm_analyzer.py" --image "$TEST_IMAGE" --model "$MODEL_DIR" \
   --prompt "What architectural style is shown in this logo? Be specific." --direct
 
 echo -e "\n${YELLOW}Testing with object detection prompt:${NC}"
-python "$(dirname "${BASH_SOURCE[0]}")/../src/fastvlm_test.py" --image "$TEST_IMAGE" --model "$MODEL_DIR" \
+python "$(dirname "${BASH_SOURCE[0]}")/../src/fastvlm_analyzer.py" --image "$TEST_IMAGE" --model "$MODEL_DIR" \
   --prompt "List all visual elements in this image and their positions." --direct
 
 echo -e "\n${GREEN}Tests complete!${NC}"
