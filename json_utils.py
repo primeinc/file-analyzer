@@ -24,17 +24,27 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class JSONValidator:
-    """Class for validating and extracting JSON from various text formats."""
+    """Class for validating and extracting JSON from various text formats.
+    
+    This class provides a multi-strategy approach to JSON extraction:
+    1. Direct JSON parsing for well-formed JSON
+    2. Pattern matching for flat JSON with expected fields (limitations with nested objects)
+    3. General JSON object pattern matching
+    4. Advanced balanced bracket algorithm for complex nested structures
+    
+    The strategies are tried in order, with each subsequent strategy being more robust
+    but potentially less precise for our specific output format.
+    """
     
     @staticmethod
     def extract_json_from_text(text):
         """
-        Extract JSON from text using sophisticated pattern matching.
+        Extract JSON from text using robust extraction methods.
         
-        This method uses multiple strategies to find valid JSON:
-        1. First attempts to match complete JSON objects with expected fields
-        2. Falls back to balanced bracket search for any JSON object
-        3. Handles nested objects, arrays, and quoted strings properly
+        This method employs a comprehensive approach to finding valid JSON:
+        1. Parse the entire text as JSON if possible
+        2. Find all potential JSON objects with proper nesting support
+        3. Extract largest valid JSON object from the text
         
         Args:
             text (str): The text that may contain JSON
@@ -45,55 +55,111 @@ class JSONValidator:
         if not text:
             return None
             
-        # Strategy 1: Try direct JSON parsing first
+        # Strategy 1: Try to parse the entire text as JSON
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
         
-        # Strategy 2: Look for common vision result patterns with key fields
-        # This regex specifically looks for our vision output format with description and tags
-        vision_pattern = r'\{(?:[^{}]|"(?:\\.|[^"\\])*")*"description"(?:[^{}]|"(?:\\.|[^"\\])*")*"tags"(?:[^{}]|"(?:\\.|[^"\\])*")*\}'
-        match = re.search(vision_pattern, text)
-        if match:
-            try:
-                potential_json = match.group(0)
-                return json.loads(potential_json)
-            except json.JSONDecodeError:
-                pass
+        # Strategy 2: Extract all potential JSON objects
+        potential_jsons = []
+        
+        # Find all opening braces
+        start_positions = [i for i, char in enumerate(text) if char == '{']
+        
+        for start_pos in start_positions:
+            # Track nesting level of braces
+            nest_level = 0
+            in_string = False
+            escape_next = False
+            
+            for i in range(start_pos, len(text)):
+                char = text[i]
                 
-        # Strategy 3: Find any JSON-like structure with balanced brackets
-        # This is more general but might capture unrelated JSON
-        json_pattern = r'\{(?:[^{}]|"(?:\\.|[^"\\])*")*\}'
-        match = re.search(json_pattern, text)
-        if match:
-            try:
-                potential_json = match.group(0)
-                return json.loads(potential_json)
-            except json.JSONDecodeError:
-                pass
+                # Handle string boundaries and escaping
+                if char == '"' and not escape_next:
+                    in_string = not in_string
+                elif char == '\\' and in_string:
+                    escape_next = True
+                else:
+                    escape_next = False
+                
+                # Only count braces outside of strings
+                if not in_string:
+                    if char == '{':
+                        nest_level += 1
+                    elif char == '}':
+                        nest_level -= 1
+                        
+                        # Found a complete JSON object
+                        if nest_level == 0:
+                            json_str = text[start_pos:i+1]
+                            try:
+                                json_obj = json.loads(json_str)
+                                potential_jsons.append(json_obj)
+                                break  # Found a valid JSON, move to next starting position
+                            except json.JSONDecodeError:
+                                pass  # Not valid JSON, continue searching
+                
+                # If the nesting goes negative, this isn't valid
+                if nest_level < 0:
+                    break
         
-        # Strategy 4: Advanced balanced bracket search
-        # This handles nested objects and arrays
-        stack = []
-        start_index = -1
+        # If we found potential JSON objects, select the most relevant one
+        if potential_jsons:
+            # First look for objects with required fields for vision output
+            for json_obj in potential_jsons:
+                if isinstance(json_obj, dict) and "description" in json_obj and "tags" in json_obj:
+                    return json_obj
+                    
+            # Then check for objects with any of our expected fields
+            expected_fields = ["description", "tags", "objects", "text", "document_type"]
+            for json_obj in potential_jsons:
+                if isinstance(json_obj, dict) and any(field in json_obj for field in expected_fields):
+                    return json_obj
+            
+            # If no objects with expected fields, return the largest one
+            return max(potential_jsons, key=lambda x: len(json.dumps(x)) if isinstance(x, dict) else 0)
         
-        for i, char in enumerate(text):
-            if char == '{' and (i == 0 or text[i-1] != '\\'):
-                if not stack:  # Mark the start of potential JSON
-                    start_index = i
-                stack.append('{')
-            elif char == '}' and (i == 0 or text[i-1] != '\\'):
-                if stack and stack[-1] == '{':
-                    stack.pop()
-                    if not stack:  # We've found a complete balanced section
-                        try:
-                            potential_json = text[start_index:i+1]
-                            return json.loads(potential_json)
-                        except json.JSONDecodeError:
-                            # Continue searching
-                            start_index = -1
+        # Strategy 3: More aggressive extraction for strings with escaped characters
+        # Find sequences that look like JSON by using regex
+        import re
+        # Look for more complex JSON-like patterns that might have nested structure
+        json_pattern = r'(\{(?:[^{}]|\"(?:\\.|[^\"])*\")*\})'
+        matches = re.findall(json_pattern, text)
         
+        # Try each potential match
+        for match in matches:
+            # Look for our expected fields
+            if ('"description"' in match and '"tags"' in match) or any(f'"{field}"' in match for field in ["objects", "text", "document_type"]):
+                # Try multiple approaches to parse potentially malformed JSON
+                for parse_attempt in range(3):  # Try different parsing strategies
+                    try:
+                        if parse_attempt == 0:
+                            # Standard parsing
+                            json_obj = json.loads(match)
+                            return json_obj
+                        elif parse_attempt == 1:
+                            # Fix common JSON errors - escaped quotes
+                            # Replace escaped quotes with a temporary placeholder
+                            temp = match.replace('\\"', '§ESCAPED_QUOTE§')
+                            # Fix the JSON structure
+                            temp = temp.replace('§ESCAPED_QUOTE§', '\\"')
+                            json_obj = json.loads(temp)
+                            return json_obj
+                        elif parse_attempt == 2:
+                            # More aggressive fixing for problematic escaping
+                            # First normalize all backslashes
+                            temp = match.replace('\\\\', '§DOUBLE_BACKSLASH§')
+                            temp = temp.replace('\\"', '§ESCAPED_QUOTE§')
+                            # Replace with proper escaping
+                            temp = temp.replace('§ESCAPED_QUOTE§', '\\"')
+                            temp = temp.replace('§DOUBLE_BACKSLASH§', '\\\\')
+                            json_obj = json.loads(temp)
+                            return json_obj
+                    except json.JSONDecodeError:
+                        continue  # Try next parsing strategy
+                        
         # No valid JSON found
         return None
     
@@ -212,7 +278,7 @@ JSON_PROMPT_TEMPLATES = {
     No other text, just the JSON object."""
 }
 
-def process_model_output(output, mode="describe", metadata=None, max_retries=0, retry_prompt=None):
+def process_model_output(output, mode="describe", metadata=None, attempt_count=0, retry_prompt=None):
     """
     Process model output to extract and validate JSON.
     
@@ -220,7 +286,7 @@ def process_model_output(output, mode="describe", metadata=None, max_retries=0, 
         output (str): The raw output from the model
         mode (str): The analysis mode (describe, detect, document)
         metadata (dict): Additional metadata to include
-        max_retries (int): Number of retries attempted (for metadata)
+        attempt_count (int): Actual number of attempts made, including this one
         retry_prompt (str): Prompt used for retry (for debugging)
         
     Returns:
@@ -243,8 +309,10 @@ def process_model_output(output, mode="describe", metadata=None, max_retries=0, 
         base_metadata = {
             "mode": mode,
         }
-        if max_retries > 0:
-            base_metadata["attempts"] = max_retries
+        
+        # Record the actual attempt count
+        if attempt_count > 0:
+            base_metadata["attempts"] = attempt_count
             
         if metadata:
             base_metadata.update(metadata)
@@ -263,8 +331,9 @@ def process_model_output(output, mode="describe", metadata=None, max_retries=0, 
         "json_parsing_failed": True
     }
     
-    if max_retries > 0:
-        base_metadata["attempts"] = max_retries
+    # Record the actual attempt count
+    if attempt_count > 0:
+        base_metadata["attempts"] = attempt_count
         
     if metadata:
         base_metadata.update(metadata)

@@ -15,6 +15,14 @@ import argparse
 import logging
 from pathlib import Path
 
+# Define exception classes for JSON handling
+class JSONParsingError(Exception):
+    """Exception raised when all JSON parsing attempts fail."""
+    def __init__(self, text, metadata):
+        self.text = text
+        self.metadata = metadata
+        super().__init__("Failed to parse valid JSON from model output")
+
 # Make sure our modules are in the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -172,11 +180,20 @@ def run_fastvlm_json_analysis(image_path, model_path, prompt=None, max_retries=3
                     cmd = base_cmd + ["--prompt", prompt]
                     continue
                 else:
-                    # Final attempt failed, return structured error
-                    logging.warning("All JSON parsing attempts failed. Returning as text.")
-                    # Add failure flags to metadata
-                    metadata["json_parsing_failed"] = True
-                    return JSONValidator.format_fallback_response(output, metadata)
+                    # Final attempt failed, raise a structured error
+                    logging.warning("All JSON parsing attempts failed. Raising JSONParsingError.")
+                    
+                    # Raise the error with full context
+                    raise JSONParsingError(
+                        text=output,
+                        metadata={
+                            "response_time": response_time,
+                            "model": "FastVLM 1.5B",
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "json_parsing_failed": True,
+                            "attempts": max_retries
+                        }
+                    )
                 
         except subprocess.SubprocessError as e:
             logging.error(f"Error running FastVLM: {e}")
@@ -226,42 +243,65 @@ def main():
     if not args.quiet:
         print("\nRunning analysis...")
     
-    result = run_fastvlm_json_analysis(
-        args.image, 
-        args.model,
-        prompt=args.prompt,  # This will be None if not provided
-        max_retries=args.retries,
-        mode=args.mode
-    )
-    
-    if result:
-        # Save to file if output path provided
+    try:
+        result = run_fastvlm_json_analysis(
+            args.image, 
+            args.model,
+            prompt=args.prompt,  # This will be None if not provided
+            max_retries=args.retries,
+            mode=args.mode
+        )
+        
+        if result:
+            # Save to file if output path provided
+            if args.output:
+                with open(args.output, 'w') as f:
+                    json.dump(result, f, indent=2)
+                if not args.quiet:
+                    print(f"\nResults saved to {args.output}")
+            
+            # Print results
+            if not args.quiet:
+                print("\nAnalysis Results:")
+                print(json.dumps(result, indent=2))
+                
+                # Print metadata separately
+                if "metadata" in result:
+                    print(f"\nResponse time: {result['metadata']['response_time']:.2f} seconds")
+                    if "attempts" in result["metadata"] and result["metadata"]["attempts"] > 1:
+                        print(f"JSON validation attempts: {result['metadata']['attempts']}")
+            else:
+                # In quiet mode, just print the JSON
+                print(json.dumps(result))
+        else:
+            print("\nAnalysis failed.")
+            
+    except JSONParsingError as e:
+        # Handle JSON parsing failures with consistent output
+        print("\nJSON Parsing Error: Could not extract valid JSON structure")
+        print(f"Attempts made: {e.metadata['attempts']}")
+        print(f"Response time: {e.metadata['response_time']:.2f} seconds")
+        
+        # Create error result for output file if requested
+        error_result = {
+            "error": "Failed to parse JSON output",
+            "description": "FastVLM output could not be parsed as valid JSON",
+            "tags": ["error", "json_parsing_failed"],
+            "metadata": e.metadata
+        }
+        
         if args.output:
             with open(args.output, 'w') as f:
-                json.dump(result, f, indent=2)
+                json.dump(error_result, f, indent=2)
             if not args.quiet:
-                print(f"\nResults saved to {args.output}")
+                print(f"\nError results saved to {args.output}")
         
-        # Print results
         if not args.quiet:
-            print("\nAnalysis Results:")
-            # Check if the result contains proper JSON structure or just text
-            if "text" in result and "json_parsing_failed" in result.get("metadata", {}):
-                print("WARNING: JSON parsing failed. Raw output:")
-                print(result["text"])
-            else:
-                print(json.dumps(result, indent=2))
-            
-            # Print metadata separately
-            if "metadata" in result:
-                print(f"\nResponse time: {result['metadata']['response_time']:.2f} seconds")
-                if "attempts" in result["metadata"] and result["metadata"]["attempts"] > 1:
-                    print(f"JSON validation attempts: {result['metadata']['attempts']}")
+            print("\nRaw model output:")
+            print(e.text)
         else:
-            # In quiet mode, just print the JSON
-            print(json.dumps(result))
-    else:
-        print("\nAnalysis failed.")
+            # In quiet mode, just print the error JSON
+            print(json.dumps(error_result))
     
     if not args.quiet:
         print("\nDemo complete!")
