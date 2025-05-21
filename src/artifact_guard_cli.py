@@ -134,17 +134,50 @@ def main():
             sys.exit(1)
             
     elif args.command == "validate":
-        # Validate path against artifact discipline
-        valid = validate_artifact_path(args.path)
+        # Validate path against artifact discipline with detailed feedback
+        path = args.path
+        valid = validate_artifact_path(path)
+        
         if valid:
             print(f"{GREEN}Path IS valid according to artifact discipline.{RESET}")
             sys.exit(0)
         else:
-            print(f"{RED}Path is NOT valid according to artifact discipline.{RESET}")
-            print(f"{YELLOW}Valid paths must be within:{RESET}")
-            print(f"1. {ARTIFACTS_ROOT}")
+            # Provide more specific reasons why the path is invalid
+            print(f"{RED}Path is NOT valid according to artifact discipline:{RESET}")
+            
+            # Check if it's a system directory
+            if path.startswith('/tmp') or path.startswith('/var/tmp'):
+                print(f"{RED}ERROR:{RESET} Path is a system temporary directory. Use canonical artifact paths instead.")
+                print(f"  Use: get_canonical_artifact_path(\"tmp\", \"your_context\") for temporary files.")
+            
+            # Check if it's attempting path traversal
+            elif '..' in path:
+                print(f"{RED}ERROR:{RESET} Path contains parent directory references (..) which is not allowed.")
+                print(f"  Use absolute paths within the canonical artifact structure.")
+            
+            # Check if it's outside project directory
+            elif not path.startswith('/') and not os.path.abspath(path).startswith(project_root):
+                print(f"{RED}ERROR:{RESET} Path is outside the project directory structure.")
+                
+            # Check if it's using a legacy pattern
+            elif any(pattern in path for pattern in ['analysis_results', 'vision_results']):
+                print(f"{RED}ERROR:{RESET} Path uses a legacy pattern that is not compatible with artifact discipline.")
+                print(f"  Replace legacy paths with canonical artifact paths.")
+            
+            # Check if it's in artifacts directory but not following canonical structure
+            elif path.startswith(ARTIFACTS_ROOT) and not any(f"/{t}/" in path for t in ARTIFACT_TYPES):
+                print(f"{RED}ERROR:{RESET} Path is in artifacts directory but doesn't follow canonical type structure.")
+                print(f"  Canonical paths must include a valid type: {', '.join(ARTIFACT_TYPES)}")
+            
+            # General guidance
+            print(f"\n{YELLOW}Valid paths must be within:{RESET}")
+            print(f"1. {ARTIFACTS_ROOT} and follow canonical naming")
             print(f"2. {project_root}/src, {project_root}/tools, {project_root}/tests")
             print(f"3. Standard files in project root directory")
+            
+            print(f"\n{YELLOW}Example of valid canonical path:{RESET}")
+            print(f"  {get_canonical_artifact_path('test', 'example_context')}")
+            
             sys.exit(1)
             
     elif args.command == "cleanup":

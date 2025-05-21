@@ -92,7 +92,8 @@ get_artifact_path() {
 }
 
 # Prevent running more than one cleanup process at a time
-LOCK_FILE="/tmp/file-analyzer-cleanup.lock"
+# Use a canonical path for the lock file
+LOCK_FILE="$ARTIFACTS_ROOT/tmp/file-analyzer-cleanup.lock"
 cleanup_lock() {
   if [ -f "$LOCK_FILE" ]; then
     pid=$(cat "$LOCK_FILE")
@@ -122,6 +123,7 @@ clean_artifacts() {
   fi
 
   log "INFO" "Cleaning artifacts based on retention policies (default: $default_retention_days days)..."
+  log "INFO" "Using per-manifest retention days when available"
 
   # Find all artifact directories
   find "$ARTIFACTS_ROOT" -type d -path "$ARTIFACTS_ROOT/*/*/*" | while read dir; do
@@ -138,6 +140,7 @@ clean_artifacts() {
       local manifest_retention=$(python3 "$SCRIPT_DIR/src/json_parser.py" "$manifest_file" "retention_days" "")
       if [ -n "$manifest_retention" ]; then
         retention_days=$manifest_retention
+        log "INFO" "Using manifest-specific retention period for $dir: $retention_days days"
       fi
     fi
     
@@ -293,11 +296,12 @@ check_artifact_sprawl() {
   
   log "INFO" "Checking for artifact sprawl in $check_dir..."
   
-  # Temporary file for results
-  local temp_file="/tmp/artifact-sprawl-$$.txt"
+  # Use canonical temp directory instead of /tmp
+  local temp_dir=$(get_artifact_path tmp "artifact_sprawl_$$")
+  local temp_file="$temp_dir/results.txt"
   
-  # Find timestamp directories (anything under artifacts/)
-  find "$check_dir" -type d -path "$check_dir/artifacts/*" -not -path "$excluded_dirs*" > "$temp_file"
+  # Find directories under artifacts/ that are not part of the canonical structure
+  find "$check_dir" -type d -path "$check_dir/artifacts/*" -not -path "$ARTIFACTS_ROOT/*" > "$temp_file"
   
   # Filter duplicates and report
   if [ -s "$temp_file" ]; then

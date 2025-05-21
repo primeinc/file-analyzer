@@ -102,8 +102,10 @@ mkdir_guard() {
     done
     
     if [[ "$has_p_flag" == true ]] && [[ ! "$dir" == /* ]]; then
-      # Only allow relative paths within current directory that don't try
-      # to escape to sensitive locations using ../
+      # Even with -p flag, strictly validate relative paths to prevent path traversal
+      # attacks or creation of directories outside the canonical structure
+      
+      # Block path traversal attempts or system temp directories
       if [[ "$dir" == *"../"* ]] || [[ "$abs_path" == *"/tmp"* ]] || [[ "$abs_path" == *"/var/tmp"* ]]; then
         echo "ERROR: Path traversal or temporary path not allowed: $dir" >&2
         echo "Use get_canonical_artifact_path to create canonical paths" >&2
@@ -112,13 +114,21 @@ mkdir_guard() {
       
       # Check if path is attempting to write to artifacts directory
       if [[ "$abs_path" == *"/artifacts/"* ]]; then
-        # For artifacts directory, continue with strict validation below
+        # For artifacts directory, always use strict validation (pass through to validation below)
         :
       else
-        # For other directories, allow if they are in project structure
-        if [[ "$abs_path" == *"/src/"* ]] || [[ "$abs_path" == *"/tools/"* ]] || [[ "$abs_path" == *"/tests/"* ]]; then
-          continue
+        # For project structure directories, allow if they are within specific safe project directories
+        if [[ "$abs_path" == "$SCRIPT_DIR/src/"* ]] || [[ "$abs_path" == "$SCRIPT_DIR/tools/"* ]] || [[ "$abs_path" == "$SCRIPT_DIR/tests/"* ]]; then
+          # Allow but still verify no escaping to parent directories
+          if [[ "$dir" != *"../"* ]]; then
+            continue
+          fi
         fi
+        
+        # Any other paths (especially those outside project dir) are potentially dangerous
+        echo "ERROR: Non-canonical path outside project structure: $dir" >&2
+        echo "Use get_canonical_artifact_path to create canonical artifact paths" >&2
+        return 1
       fi
     fi
     
