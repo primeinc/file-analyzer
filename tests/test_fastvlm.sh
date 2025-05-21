@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard.sh"
 # Test script for FastVLM integration
 
 echo "FastVLM Integration Test"

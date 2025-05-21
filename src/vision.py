@@ -354,9 +354,8 @@ class VisionAnalyzer:
             # Check if we should use the JSON-specific implementation
             if output_format == "json":
                 try:
-                    # Import the improved JSON module from tools directory
-                    sys.path.insert(0, os.path.join(project_root, 'tools'))
-                    from fastvlm_json import run_fastvlm_json_analysis
+                    # Import the improved JSON module from src directory
+                    from src.fastvlm_json import run_fastvlm_json_analysis
                     
                     # Determine appropriate JSON prompt based on mode
                     if mode == "describe":

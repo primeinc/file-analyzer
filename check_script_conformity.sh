@@ -26,12 +26,12 @@ check_script() {
     fi
   done
   
-  # Look for any sourcing of artifact_guard.sh in the script
-  if grep -q "source.*artifact_guard.sh" "$script" || grep -q "\. .*artifact_guard.sh" "$script"; then
+  # Look for any sourcing of artifact_guard.sh or artifact_guard_py_adapter.sh in the script
+  if grep -q "source.*artifact_guard.sh" "$script" || grep -q "\. .*artifact_guard.sh" "$script" || grep -q "source.*artifact_guard_py_adapter.sh" "$script"; then
     echo -e "${GREEN}${BOLD}PASS${NC}: $script"
     return 0
   else
-    echo -e "${RED}${BOLD}FAIL${NC}: $script (does not source artifact_guard.sh)"
+    echo -e "${RED}${BOLD}FAIL${NC}: $script (does not source artifact_guard.sh or artifact_guard_py_adapter.sh)"
     return 1
   fi
 }

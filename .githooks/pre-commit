@@ -85,7 +85,7 @@ fi
 NEW_SH_FILES=$(git diff --cached --name-only --diff-filter=A | grep -E '\.sh$' | grep -v "^tools/" | grep -v "^tests/" || true)
 if [[ -n "$NEW_SH_FILES" ]]; then
   # Allow specific root-level scripts
-  ALLOWED_ROOT_SCRIPTS=("artifact_guard.sh" "preflight.sh" "cleanup.sh" "migrate_artifacts.sh" "check_script_conformity.sh" "artifact_guard_py_adapter.sh")
+  ALLOWED_ROOT_SCRIPTS=("artifact_guard.sh" "preflight.sh" "cleanup.sh" "migrate_artifacts.sh" "check_script_conformity.sh" "artifact_guard_py_adapter.sh" "check_all_scripts.sh")
   
   for script in $NEW_SH_FILES; do
     script_name=$(basename "$script")

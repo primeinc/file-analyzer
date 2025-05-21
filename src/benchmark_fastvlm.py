@@ -16,10 +16,21 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-# Make sure fastvlm_test is available
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure project root is in sys.path for module imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from fastvlm_test import FastVLMAnalyzer
+# Import artifact discipline tools
+from src.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
+
+# Ensure project root is in sys.path for module imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Import local modules
+from src.fastvlm_test import FastVLMAnalyzer
 
 # Check if PIL is available
 try:
@@ -32,15 +43,24 @@ def download_test_images(output_dir=None):
     """Download sample test images of different types if not available.
     
     Args:
-        output_dir: Directory to save images. If None, uses test_data/sample_images
+        output_dir: Directory to save images. If None, uses canonical artifact path
         
     Returns:
         List of paths to downloaded or existing images
     """
-    # Use test_data/sample_images as the default location
+    # Use canonical artifact path as the default location
     if output_dir is None:
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data", "sample_images")
+        output_dir = get_canonical_artifact_path("benchmark", "sample_images")
+        print(f"Using canonical artifact path for sample images: {output_dir}")
+    else:
+        # Validate the provided output directory
+        if not validate_artifact_path(output_dir):
+            print(f"Warning: Output directory {output_dir} is not a canonical artifact path")
+            print(f"Creating canonical artifact path for sample images")
+            output_dir = get_canonical_artifact_path("benchmark", "sample_images")
+            print(f"Using canonical artifact path: {output_dir}")
     
+    # Ensure the directory exists
     os.makedirs(output_dir, exist_ok=True)
     
     # Check if we already have images
@@ -132,29 +152,29 @@ def find_test_images():
     """Find test images in the project.
     
     This function looks for images in the following locations, in order:
-    1. test_data/sample_images (downloaded standard test images)
-    2. test_data/images (user-provided test images)
-    3. Throughout test_data recursively
-    4. Downloads sample images to test_data/sample_images if none found
+    1. Canonical artifact path benchmark/sample_images (downloaded standard test images)
+    2. Canonical artifact path test/images (user-provided test images)
+    3. Throughout artifacts/benchmark and artifacts/test recursively
+    4. Downloads sample images to canonical artifact path if none found
     
     Returns:
         List of paths to test images
     """
     images = []
     
-    # Check in test_data/sample_images directory first (our standard test images)
-    sample_images_dir = Path(__file__).parent / "test_data" / "sample_images"
+    # Check in canonical sample images directory first
+    sample_images_dir = Path(get_canonical_artifact_path("benchmark", "sample_images"))
     if sample_images_dir.exists():
         # Find all image files in the sample images directory
         for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"]:
             images.extend(list(sample_images_dir.glob(f"*{ext}")))
         
         if images:
-            print(f"Found {len(images)} test images in test_data/sample_images directory")
+            print(f"Found {len(images)} test images in {sample_images_dir}")
             return images
     
-    # Check in test_data/images directory next (user test images)
-    test_images_dir = Path(__file__).parent / "test_data" / "images"
+    # Check in canonical test images directory next
+    test_images_dir = Path(get_canonical_artifact_path("test", "images"))
     if test_images_dir.exists():
         test_images = []
         # Find all image files in the images directory
@@ -162,30 +182,51 @@ def find_test_images():
             test_images.extend(list(test_images_dir.glob(f"*{ext}")))
         
         if test_images:
-            print(f"Found {len(test_images)} test images in test_data/images directory")
+            print(f"Found {len(test_images)} test images in {test_images_dir}")
             return test_images
-            
-    # If images dir doesn't have images, check all of test_data
-    test_data = Path(__file__).parent / "test_data"
+    
+    # Check in project test_data directory (for backward compatibility)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    test_data = Path(project_root) / "test_data"
     if test_data.exists():
+        legacy_images = []
+        # Find all image files in the images directory
+        for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"]:
+            legacy_images.extend(list(test_data.glob(f"images/*{ext}")))
+            
+        if legacy_images:
+            print(f"Found {len(legacy_images)} legacy test images in {test_data}/images")
+            print("Consider moving these to canonical artifact paths")
+            return legacy_images
+            
+        # If test_data/images doesn't have images, check sample_images
+        for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"]:
+            legacy_images.extend(list(test_data.glob(f"sample_images/*{ext}")))
+            
+        if legacy_images:
+            print(f"Found {len(legacy_images)} legacy test images in {test_data}/sample_images")
+            print("Consider moving these to canonical artifact paths")
+            return legacy_images
+        
+        # Last resort: check all of test_data recursively
         recursive_images = []
-        # Find all image files recursively
         for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"]:
             recursive_images.extend(list(test_data.glob(f"**/*{ext}")))
         
         if recursive_images:
-            print(f"Found {len(recursive_images)} test images in test_data directory")
+            print(f"Found {len(recursive_images)} legacy test images in {test_data}")
+            print("Consider moving these to canonical artifact paths")
             return recursive_images
     
-    # If no local images found, download standard test images to sample_images dir
-    print("No test images found in test_data. Downloading standard test images...")
-    downloaded_images = download_test_images()  # Uses default location test_data/sample_images
+    # If no local images found, download standard test images to canonical artifact path
+    print("No test images found. Downloading standard test images...")
+    downloaded_images = download_test_images()  # Uses canonical artifact path
     
     # If download also failed, return an empty list with clear error
     if not downloaded_images:
         print("WARNING: Could not find or download any test images!")
         print("Please ensure either:")
-        print("  1. test_data/images/ directory contains image files, or")
+        print("  1. Images are available in a canonical artifact path, or")
         print("  2. Internet connectivity is available for downloading sample images")
         return []
         
@@ -196,12 +237,27 @@ def run_benchmark(analyzer, images, output_file=None):
     if not images:
         print("No test images available for benchmarking")
         return None
+        
+    # Use canonical artifact path for output file if none provided
+    if output_file is None:
+        benchmark_dir = get_canonical_artifact_path("benchmark", f"fastvlm_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        output_file = os.path.join(benchmark_dir, "results.json")
+        print(f"Using canonical artifact path for benchmark results: {output_file}")
+    else:
+        # Validate the provided output path
+        if not validate_artifact_path(output_file):
+            print(f"Warning: Output file {output_file} is not in a canonical artifact path")
+            print(f"Creating canonical artifact path for benchmark results")
+            benchmark_dir = get_canonical_artifact_path("benchmark", f"fastvlm_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            output_file = os.path.join(benchmark_dir, "results.json")
+            print(f"Using canonical artifact path: {output_file}")
     
     # Setup results structure    
     results = {
         "timestamp": datetime.now().isoformat(),
         "model": analyzer.model_info["name"] if hasattr(analyzer, "model_info") else "FastVLM",
         "model_path": analyzer.model_path,
+        "output_path": output_file,
         "images": {},
         "summary": {},
         "errors": []
@@ -462,9 +518,30 @@ def run_benchmark(analyzer, images, output_file=None):
     # Save results
     if output_file:
         try:
-            with open(output_file, 'w') as f:
-                json.dump(results, f, indent=2)
-            print(f"\nDetailed results saved to {output_file}")
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            
+            # Use PathGuard to enforce artifact discipline
+            with PathGuard(os.path.dirname(output_file)):
+                with open(output_file, 'w') as f:
+                    json.dump(results, f, indent=2)
+                print(f"\nDetailed results saved to {output_file}")
+                
+                # Also save a summary file
+                summary_file = os.path.join(os.path.dirname(output_file), "summary.txt")
+                with open(summary_file, 'w') as f:
+                    f.write("Benchmark Summary:\n")
+                    f.write(f"Total images: {len(images)}\n")
+                    f.write(f"Successful analyses: {results['summary'].get('successful_images', 0)}\n")
+                    f.write(f"Failed analyses: {results['summary'].get('failed_images', 0)}\n")
+                    f.write(f"Success rate: {results['summary'].get('success_rate', 0):.1f}%\n")
+                    f.write(f"Total processing time: {results['summary'].get('total_time', 0):.2f}s\n")
+                    f.write(f"Average time per image: {results['summary'].get('avg_time', 0):.2f}s\n")
+                    f.write(f"Throughput: {results['summary'].get('throughput', 0):.2f} images/s\n")
+                    f.write(f"Average image size: {results['summary'].get('avg_original_size_kb', 0):.1f}KB\n")
+                    f.write(f"Average processed size: {results['summary'].get('avg_processed_size_kb', 0):.1f}KB\n")
+                    f.write(f"Overall size reduction: {results['summary'].get('total_size_reduction_pct', 0):.1f}%\n")
+                print(f"Summary saved to {summary_file}")
         except Exception as save_error:
             print(f"\nError saving results to {output_file}: {save_error}")
     
@@ -474,7 +551,8 @@ def main():
     parser = argparse.ArgumentParser(description="FastVLM Benchmark")
     parser.add_argument("--model", help="Path to FastVLM model")
     parser.add_argument("--images", help="Directory containing test images")
-    parser.add_argument("--output", default="benchmark_results.json", help="Output file for benchmark results")
+    parser.add_argument("--output", help="Output file for benchmark results (uses canonical artifact path if not specified)")
+    parser.add_argument("--canonical", action="store_true", help="Force use of canonical artifact paths")
     
     args = parser.parse_args()
     
@@ -482,15 +560,27 @@ def main():
     analyzer = FastVLMAnalyzer(model_path=args.model)
     
     # Find test images
-    if args.images and os.path.exists(args.images):
-        image_dir = Path(args.images)
-        images = []
-        for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp"]:
-            images.extend(list(image_dir.glob(f"*{ext}")))
+    if args.images and os.path.exists(args.images) and not args.canonical:
+        # Check if the provided directory is a canonical artifact path
+        if validate_artifact_path(args.images):
+            image_dir = Path(args.images)
+            images = []
+            for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp"]:
+                images.extend(list(image_dir.glob(f"*{ext}")))
+            if images:
+                print(f"Using {len(images)} images from provided canonical artifact path")
+            else:
+                print(f"No images found in provided directory. Searching canonical artifact paths...")
+                images = find_test_images()
+        else:
+            print(f"Warning: Provided image directory {args.images} is not a canonical artifact path")
+            print(f"Consider moving images to canonical artifact paths")
+            print(f"Searching canonical artifact paths instead...")
+            images = find_test_images()
     else:
         images = find_test_images()
     
-    # Run benchmark
+    # Run benchmark with canonical artifact path for output
     run_benchmark(analyzer, images, args.output)
 
 if __name__ == "__main__":

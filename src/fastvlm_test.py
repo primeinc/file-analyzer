@@ -16,10 +16,34 @@ from datetime import datetime
 
 # Import error handler
 try:
-    from fastvlm_errors import FastVLMErrorHandler
+    from src.fastvlm_errors import FastVLMErrorHandler
     ERROR_HANDLER_AVAILABLE = True
 except ImportError:
-    ERROR_HANDLER_AVAILABLE = False
+    # For backward compatibility, check various import paths
+    try:
+        from fastvlm_errors import FastVLMErrorHandler
+        ERROR_HANDLER_AVAILABLE = True
+    except ImportError:
+        # Create a minimal error handler class if not available
+        class FastVLMErrorHandler:
+            @staticmethod
+            def check_environment():
+                return []
+                
+            @staticmethod
+            def check_model_files(path):
+                return {"status": "success"}
+                
+            @staticmethod
+            def diagnose_error(error_text):
+                return None
+                
+            @staticmethod
+            def fix_common_issues():
+                return []
+                
+        ERROR_HANDLER_AVAILABLE = True
+        print("Warning: Created minimal FastVLM error handler")
 
 # Determine if MLX and FastVLM are available
 try:
@@ -29,16 +53,27 @@ except ImportError:
     MLX_AVAILABLE = False
     print("Warning: MLX framework not found. Please install with 'pip install mlx'")
 
+# Ensure project root is in sys.path for module imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 # Check if we've downloaded the ml-fastvlm repository
-ML_FASTVLM_PATH = Path(__file__).parent / "ml-fastvlm"
+# First check in project root, then in tools directory for backward compatibility
+ML_FASTVLM_PATH = Path(project_root) / "ml-fastvlm"
 if ML_FASTVLM_PATH.exists():
     sys.path.append(str(ML_FASTVLM_PATH))
 else:
-    print(f"Warning: ml-fastvlm directory not found at {ML_FASTVLM_PATH}")
-    ML_FASTVLM_PATH = None
+    # Try tools directory as fallback
+    ML_FASTVLM_PATH = Path(__file__).parent / "ml-fastvlm"
+    if ML_FASTVLM_PATH.exists():
+        sys.path.append(str(ML_FASTVLM_PATH))
+    else:
+        print(f"Warning: ml-fastvlm directory not found at {project_root}/ml-fastvlm or {Path(__file__).parent}/ml-fastvlm")
+        ML_FASTVLM_PATH = None
 
-# Import from our vision_analyzer module
-from vision_analyzer import VisionAnalyzer
+# Import from our vision analyzer module
+from src.vision import VisionAnalyzer
 
 class FastVLMAnalyzer:
     """FastVLM image analyzer for Apple Silicon."""

@@ -61,7 +61,8 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARTIFACTS_ROOT="$SCRIPT_DIR/artifacts"
 CLEANUP_SCRIPT="$SCRIPT_DIR/cleanup.sh"
-ARTIFACT_GUARD="$SCRIPT_DIR/artifact_guard.sh"
+ARTIFACT_GUARD_PYTHON="$SCRIPT_DIR/src/artifact_guard.py"
+ARTIFACT_GUARD_ADAPTER="$SCRIPT_DIR/artifact_guard_py_adapter.sh"
 
 # Check if required scripts exist
 if [ ! -f "$CLEANUP_SCRIPT" ]; then
@@ -69,9 +70,15 @@ if [ ! -f "$CLEANUP_SCRIPT" ]; then
   exit 1
 fi
 
-if [ ! -f "$ARTIFACT_GUARD" ]; then
-  echo -e "${RED}Error: artifact_guard.sh not found at $ARTIFACT_GUARD${NC}" >&2
+# Use the Python implementation or adapter - the original artifact_guard.sh is deprecated
+if [ ! -f "$ARTIFACT_GUARD_PYTHON" ]; then
+  echo -e "${RED}Error: artifact_guard.py not found at $ARTIFACT_GUARD_PYTHON${NC}" >&2
   exit 1
+fi
+
+if [ ! -f "$ARTIFACT_GUARD_ADAPTER" ]; then
+  echo -e "${YELLOW}Warning: artifact_guard_py_adapter.sh not found at $ARTIFACT_GUARD_ADAPTER${NC}" >&2
+  echo -e "${YELLOW}You should use the Python implementation directly${NC}" >&2
 fi
 
 # Ensure artifact directory structure exists
@@ -157,9 +164,9 @@ for script in $SCRIPT_FILES; do
     fi
   done
   
-  # Check if script sources artifact_guard.sh
-  if ! grep -q "source.*artifact_guard.sh" "$script" && ! grep -q "\. .*artifact_guard.sh" "$script"; then
-    echo -e "  ${YELLOW}⚠ Does not source artifact_guard.sh${NC}"
+  # Check if script sources artifact_guard.sh or adapter
+  if ! grep -q "source.*artifact_guard.sh" "$script" && ! grep -q "\. .*artifact_guard.sh" "$script" && ! grep -q "source.*artifact_guard_py_adapter.sh" "$script"; then
+    echo -e "  ${YELLOW}⚠ Does not source artifact_guard implementation${NC}"
     ((VIOLATIONS++))
   fi
   
@@ -202,7 +209,7 @@ fi
 # Success message
 echo -e "\n${GREEN}${BOLD}Preflight check completed successfully.${NC}"
 echo -e "${BOLD}IMPORTANT:${NC} All scripts must:"
-echo -e "1. Source ${YELLOW}artifact_guard.sh${NC} for path enforcement"
+echo -e "1. Source ${YELLOW}artifact_guard_py_adapter.sh${NC} or import ${YELLOW}src.artifact_guard${NC}"
 echo -e "2. Use ${YELLOW}get_canonical_artifact_path <type> \"context\"${NC} for generating paths"
 echo -e "3. Write all files in canonical locations with manifests"
 echo -e "4. NOT bypass the artifact guard with manual paths"

@@ -1,92 +1,55 @@
 #!/bin/bash
-# Install script for File Analysis System
+source "$(dirname "${BASH_SOURCE[0]}")/artifact_guard.sh"
+# Install script for file-analyzer
 
-set -e
+# Default installation directory
+if [ -z "$1" ]; then
+    INSTALL_DIR="$HOME/bin"
+else
+    INSTALL_DIR="$1"
+fi
 
-# Find script directory (where we're installed)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ANALYZE_SCRIPT="${SCRIPT_DIR}/analyze.sh"
-ANALYZER_SCRIPT="${SCRIPT_DIR}/file_analyzer.py"
+# Create installation directory if it doesn't exist
+mkdir -p "$INSTALL_DIR"
 
-# Default installation location
-DEFAULT_BIN_DIR="${HOME}/bin"
-
-# Parse arguments
-BIN_DIR="${1:-$DEFAULT_BIN_DIR}"
-
-# Check if analyzer scripts exist
-if [ ! -f "$ANALYZE_SCRIPT" ] || [ ! -f "$ANALYZER_SCRIPT" ]; then
-    echo "Error: Unable to find analyze.sh or file_analyzer.py in $SCRIPT_DIR"
+# Check if directory exists and is writable
+if [ ! -d "$INSTALL_DIR" ]; then
+    echo "Error: Installation directory $INSTALL_DIR could not be created"
     exit 1
 fi
 
-# Make sure scripts are executable
-chmod +x "$ANALYZE_SCRIPT" "$ANALYZER_SCRIPT"
-
-# Create bin directory if it doesn't exist
-if [ ! -d "$BIN_DIR" ]; then
-    echo "Creating directory: $BIN_DIR"
-    mkdir -p "$BIN_DIR"
+if [ ! -w "$INSTALL_DIR" ]; then
+    echo "Error: Installation directory $INSTALL_DIR is not writable"
+    exit 1
 fi
 
-# Check if bin directory is in PATH and try to add it automatically on macOS
-if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    # Detect shell and profile file
-    if [[ "$OSTYPE" == "darwin"* ]]; then  # macOS
-        SHELL_NAME=$(basename "$SHELL")
-        if [ "$SHELL_NAME" = "zsh" ]; then
-            PROFILE_FILE="$HOME/.zshrc"
-        elif [ "$SHELL_NAME" = "bash" ]; then
-            PROFILE_FILE="$HOME/.bash_profile"
-        fi
-        
-        if [ -n "$PROFILE_FILE" ]; then
-            # Check if we already have a PATH line for this directory
-            if ! grep -q "export PATH=.*$BIN_DIR" "$PROFILE_FILE" 2>/dev/null; then
-                echo "Adding $BIN_DIR to your PATH in $PROFILE_FILE"
-                echo "" >> "$PROFILE_FILE"
-                echo "# Added by file-analyzer install script" >> "$PROFILE_FILE"
-                echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$PROFILE_FILE"
-                echo "PATH updated in $PROFILE_FILE. Please run: source $PROFILE_FILE"
-            fi
-        else
-            echo "Warning: $BIN_DIR is not in your PATH."
-            echo "Please add the following line to your shell profile:"
-            echo "  export PATH=\"\$PATH:$BIN_DIR\""
-        fi
-    else
-        echo "Warning: $BIN_DIR is not in your PATH."
-        echo "Please add the following line to your shell profile:"
-        echo "  export PATH=\"\$PATH:$BIN_DIR\""
+# Get absolute path to source directory
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Create symbolic links for the analyzer tools
+ln -sf "$SOURCE_DIR/tools/analyze.sh" "$INSTALL_DIR/analyze-files"
+ln -sf "$SOURCE_DIR/src/analyzer.py" "$INSTALL_DIR/file-analyzer"
+
+# Make the Python script executable
+chmod +x "$SOURCE_DIR/src/analyzer.py"
+
+# Check if installation was successful
+if [ -L "$INSTALL_DIR/analyze-files" ] && [ -L "$INSTALL_DIR/file-analyzer" ]; then
+    echo "Installation successful!"
+    echo "The following commands are now available:"
+    echo "  - analyze-files: Shell script wrapper"
+    echo "  - file-analyzer: Python script"
+    
+    # Check if installation directory is in PATH
+    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+        echo ""
+        echo "WARNING: $INSTALL_DIR is not in your PATH."
+        echo "Add the following line to your ~/.bashrc or ~/.zshrc file:"
+        echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
     fi
+    
+    exit 0
+else
+    echo "Installation failed."
+    exit 1
 fi
-
-# Create symbolic links with absolute paths
-echo "Creating symbolic links in $BIN_DIR"
-ln -sf "$ANALYZE_SCRIPT" "$BIN_DIR/analyze-files"
-ln -sf "$ANALYZER_SCRIPT" "$BIN_DIR/file-analyzer"
-
-# No wrapper script needed as analyze.sh already implements robust directory resolution
-
-echo "Installation complete!"
-echo "You can now run the tool using 'analyze-files' or 'file-analyzer' commands."
-
-# Check for required dependencies
-echo "Checking for required dependencies..."
-missing_tools=()
-
-for tool in exiftool rdfind tesseract clamscan rg binwalk; do
-    if ! command -v "$tool" &> /dev/null; then
-        missing_tools+=("$tool")
-    fi
-done
-
-if [ ${#missing_tools[@]} -gt 0 ]; then
-    echo "Warning: The following required tools are missing:"
-    for tool in "${missing_tools[@]}"; do
-        echo "  - $tool"
-    done
-    echo "Please install missing dependencies. See INSTALL.md for instructions."
-fi
-
-exit 0

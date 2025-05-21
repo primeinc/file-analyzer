@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard.sh"
 # Comprehensive test script for FastVLM integration
 
 # Set up colors for output
@@ -43,9 +44,19 @@ check_test_image() {
   echo "$TEST_IMAGE"
 }
 
-# Create output directory
-OUTPUT_DIR="fastvlm_test_results_$(date +%Y%m%d_%H%M%S)"
+# Determine script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Run preflight check to ensure artifact structure exists
+"$SCRIPT_DIR/preflight.sh" --no-tmp-clean >/dev/null 2>&1
+
+# Get canonical output directory
+OUTPUT_DIR=$("$SCRIPT_DIR/cleanup.sh" --path vision fastvlm_tests)
+
+# Clean directory to start fresh
+rm -rf "$OUTPUT_DIR"/*
 mkdir -p "$OUTPUT_DIR"
+
 echo -e "${GREEN}Test results will be saved to $OUTPUT_DIR${NC}"
 
 # Check environment

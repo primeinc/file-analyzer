@@ -20,10 +20,10 @@ TEST_DIR=$(get_canonical_artifact_path test "$TEST_NAME")
 echo "Test output will be written to: $TEST_DIR"
 
 # Create a test file - this is guarded and will fail if not in canonical path
-touch "$TEST_DIR/test_output.txt"
+touch "$TEST_DIR/output_data.txt"
 
 # Write some test data - note that redirection isn't guarded, but the path is canonical
-echo "Test data with timestamp $(date)" > "$TEST_DIR/test_output.txt"
+echo "Test data with timestamp $(date)" > "$TEST_DIR/output_data.txt"
 echo "Another test output" > "$TEST_DIR/additional_output.txt"
 
 # Get an analysis directory with proper enforcement
