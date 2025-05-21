@@ -4,7 +4,7 @@ This directory contains all outputs and artifacts produced by the file analyzer 
 
 ## Key Design Principles
 
-1. **Simplified Organization**: We use distinct subdirectories for logical artifact types, not timestamps.
+1. **Simplified Organization**: We use distinct subdirectories for logical artifact types. Timestamps in directory names are generally discouraged but may be used in specific cases, such as for retention purposes.
 2. **No Ephemeral Timestamps**: Files are versioned with dates only when needed for retention.
 3. **Standard Locations**: Each script uses consistent, predictable paths.
 4. **Flat Structure**: Avoid nested timestamp-based directories when possible.
