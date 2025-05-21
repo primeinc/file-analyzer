@@ -6,15 +6,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Reviewing PR Comments and Resolving Them
 
-```bash
-# 1. Get PR ID
-gh api repos/OWNER/REPO/pulls/PR_NUMBER --jq .node_id
+Follow this step-by-step workflow for working with PR comments:
 
-# 2. Get all review threads from a PR
+```bash
+# 1. Get the PR number for the current branch
+gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
+
+# 2. Get PR ID (node_id) - replace PR_NUMBER with the actual number
+export PR_NUMBER=5
+gh api repos/primeinc/file-analyzer/pulls/$PR_NUMBER --jq .node_id
+# Example output: PR_kwDOOtfNVs6XDJNj - save this as PR_ID
+
+# 3. Get all review threads from a PR with filtering
+# This command shows all unresolved threads and their details
+export PR_NUMBER=5
 gh api graphql -f query='
 query {
   repository(owner: "primeinc", name: "file-analyzer") {
-    pullRequest(number: PR_NUMBER) {
+    pullRequest(number: '"$PR_NUMBER"') {
       reviewThreads(first: 100) {
         nodes {
           id
@@ -33,16 +42,19 @@ query {
       }
     }
   }
-}'
+}' | jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)'
+# Example output with thread IDs: PRRT_kwDOOtfNVs5QXxLc, etc.
 
-# 3. Add a general comment to the PR
-gh pr comment PR_NUMBER -b "Your comment here"
+# 4. Add a general comment to the PR (simpler approach)
+export PR_NUMBER=5
+gh pr comment $PR_NUMBER -b "Your comment here"
 
-# 4. Create a new review
+# 5. Create a new review (needed for thread operations)
+export PR_ID="PR_kwDOOtfNVs6XDJNj"  # Use the value from step 2
 gh api graphql -f query='
 mutation {
   addPullRequestReview(input: {
-    pullRequestId: "PR_ID_HERE",
+    pullRequestId: "'"$PR_ID"'",
     event: COMMENT,
     body: "Addressing review comments"
   }) {
@@ -51,25 +63,15 @@ mutation {
     }
   }
 }'
+# Save the returned review ID, example: PRR_kwDOOtfNVs6qU3aH
 
-# 5. Submit a review
-gh api graphql -f query='
-mutation {
-  submitPullRequestReview(input: {
-    pullRequestReviewId: "REVIEW_ID_HERE",
-    event: COMMENT
-  }) {
-    pullRequestReview {
-      id
-    }
-  }
-}'
-
-# 6. Resolve a specific review thread
+# 6. To resolve threads directly (without adding new comments)
+# First make sure you have the thread IDs from step 3
+export THREAD_ID="PRRT_kwDOOtfNVs5QXxLc"  # Replace with actual thread ID
 gh api graphql -f query='
 mutation {
   resolveReviewThread(input: {
-    threadId: "THREAD_ID_HERE"
+    threadId: "'"$THREAD_ID"'"
   }) {
     thread {
       id
@@ -77,6 +79,37 @@ mutation {
     }
   }
 }'
+```
+
+For multiple threads, you can create a script to iterate through them:
+
+```bash
+#!/bin/bash
+# Example script to resolve multiple threads
+
+# Thread IDs from the query in step 3
+THREAD_IDS=(
+  "PRRT_kwDOOtfNVs5QXxLc"
+  "PRRT_kwDOOtfNVs5QXxLu"
+  "PRRT_kwDOOtfNVs5QXxq0"
+  "PRRT_kwDOOtfNVs5QXxq2"
+)
+
+# Resolve each thread
+for thread_id in "${THREAD_IDS[@]}"; do
+  echo "Resolving thread: $thread_id"
+  gh api graphql -f query='
+  mutation {
+    resolveReviewThread(input: {
+      threadId: "'"$thread_id"'"
+    }) {
+      thread {
+        id
+        isResolved
+      }
+    }
+  }'
+done
 ```
 
 ## CRITICAL RULES
@@ -309,74 +342,31 @@ The file analyzer includes a centralized model management system:
 
 For more details, see the MODEL_ANALYSIS.md and MODELS.md documentation files.
 
-## GitHub PR Review Thread Workflow
+## Complete GitHub PR Review Workflow
 
-When working with GitHub Pull Request review threads, follow this precise workflow:
+Working with GitHub PR comments can be complex due to GraphQL API requirements. Below is a comprehensive guide covering all common PR review workflows:
 
-### 1. Creating review comments
+### 1. Finding and Analyzing PR Comments
 
-To comment on specific lines in files and create review threads:
-
-```bash
-# Create a new review and get its ID
-gh api graphql -f query='
-mutation {
-  addPullRequestReview(input: {
-    pullRequestId: "PR_ID_HERE",  # Get using: gh api repos/{owner}/{repo}/pulls/1 --jq .node_id
-    event: COMMENT,
-    body: "Starting review with comments"
-  }) {
-    pullRequestReview {
-      id  # Save this ID for subsequent steps
-    }
-  }
-}'
-```
-
-### 2. Add threaded review comments on specific files/lines
+First, identify your PR and get a list of all unresolved comments:
 
 ```bash
-# Add review thread on specific line in file
-gh api graphql -f query='
-mutation {
-  addPullRequestReviewThread(input: {
-    pullRequestReviewId: "PRR_ID_FROM_STEP_1",
-    path: "path/to/file.py",
-    line: 42,  # Line number in the file
-    body: "Comment about this specific line of code"
-  }) {
-    thread {
-      id  # This is your thread ID for later resolution
-    }
-  }
-}'
-```
+# Create a script called pr-comments.sh
+#!/bin/bash
 
-### 3. Submit the review with all comments
+# Get the PR number for current branch
+PR_NUMBER=$(gh pr list --head $(git branch --show-current) --json number --jq '.[0].number')
+echo "Current PR: #$PR_NUMBER"
 
-```bash
-# Submit the review to make all comments visible
-gh api graphql -f query='
-mutation {
-  submitPullRequestReview(input: {
-    pullRequestReviewId: "PRR_ID_FROM_STEP_1",
-    event: COMMENT  # Or APPROVE, REQUEST_CHANGES
-  }) {
-    pullRequestReview {
-      id
-    }
-  }
-}'
-```
+# Get PR node ID (needed for GraphQL operations)
+PR_ID=$(gh api repos/primeinc/file-analyzer/pulls/$PR_NUMBER --jq .node_id)
+echo "PR ID: $PR_ID"
 
-### 4. Listing review threads to resolve
-
-```bash
-# Get all review threads with their IDs
+# Get all unresolved review threads - saving full output
 gh api graphql -f query='
 query {
-  repository(owner: "OWNER", name: "REPO") {
-    pullRequest(number: PR_NUMBER) {
+  repository(owner: "primeinc", name: "file-analyzer") {
+    pullRequest(number: '"$PR_NUMBER"') {
       reviewThreads(first: 100) {
         nodes {
           id
@@ -385,7 +375,6 @@ query {
           line
           comments(first: 5) {
             nodes {
-              id
               body
               author {
                 login
@@ -396,41 +385,87 @@ query {
       }
     }
   }
-}'
+}' > pr_threads.json
+
+# Extract and display just the unresolved threads
+echo "Unresolved review threads:"
+cat pr_threads.json | jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | {id: .id, path: .path, line: .line, comment: .comments.nodes[0].body, author: .comments.nodes[0].author.login}'
+
+# Save thread IDs to a file for later use
+cat pr_threads.json | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' > unresolved_thread_ids.txt
+
+echo "Thread IDs saved to unresolved_thread_ids.txt"
 ```
 
-### 5. Responding to review threads
+### 2. Addressing Multiple Comments Efficiently
 
-IMPORTANT: Always add your own comment to a thread before resolving it! You cannot use addPullRequestReviewComment directly - you must:
+After fixing the issues described in the comments, use this script to add a response to the PR and resolve all threads:
 
-1. Create a new review
-2. Add thread comments through that review 
-3. Submit the review
-4. Only then resolve the thread
+```bash
+# Create a script called resolve-pr-comments.sh
+#!/bin/bash
+
+PR_NUMBER=$(gh pr list --head $(git branch --show-current) --json number --jq '.[0].number')
+PR_ID=$(gh api repos/primeinc/file-analyzer/pulls/$PR_NUMBER --jq .node_id)
+
+# Add a single general PR comment explaining all the fixes
+gh pr comment $PR_NUMBER -b "I've addressed all the unresolved PR review comments:
+
+$(cat unresolved_thread_ids.txt | wc -l) issues have been fixed and committed to the branch.
+
+$(git log -1 --pretty=%B)"
+
+# Resolve all threads in the file
+echo "Resolving all threads..."
+while read thread_id; do
+  echo "Resolving thread: $thread_id"
+  gh api graphql -f query='
+  mutation {
+    resolveReviewThread(input: {
+      threadId: "'"$thread_id"'"
+    }) {
+      thread {
+        id
+        isResolved
+      }
+    }
+  }'
+done < unresolved_thread_ids.txt
+
+echo "All PR threads resolved!"
+```
+
+### 3. For Individual Comment Responses (When Needed)
+
+In some cases, you may want to respond to individual comments with specific replies. Here's how to do that:
 
 ```bash
 # Create a new review for your responses
-gh api graphql -f query='
+PR_ID="PR_kwDOOtfNVs6XDJNj"  # Use the value from previous step
+REVIEW_RESPONSE=$(gh api graphql -f query='
 mutation {
   addPullRequestReview(input: {
-    pullRequestId: "PR_ID_HERE",
+    pullRequestId: "'"$PR_ID"'",
     event: COMMENT,
-    body: "Addressing review feedback"
+    body: "Addressing specific review comments"
   }) {
     pullRequestReview {
-      id  # Use this ID for your responses
+      id
     }
   }
-}'
+}')
+REVIEW_ID=$(echo $REVIEW_RESPONSE | jq -r '.data.addPullRequestReview.pullRequestReview.id')
+echo "Created review: $REVIEW_ID"
 
-# Add threads to specific files/lines to respond to previous comments
+# Now add a thread response to a specific file/line
+# You need both the path and line number from the original comment
 gh api graphql -f query='
 mutation {
   addPullRequestReviewThread(input: {
-    pullRequestReviewId: "YOUR_NEW_REVIEW_ID",
-    path: "path/to/file.py",
-    line: 42,
-    body: "I fixed this issue by implementing X and Y solution"
+    pullRequestReviewId: "'"$REVIEW_ID"'",
+    path: "src/cli/common/config.py",
+    line: 46,  # Must match the line from the original comment
+    body: "Fixed by implementing a robust find_project_root() function that looks for marker files."
   }) {
     thread {
       id
@@ -438,11 +473,11 @@ mutation {
   }
 }'
 
-# Submit your response review 
+# Submit your review with all the thread responses
 gh api graphql -f query='
 mutation {
   submitPullRequestReview(input: {
-    pullRequestReviewId: "YOUR_NEW_REVIEW_ID",
+    pullRequestReviewId: "'"$REVIEW_ID"'",
     event: COMMENT
   }) {
     pullRequestReview {
@@ -450,18 +485,13 @@ mutation {
     }
   }
 }'
-```
 
-### 6. Resolving review threads
-
-After responding, resolve the threads:
-
-```bash
-# Resolve a review thread
+# After submission, you can resolve individual threads
+THREAD_ID="PRRT_kwDOOtfNVs5QXxLc"  # Get this from previous step
 gh api graphql -f query='
 mutation {
   resolveReviewThread(input: {
-    threadId: "THREAD_ID_TO_RESOLVE"
+    threadId: "'"$THREAD_ID"'"
   }) {
     thread {
       id
@@ -470,3 +500,14 @@ mutation {
   }
 }'
 ```
+
+### Important Tips for PR Comment Management
+
+1. Always check if your PR is up-to-date with the latest changes before responding to comments
+2. Group related fixes in a single commit with a clear message
+3. When you have fixed all comments, it's generally better to:
+   - Add one comprehensive PR comment explaining all the fixes
+   - Resolve all threads directly without individual responses
+   - Push your changes in a single commit
+4. For complex PRs with many comments, maintain a checklist of issues to track progress
+5. Use the GitHub web UI for simple responses when the GraphQL API seems too complex
