@@ -200,40 +200,8 @@ def clean_tmp_artifacts():
     except Exception as e:
         return False, f"Failed to clean temporary artifacts: {str(e)}"
 
-def check_artifact_sprawl(check_dir: str = ".") -> Tuple[bool, List[str]]:
-    """
-    Check for artifacts outside the standard structure.
-    
-    Args:
-        check_dir: Directory to check
-        
-    Returns:
-        Tuple[bool, List[str]]: (no_sprawl_found, sprawl_paths)
-    """
-    # Use canonical temp directory
-    temp_dir = get_canonical_artifact_path("tmp", f"artifact_sprawl_{os.getpid()}")
-    temp_file = os.path.join(temp_dir, "results.txt")
-    
-    # Find artifact directories outside canonical structure
-    non_canonical_dirs = []
-    
-    # Convert to absolute path
-    check_dir = os.path.abspath(check_dir)
-    
-    # Walk the directory tree to find artifacts/ directories
-    for root, dirs, _ in os.walk(check_dir):
-        # Skip the canonical ARTIFACTS_ROOT
-        if root == os.path.dirname(ARTIFACTS_ROOT) and "artifacts" in dirs:
-            continue
-            
-        # Check for artifacts/ directories
-        if "artifacts" in dirs:
-            artifacts_dir = os.path.join(root, "artifacts")
-            if artifacts_dir != ARTIFACTS_ROOT:
-                non_canonical_dirs.append(artifacts_dir)
-    
-    # Return results
-    return len(non_canonical_dirs) == 0, non_canonical_dirs
+# Import shared utility function
+from src.cli.artifact.utils import check_artifact_sprawl
 
 def generate_env_file() -> Tuple[bool, str, str]:
     """

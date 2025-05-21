@@ -152,7 +152,7 @@ def callback():
 
 @app.command("check")
 def check_scripts(
-    scripts: List[str] = typer.Argument(
+    scripts: Optional[List[str]] = typer.Argument(
         None, help="List of shell scripts to check. If not provided, all scripts will be checked."
     ),
     verbose: bool = typer.Option(

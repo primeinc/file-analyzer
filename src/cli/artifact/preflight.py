@@ -65,36 +65,8 @@ def get_project_root() -> Path:
     # Assuming this file is in src/cli/artifact/preflight.py
     return Path(__file__).parent.parent.parent.parent.absolute()
 
-def check_artifact_sprawl(check_dir: str = ".") -> Tuple[bool, List[str]]:
-    """
-    Check for artifacts outside the standard structure.
-    
-    Args:
-        check_dir: Directory to check
-        
-    Returns:
-        Tuple[bool, List[str]]: (no_sprawl_found, sprawl_paths)
-    """
-    # Convert to absolute path
-    check_dir = os.path.abspath(check_dir)
-    
-    # Find artifact directories outside canonical structure
-    non_canonical_dirs = []
-    
-    # Walk the directory tree to find artifacts/ directories
-    for root, dirs, _ in os.walk(check_dir):
-        # Skip the canonical ARTIFACTS_ROOT
-        if root == os.path.dirname(ARTIFACTS_ROOT) and "artifacts" in dirs:
-            continue
-            
-        # Check for artifacts/ directories
-        if "artifacts" in dirs:
-            artifacts_dir = os.path.join(root, "artifacts")
-            if artifacts_dir != ARTIFACTS_ROOT:
-                non_canonical_dirs.append(artifacts_dir)
-    
-    # Return results
-    return len(non_canonical_dirs) == 0, non_canonical_dirs
+# Import shared utility function
+from src.cli.artifact.utils import check_artifact_sprawl
 
 def check_scripts_conformity() -> Tuple[bool, List[str]]:
     """
@@ -134,6 +106,9 @@ def check_scripts_conformity() -> Tuple[bool, List[str]]:
     
     return len(failures) == 0, failures
 
+# Import functions from main module
+from src.cli.artifact.main import clean_tmp_artifacts as main_clean_tmp_artifacts
+
 def clean_tmp_artifacts():
     """
     Clean only the tmp directory.
@@ -142,16 +117,14 @@ def clean_tmp_artifacts():
         Tuple[bool, str]: (success, message)
     """
     try:
-        # Use the artifact CLI command
-        result = subprocess.run(
-            ["python", "-m", "src.cli.artifact.main", "clean-tmp"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return True, "Temporary artifacts cleaned"
-    except subprocess.CalledProcessError as e:
-        return False, f"Failed to clean temporary artifacts: {e.stderr}"
+        # Directly call the function from main module
+        success, message = main_clean_tmp_artifacts()
+        return success, message
+    except Exception as e:
+        return False, f"Failed to clean temporary artifacts: {str(e)}"
+
+# Also import generate_env_file
+from src.cli.artifact.main import generate_env_file as main_generate_env_file
 
 def generate_env_file():
     """
@@ -161,16 +134,11 @@ def generate_env_file():
         Tuple[bool, str]: (success, message)
     """
     try:
-        # Use the artifact CLI command
-        result = subprocess.run(
-            ["python", "-m", "src.cli.artifact.main", "env-file"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return True, "Generated artifacts.env file"
-    except subprocess.CalledProcessError as e:
-        return False, f"Failed to generate artifacts.env file: {e.stderr}"
+        # Directly call the function from main module
+        success, file_path, message = main_generate_env_file()
+        return success, message
+    except Exception as e:
+        return False, f"Failed to generate artifacts.env file: {str(e)}"
 
 @app.callback()
 def callback():
@@ -250,27 +218,22 @@ def run(
     # Check for artifact sprawl
     console.print("\n[bold]Checking for artifact sprawl...[/bold]")
     
-    try:
-        # Call the artifact check command using the CLI
-        result = subprocess.run(
-            ["python", "-m", "src.cli.artifact.main", "check"],
-            capture_output=True,
-            text=True
-        )
+    # Direct call to check_artifact_sprawl function (already imported above)
+    no_sprawl, sprawl_paths = check_artifact_sprawl(check_dir=".")
+    
+    # Display the results
+    if no_sprawl:
+        console.print("\n[green][bold]No Artifact Sprawl Detected[/bold][/green]")
+        console.print("All artifacts appear to be in the canonical structure.")
+    else:
+        console.print("\n[red][bold]Artifact Sprawl Detected[/bold][/red]")
+        console.print("=======================")
+        console.print("[yellow]The following directories outside the canonical artifact structure were found:[/yellow]")
+        for sprawl_path in sprawl_paths:
+            console.print(sprawl_path)
         
-        no_sprawl = result.returncode == 0
-        
-        # Print the output from the check command
-        if result.stdout:
-            console.print(result.stdout)
-        
-        if not no_sprawl and enforce:
-            console.print("[red][bold]Error: Artifact sprawl detected.[/bold][/red]")
-            return 1
-            
-    except subprocess.CalledProcessError as e:
-        console.print(f"[red]Error checking for artifact sprawl:[/red] {e.stderr}")
         if enforce:
+            console.print("[red][bold]Error: Artifact sprawl detected.[/bold][/red]")
             return 1
     
     # Check presence of artifact.env and make sure all required scripts update it
@@ -285,7 +248,7 @@ def run(
     # Success message
     console.print("\n[green][bold]Preflight check completed successfully.[/bold][/green]")
     console.print("[bold]IMPORTANT:[/bold] All scripts must:")
-    console.print("1. Source [yellow]artifact_guard_py_adapter.sh[/yellow] or import [yellow]src.artifact_guard[/yellow]")
+    console.print("1. Source [yellow]artifact_guard_py_adapter.sh[/yellow] or import [yellow]src.core.artifact_guard[/yellow]")
     console.print("2. Use [yellow]get_canonical_artifact_path <type> \"context\"[/yellow] for generating paths")
     console.print("3. Write all files in canonical locations with manifests")
     console.print("4. NOT bypass the artifact guard with manual paths")

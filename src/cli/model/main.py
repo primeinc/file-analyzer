@@ -318,7 +318,7 @@ def download_model_cmd(
         # Check if model already exists
         if os.path.exists(model_path) and not force:
             # Check for safetensors file as a simple existence check
-            safetensors_file = os.path.join(model_path, model_name, "model.safetensors")
+            safetensors_file = os.path.join(model_path, "model.safetensors")
             if os.path.exists(safetensors_file):
                 console.print(f"[yellow]Model {model_name} is already installed.[/yellow]")
                 console.print("Use --force to re-download.")
