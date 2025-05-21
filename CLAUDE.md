@@ -191,6 +191,168 @@ Test scripts include enhanced error reporting:
 - Non-zero exit codes for CI/CD integration
 - Visual indicators (✓/✗) for test status feedback
 
+## GitHub PR Review Thread Workflow
+
+When working with GitHub Pull Request review threads, follow this precise workflow:
+
+### 1. Creating review comments
+
+To comment on specific lines in files and create review threads:
+
+```bash
+# Create a new review and get its ID
+gh api graphql -f query='
+mutation {
+  addPullRequestReview(input: {
+    pullRequestId: "PR_ID_HERE",  # Get using: gh api repos/{owner}/{repo}/pulls/1 --jq .node_id
+    event: COMMENT,
+    body: "Starting review with comments"
+  }) {
+    pullRequestReview {
+      id  # Save this ID for subsequent steps
+    }
+  }
+}'
+```
+
+### 2. Add threaded review comments on specific files/lines
+
+```bash
+# Add review thread on specific line in file
+gh api graphql -f query='
+mutation {
+  addPullRequestReviewThread(input: {
+    pullRequestReviewId: "PRR_ID_FROM_STEP_1",
+    path: "path/to/file.py",
+    line: 42,  # Line number in the file
+    body: "Comment about this specific line of code"
+  }) {
+    thread {
+      id  # This is your thread ID for later resolution
+    }
+  }
+}'
+```
+
+### 3. Submit the review with all comments
+
+```bash
+# Submit the review to make all comments visible
+gh api graphql -f query='
+mutation {
+  submitPullRequestReview(input: {
+    pullRequestReviewId: "PRR_ID_FROM_STEP_1",
+    event: COMMENT  # Or APPROVE, REQUEST_CHANGES
+  }) {
+    pullRequestReview {
+      id
+    }
+  }
+}'
+```
+
+### 4. Listing review threads to resolve
+
+```bash
+# Get all review threads with their IDs
+gh api graphql -f query='
+query {
+  repository(owner: "OWNER", name: "REPO") {
+    pullRequest(number: PR_NUMBER) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          path
+          line
+          comments(first: 5) {
+            nodes {
+              id
+              body
+              author {
+                login
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+### 5. Responding to review threads
+
+IMPORTANT: Always add your own comment to a thread before resolving it! You cannot use addPullRequestReviewComment directly - you must:
+
+1. Create a new review
+2. Add thread comments through that review 
+3. Submit the review
+4. Only then resolve the thread
+
+```bash
+# Create a new review for your responses
+gh api graphql -f query='
+mutation {
+  addPullRequestReview(input: {
+    pullRequestId: "PR_ID_HERE",
+    event: COMMENT,
+    body: "Addressing review feedback"
+  }) {
+    pullRequestReview {
+      id  # Use this ID for your responses
+    }
+  }
+}'
+
+# Add threads to specific files/lines to respond to previous comments
+gh api graphql -f query='
+mutation {
+  addPullRequestReviewThread(input: {
+    pullRequestReviewId: "YOUR_NEW_REVIEW_ID",
+    path: "path/to/file.py",
+    line: 42,
+    body: "I fixed this issue by implementing X and Y solution"
+  }) {
+    thread {
+      id
+    }
+  }
+}'
+
+# Submit your response review 
+gh api graphql -f query='
+mutation {
+  submitPullRequestReview(input: {
+    pullRequestReviewId: "YOUR_NEW_REVIEW_ID",
+    event: COMMENT
+  }) {
+    pullRequestReview {
+      id
+    }
+  }
+}'
+```
+
+### 6. Resolving review threads
+
+After responding, resolve the threads:
+
+```bash
+# Resolve a review thread
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {
+    threadId: "THREAD_ID_TO_RESOLVE"
+  }) {
+    thread {
+      id
+      isResolved
+    }
+  }
+}'
+```
+
 ## GitHub CLI Integration
 
 ### Authentication and Token Management
