@@ -24,7 +24,7 @@ import importlib
 from abc import ABC, abstractmethod
 
 # Import artifact discipline components
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     get_canonical_artifact_path,
     validate_artifact_path,
     PathGuard,
@@ -32,7 +32,7 @@ from src.artifact_guard import (
 )
 
 # Import JSON utilities
-from src.json_utils import JSONValidator, process_model_output, get_json_prompt
+from src.utils.json_utils import JSONValidator, process_model_output, get_json_prompt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -91,7 +91,7 @@ class ModelManager:
         
         # Load from model_config.py if it exists
         try:
-            from src.model_config import MODEL_CONFIGS
+            from src.models.config import MODEL_CONFIGS
             self.model_configs.update(MODEL_CONFIGS)
         except ImportError:
             logger.warning("model_config.py not found, using defaults")
@@ -101,7 +101,7 @@ class ModelManager:
         # Register vision adapters
         try:
             # Try importing FastVLM adapter
-            from src.fastvlm_adapter import create_adapter, FastVLMAdapter
+            from src.models.fastvlm.adapter import create_adapter, FastVLMAdapter
             self.adapters["fastvlm"] = FastVLMAdapter
             logger.info("Registered FastVLM adapter")
         except ImportError:

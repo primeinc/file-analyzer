@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Optional, Any, List, Tuple, Union
 
 # Import model configuration
-from src.model_config import (
+from src.models.config import (
     get_model_path,
     list_available_models,
     get_model_info,
@@ -28,7 +28,7 @@ from src.model_config import (
 
 # Import artifact discipline if available
 try:
-    from src.artifact_guard import (
+    from src.core.artifact_guard import (
         get_canonical_artifact_path,
         validate_artifact_path,
         PathGuard,

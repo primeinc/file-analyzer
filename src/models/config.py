@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # Import artifact discipline tools if available
 try:
-    from src.artifact_guard import get_canonical_artifact_path, validate_artifact_path
+    from src.core.artifact_guard import get_canonical_artifact_path, validate_artifact_path
     ARTIFACT_DISCIPLINE = True
 except ImportError:
     ARTIFACT_DISCIPLINE = False
