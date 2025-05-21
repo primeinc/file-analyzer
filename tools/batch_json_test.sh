@@ -28,7 +28,7 @@ done
 
 # Now try with analyze.sh
 echo -e "\n=== Testing Batch JSON Output with analyze.sh ==="
-./analyze.sh -V --vision-model fastvlm --vision-mode describe "../test_data/images"
+python ../src/analyzer.py -V --vision-model fastvlm --vision-mode describe "../test_data/images"
 
 # Create analysis artifact directory
 ANALYSIS_DIR=$(get_canonical_artifact_path analysis "vision_analysis")

@@ -61,7 +61,7 @@ echo -e "${GREEN}Test results will be saved to $OUTPUT_DIR${NC}"
 
 # Check environment
 print_header "CHECKING ENVIRONMENT"
-./fastvlm_errors.py | tee "$OUTPUT_DIR/environment_check.txt"
+python "$PROJECT_ROOT/src/fastvlm_errors.py" | tee "$OUTPUT_DIR/environment_check.txt"
 check_result "Environment check" "continue"
 
 # Check FastVLM model
@@ -96,12 +96,12 @@ echo -e "${YELLOW}Testing document mode...${NC}"
 
 # Run benchmark (quick version)
 print_header "RUNNING QUICK BENCHMARK"
-./benchmark_fastvlm.py --output "$OUTPUT_DIR/benchmark_results.json" | tee "$OUTPUT_DIR/benchmark.txt"
+python "$PROJECT_ROOT/src/benchmark_fastvlm.py" --output "$OUTPUT_DIR/benchmark_results.json" | tee "$OUTPUT_DIR/benchmark.txt"
 check_result "Benchmark" "continue"
 
 # Test direct script usage
 print_header "TESTING DIRECT SCRIPT USAGE"
-./fastvlm_test.py --image "$TEST_IMAGE" --prompt "Describe this image in detail" | tee "$OUTPUT_DIR/direct_usage.txt"
+python "$PROJECT_ROOT/src/fastvlm_test.py" --image "$TEST_IMAGE" --prompt "Describe this image in detail" | tee "$OUTPUT_DIR/direct_usage.txt"
 check_result "Direct script usage" "continue"
 
 # Final summary
@@ -112,6 +112,6 @@ echo -e "${YELLOW}For detailed information on using FastVLM, see FASTVLM.md${NC}
 echo ""
 echo -e "${GREEN}Next steps:${NC}"
 echo "1. Review the test results in $OUTPUT_DIR"
-echo "2. Run a full benchmark with: ./benchmark_fastvlm.py"
-echo "3. Try batch processing with: ./file_analyzer.py --vision --vision-model fastvlm test_data/images/"
+echo "2. Run a full benchmark with: python $PROJECT_ROOT/src/benchmark_fastvlm.py"
+echo "3. Try batch processing with: python $PROJECT_ROOT/src/analyzer.py --vision --vision-model fastvlm test_data/images/"
 echo ""

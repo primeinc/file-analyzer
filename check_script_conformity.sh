@@ -41,7 +41,7 @@ find_scripts() {
   local count=0
   local failures=0
   
-  echo -e "${BOLD}Checking all shell scripts for artifact_guard.sh sourcing:${NC}"
+  echo -e "${BOLD}Checking all shell scripts for artifact_guard_py_adapter.sh sourcing:${NC}"
   echo "----------------------------------------"
   
   while IFS= read -r script; do
@@ -59,10 +59,10 @@ find_scripts() {
   
   if [ $failures -gt 0 ]; then
     echo -e "\n${RED}${BOLD}ERROR:${NC} $failures script(s) do not conform to artifact discipline requirements."
-    echo -e "Each script must source artifact_guard.sh immediately after the shebang line."
+    echo -e "Each script must source artifact_guard_py_adapter.sh immediately after the shebang line."
     echo -e "Example:"
     echo -e "#!/bin/bash"
-    echo -e "source \"\$(dirname \"\${BASH_SOURCE[0]}\")/artifact_guard.sh\""
+    echo -e "source \"\$(dirname \"\${BASH_SOURCE[0]}\")/artifact_guard_py_adapter.sh\""
     return 1
   else
     echo -e "\n${GREEN}${BOLD}SUCCESS:${NC} All scripts conform to artifact discipline requirements."
@@ -72,7 +72,7 @@ find_scripts() {
 
 # Check for script paths passed as arguments, otherwise check all scripts
 if [ $# -gt 0 ]; then
-  echo -e "${BOLD}Checking specified scripts for artifact_guard.sh sourcing:${NC}"
+  echo -e "${BOLD}Checking specified scripts for artifact_guard_py_adapter.sh sourcing:${NC}"
   echo "----------------------------------------"
   
   failures=0

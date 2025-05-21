@@ -88,7 +88,7 @@ def run_fastvlm_json_analysis(image_path, model_path, output_path=None, prompt=N
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     # Standard location in project structure
-    ml_fastvlm_dir = os.path.join(project_root, "ml-fastvlm")
+    ml_fastvlm_dir = os.path.join(project_root, "libs", "ml-fastvlm")
     predict_script = os.path.join(ml_fastvlm_dir, "predict.py")
     logging.info(f"Looking for predict.py at {predict_script}")
     
@@ -139,7 +139,7 @@ def run_fastvlm_json_analysis(image_path, model_path, output_path=None, prompt=N
                 with PathGuard(os.path.dirname(output_path)):
                     with open(output_path, "w") as f:
                         json.dump(error_result, f, indent=2)
-                sys.exit(1)
+                raise Exception(f"FastVLM failed: {e}")
                 
             response_time = time.time() - start_time
             
@@ -250,7 +250,7 @@ def run_fastvlm_json_analysis(image_path, model_path, output_path=None, prompt=N
                     with PathGuard(os.path.dirname(output_path)):
                         with open(output_path, "w") as f:
                             json.dump(error_result, f, indent=2)
-                    sys.exit(1)
+                    raise JSONParsingError(text=output, metadata=error_result["metadata"])
                 
         except Exception as e:
             # This should not happen with our direct error handling above,
@@ -275,7 +275,7 @@ def run_fastvlm_json_analysis(image_path, model_path, output_path=None, prompt=N
             with PathGuard(os.path.dirname(output_path)):
                 with open(output_path, "w") as f:
                     json.dump(error_result, f, indent=2)
-            sys.exit(1)
+            raise Exception(f"FastVLM process error: {e}")
     
     # Should not reach here but just in case
     return None
@@ -304,6 +304,7 @@ def main():
     # ---- PATH VALIDATION (HARD ENFORCEMENT) ----
     if args.output and not validate_artifact_path(args.output):
         print(f"ERROR: Non-canonical artifact path: {args.output}", file=sys.stderr)
+        # In the main script we can exit directly
         sys.exit(1)
     image_basename = os.path.basename(args.image)
     image_name = os.path.splitext(image_basename)[0]
@@ -361,6 +362,7 @@ def main():
     else:
         # This should never happen now with our direct error handling
         print("\nAnalysis failed, but no error was caught.")
+        # In the main script we can exit directly
         sys.exit(1)
     
     if not args.quiet:

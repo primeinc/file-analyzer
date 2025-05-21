@@ -403,7 +403,7 @@ class VisionAnalyzer:
             
             # Fallback to the original implementation
             # Check for the predict.py script in the project directory first
-            ml_fastvlm_dir = os.path.join(project_root, "ml-fastvlm")
+            ml_fastvlm_dir = os.path.join(project_root, "libs", "ml-fastvlm")
             predict_script = os.path.join(ml_fastvlm_dir, "predict.py")
             
             if os.path.exists(predict_script):
@@ -457,7 +457,7 @@ class VisionAnalyzer:
                     except (json.JSONDecodeError, TypeError):
                         # Import the centralized JSON utilities for consistent handling
                         try:
-                            from json_utils import JSONValidator, process_model_output
+                            from src.json_utils import JSONValidator, process_model_output
                             
                             # Use the centralized method for JSON processing
                             metadata = {
@@ -572,7 +572,7 @@ class VisionAnalyzer:
             Dict mapping image paths to analysis results
         """
         results = {}
-        ml_fastvlm_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml-fastvlm")
+        ml_fastvlm_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "libs", "ml-fastvlm")
         
         # Validate output_dir is a canonical artifact path
         if not validate_artifact_path(output_dir):

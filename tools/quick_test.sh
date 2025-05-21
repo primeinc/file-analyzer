@@ -84,7 +84,7 @@ else:
 # Run the actual benchmark script (optional if model exists)
 if [ -d "libs/ml-fastvlm/checkpoints" ]; then
     echo -e "${BLUE}Running actual benchmark with FastVLM model...${NC}"
-    python benchmark_fastvlm.py --output "$OUTPUT_DIR/benchmark.txt" || {
+    python "$PROJECT_ROOT/src/benchmark_fastvlm.py" --output "$OUTPUT_DIR/benchmark.txt" || {
         echo -e "${YELLOW}Warning: Full benchmark with real model failed, continuing with mock tests${NC}"
     }
 else

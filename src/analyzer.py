@@ -20,6 +20,12 @@ import sys
 import argparse
 import logging
 import json
+import re
+import shutil
+import subprocess
+import fnmatch
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -47,6 +53,16 @@ class FileAnalyzer:
         self.results = {}
         self.model_analyzer = ModelAnalyzer(self.config)
         
+        # Set file extensions from config for filtering
+        if "file_extensions" in self.config and "images" in self.config["file_extensions"]:
+            self.image_extensions = set(self.config["file_extensions"]["images"])
+        else:
+            self.image_extensions = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"}
+            
+        # Include/exclude patterns for file filtering
+        self.include_patterns = self.config.get("default_include_patterns", [])
+        self.exclude_patterns = self.config.get("default_exclude_patterns", [])
+        
     def analyze(self, path, options):
         """Main analysis method that coordinates all analysis types."""
         logging.info(f"Analyzing {path} with options: {options}")
@@ -54,6 +70,22 @@ class FileAnalyzer:
         # Create canonical artifact path for this analysis run
         artifact_dir = get_canonical_artifact_path("analysis", "file_analysis")
         logging.info(f"Using artifact directory: {artifact_dir}")
+        
+        # Validate path exists
+        if not os.path.exists(path):
+            logging.error(f"Path does not exist: {path}")
+            return {"error": f"Path does not exist: {path}"}
+        
+        # Add path to results
+        self.results["path"] = str(path)
+        self.results["time"] = datetime.now().isoformat()
+        self.results["analyses"] = {}
+        
+        # Update include/exclude patterns if provided in options
+        if options.get('include_patterns'):
+            self.include_patterns = options.get('include_patterns')
+        if options.get('exclude_patterns'):
+            self.exclude_patterns = options.get('exclude_patterns')
         
         # Use PathGuard to enforce artifact discipline
         with PathGuard(artifact_dir):
@@ -90,65 +122,564 @@ class FileAnalyzer:
             
         return self.results
     
+    def _should_process_file(self, file_path):
+        """Determine if a file should be processed based on include/exclude patterns."""
+        file_path_str = str(file_path)
+        
+        # If we have include patterns, file must match at least one
+        if self.include_patterns and not any(fnmatch.fnmatch(file_path_str, pattern) for pattern in self.include_patterns):
+            return False
+        
+        # If file matches any exclude pattern, skip it
+        if any(fnmatch.fnmatch(file_path_str, pattern) for pattern in self.exclude_patterns):
+            return False
+            
+        return True
+    
     def _extract_metadata(self, path, artifact_dir):
         """Extract metadata from files."""
         logging.info(f"Extracting metadata from {path}")
         
-        # Implementation to be added
-        self.results['metadata'] = {
-            'status': 'skipped',
-            'message': 'Metadata extraction not implemented yet'
-        }
+        # Get list of files to process if it's a directory
+        files_to_process = []
+        if os.path.isdir(path):
+            # If we're processing a directory, collect files first with filtering
+            logging.info("Collecting files to process...")
+            
+            for root, _, files in os.walk(path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if self._should_process_file(file_path):
+                        files_to_process.append(file_path)
+            
+            logging.info(f"Found {len(files_to_process)} files to process")
+                
+            # Limit the number of files to process
+            max_files = self.config.get("max_metadata_files", 50)
+            if len(files_to_process) > max_files:
+                logging.info(f"Limiting to {max_files} files")
+                files_to_process = files_to_process[:max_files]
+                
+            # Process collected files directly
+            if files_to_process:
+                # Get exiftool options from config
+                exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
+                command = ["exiftool", "-json"]
+                
+                # Check if -json is already in the config options to avoid duplication
+                filtered_options = [opt for opt in exiftool_options if opt != "-json"]
+                command.extend(filtered_options)
+                
+                # Add all files to process
+                for file_path in files_to_process:
+                    command.append(str(file_path))
+            else:
+                logging.info("No matching files found")
+                self.results['metadata'] = {"status": "skipped"}
+                return None
+        else:
+            # If it's a single file, just process it directly
+            if not self._should_process_file(path):
+                logging.info("File excluded by pattern")
+                self.results['metadata'] = {"status": "skipped"}
+                return None
+                
+            # Get exiftool options from config
+            exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
+            command = ["exiftool", "-json"]
+            
+            # Check if -json is already in the config options to avoid duplication
+            filtered_options = [opt for opt in exiftool_options if opt != "-json"]
+            command.extend(filtered_options)
+            
+            command.append(str(path))
+        
+        # Add debug information
+        logging.info(f"Preparing to extract metadata with command: {' '.join(command)}")
+        
+        try:
+            # Run the command in a subprocess
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            output = result.stdout
+            
+            if not output:
+                logging.error("Command returned no output")
+                self.results['metadata'] = {
+                    "status": "error",
+                    "message": "Command returned no output"
+                }
+                return None
+                
+            # Try to parse JSON output
+            try:
+                # ExifTool might return warnings before the JSON data
+                # Try to find the start of the JSON data (opening bracket)
+                json_start = output.find('[')
+                if json_start >= 0:
+                    json_data = output[json_start:]
+                    metadata = json.loads(json_data)
+                else:
+                    raise json.JSONDecodeError("No JSON start marker found", output, 0)
+            except json.JSONDecodeError as e:
+                # If full parsing fails, try to get partial output
+                logging.error(f"JSON decode error: {str(e)}")
+                logging.debug(f"First 500 characters of output: {output[:500]}")
+                
+                # Write the raw output for debugging
+                debug_file = os.path.join(artifact_dir, f"metadata_debug.txt")
+                safe_write(debug_file, output)
+                
+                logging.info(f"Wrote raw output to {debug_file} for debugging")
+                
+                self.results['metadata'] = {
+                    "status": "error",
+                    "message": f"JSON decode error: {str(e)}",
+                    "debug_file": str(debug_file)
+                }
+                return None
+            
+            # Save metadata to file
+            output_file = os.path.join(artifact_dir, "metadata.json")
+            safe_write(output_file, json.dumps(metadata, indent=2))
+            
+            logging.info(f"Metadata extraction complete ({len(metadata)} items)")
+            logging.info(f"Metadata saved to {output_file}")
+                
+            self.results['metadata'] = {
+                "status": "success",
+                "file": str(output_file),
+                "count": len(metadata)
+            }
+            return metadata
+                
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error executing command: {' '.join(command)}")
+            logging.error(f"Return code: {e.returncode}")
+            logging.error(f"Error output: {e.stderr}")
+            
+            self.results['metadata'] = {
+                "status": "error",
+                "message": f"Command failed with code {e.returncode}: {e.stderr}"
+            }
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error: {str(e)}")
+            
+            self.results['metadata'] = {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}"
+            }
+            return None
         
     def _find_duplicates(self, path, artifact_dir):
         """Find duplicate files."""
         logging.info(f"Finding duplicates in {path}")
         
-        # Implementation to be added
-        self.results['duplicates'] = {
-            'status': 'skipped',
-            'message': 'Duplicate detection not implemented yet'
-        }
+        if not os.path.isdir(path):
+            logging.info("Duplicate finding only works on directories.")
+            self.results['duplicates'] = {"status": "skipped", "message": "Not a directory"}
+            return None
+        
+        results_file = os.path.join(artifact_dir, "duplicates.txt")
+        command = ["rdfind", "-outputname", results_file, str(path)]
+        
+        try:
+            # Run the command in a subprocess
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            output = result.stdout
+            
+            if os.path.exists(results_file):
+                logging.info(f"Duplicate analysis saved to {results_file}")
+                self.results['duplicates'] = {
+                    "status": "success",
+                    "file": str(results_file)
+                }
+                return results_file
+            else:
+                logging.error("Command did not create the expected output file")
+                self.results['duplicates'] = {
+                    "status": "error",
+                    "message": "Command did not create the expected output file"
+                }
+                return None
+                
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error executing command: {' '.join(command)}")
+            logging.error(f"Return code: {e.returncode}")
+            logging.error(f"Error output: {e.stderr}")
+            
+            self.results['duplicates'] = {
+                "status": "error",
+                "message": f"Command failed with code {e.returncode}: {e.stderr}"
+            }
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error: {str(e)}")
+            
+            self.results['duplicates'] = {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}"
+            }
+            return None
         
     def _perform_ocr(self, path, artifact_dir):
         """Perform OCR on images."""
         logging.info(f"Performing OCR on images in {path}")
         
-        # Implementation to be added
+        # Get list of image files
+        image_files = []
+        image_exts = self.config.get("file_extensions", {}).get("images", 
+                                                             [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"])
+        
+        # Collect image files to process
+        if os.path.isdir(path):
+            for root, _, files in os.walk(path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext in image_exts and self._should_process_file(file_path):
+                        image_files.append(file_path)
+        elif os.path.splitext(path)[1].lower() in image_exts and self._should_process_file(path):
+            image_files.append(path)
+        else:
+            logging.info("No images to process")
+            self.results['ocr'] = {"status": "skipped", "message": "No images to process"}
+            return None
+        
+        if not image_files:
+            logging.info("No image files found")
+            self.results['ocr'] = {"status": "skipped", "message": "No image files found"}
+            return None
+        
+        # Limit the number of images to process
+        max_images = self.config.get("max_ocr_images", 50)
+        if len(image_files) > max_images:
+            logging.info(f"Limiting OCR to {max_images} images")
+            image_files = image_files[:max_images]
+        
+        # Create OCR output directory
+        ocr_output_dir = os.path.join(artifact_dir, "ocr_results")
+        os.makedirs(ocr_output_dir, exist_ok=True)
+        
+        # Set up thread pool for parallel processing
+        max_workers = self.config.get("max_threads", os.cpu_count() or 4)
+        logging.info(f"Using {max_workers} threads for OCR processing")
+        
+        # Function to process a single image with OCR
+        def process_image_ocr(image_path):
+            try:
+                # Get the image filename for output
+                image_filename = os.path.basename(image_path)
+                base_name = os.path.splitext(image_filename)[0]
+                output_file = os.path.join(ocr_output_dir, f"{base_name}_ocr.txt")
+                
+                # Run tesseract OCR on the image
+                ocr_command = ["tesseract", str(image_path), os.path.splitext(output_file)[0]]
+                
+                # Add any tesseract options from config
+                tesseract_options = self.config.get("tool_options", {}).get("tesseract", [])
+                ocr_command.extend(tesseract_options)
+                
+                subprocess.run(ocr_command, check=True, capture_output=True, text=True)
+                
+                with open(output_file, 'r') as f:
+                    text = f.read().strip()
+                    
+                return {
+                    "image": str(image_path),
+                    "text": text,
+                    "output_file": output_file,
+                    "status": "success"
+                }
+            except Exception as e:
+                logging.error(f"Error processing image {image_path}: {str(e)}")
+                return {
+                    "image": str(image_path),
+                    "error": str(e),
+                    "status": "error"
+                }
+        
+        # Process images in parallel
+        results = []
+        successful = 0
+        failed = 0
+        
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_image = {executor.submit(process_image_ocr, img): img for img in image_files}
+            for future in future_to_image:
+                try:
+                    result = future.result()
+                    results.append(result)
+                    if result["status"] == "success":
+                        successful += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    logging.error(f"Task exception: {str(e)}")
+                    failed += 1
+        
+        # Save OCR results to a JSON file
+        json_output_file = os.path.join(artifact_dir, "ocr_results.json")
+        safe_write(json_output_file, json.dumps(results, indent=2))
+        
+        logging.info(f"OCR processing complete: {successful} successful, {failed} failed")
         self.results['ocr'] = {
-            'status': 'skipped',
-            'message': 'OCR not implemented yet'
+            "status": "success",
+            "file": str(json_output_file),
+            "total": len(results),
+            "successful": successful,
+            "failed": failed
         }
+        
+        return results
         
     def _scan_malware(self, path, artifact_dir):
         """Scan for malware."""
         logging.info(f"Scanning for malware in {path}")
         
-        # Implementation to be added
-        self.results['virus'] = {
-            'status': 'skipped',
-            'message': 'Malware scanning not implemented yet'
-        }
+        # Create output file
+        output_file = os.path.join(artifact_dir, "malware_scan.txt")
+        
+        # Build command with options from config
+        clamscan_options = self.config.get("tool_options", {}).get("clamscan", ["-r"])
+        command = ["clamscan"]
+        command.extend(clamscan_options)
+        command.append(str(path))
+        
+        try:
+            # Run the command in a subprocess
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            output = result.stdout
+            
+            # Save the output to a file
+            safe_write(output_file, output)
+            
+            # Parse the results to get summary information
+            scan_summary = {}
+            
+            # Try to extract lines like "Infected files: 0" from the output
+            summary_pattern = r'(Infected files|Scanned files|Data scanned|Time):\s+([\d.]+)\s*([A-Za-z]*)'  
+            for match in re.finditer(summary_pattern, output):  
+                key, value, unit = match.groups()  
+                if unit:  # If there's a unit like MB or seconds
+                    scan_summary[key] = f"{value} {unit}"
+                else:  
+                    scan_summary[key] = value
+            
+            # Record the results
+            if "Infected files" in scan_summary and scan_summary["Infected files"] != "0":
+                status = "threat_detected"
+            else:
+                status = "clean"
+                
+            self.results['virus'] = {
+                "status": status,
+                "file": str(output_file),
+                "summary": scan_summary
+            }
+            
+            logging.info(f"Malware scan complete. Status: {status}")
+            return output_file
+                
+        except subprocess.CalledProcessError as e:
+            # Note: ClamAV returns 1 if it finds infections
+            if e.returncode == 1 and e.stdout:
+                # This is actually a "success" case where threats were found
+                output = e.stdout
+                safe_write(output_file, output)
+                
+                # Try to parse summary information
+                scan_summary = {}
+                summary_pattern = r'(Infected files|Scanned files|Data scanned|Time):\s+([\d.]+)\s*([A-Za-z]*)'
+                for match in re.finditer(summary_pattern, output):
+                    key, value, unit = match.groups()
+                    if unit:  # If there's a unit like MB or seconds
+                        scan_summary[key] = f"{value} {unit}"
+                    else:
+                        scan_summary[key] = value
+                
+                self.results['virus'] = {
+                    "status": "threat_detected",
+                    "file": str(output_file),
+                    "summary": scan_summary
+                }
+                
+                logging.info("Malware scan complete. Threats detected.")
+                return output_file
+            else:
+                # This is a genuine error
+                logging.error(f"Error executing command: {' '.join(command)}")
+                logging.error(f"Return code: {e.returncode}")
+                logging.error(f"Error output: {e.stderr}")
+                
+                self.results['virus'] = {
+                    "status": "error",
+                    "message": f"Command failed with code {e.returncode}: {e.stderr}"
+                }
+                return None
+        except Exception as e:
+            logging.error(f"Unexpected error: {str(e)}")
+            
+            self.results['virus'] = {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}"
+            }
+            return None
         
     def _search_content(self, path, search_text, artifact_dir):
         """Search content for specific text."""
         logging.info(f"Searching for '{search_text}' in {path}")
         
-        # Implementation to be added
-        self.results['search'] = {
-            'status': 'skipped',
-            'message': 'Content searching not implemented yet'
-        }
+        if not search_text:
+            logging.warning("No search text provided")
+            self.results['search'] = {"status": "skipped", "message": "No search text provided"}
+            return None
+        
+        # Sanitize the search text for filename use
+        safe_search_text = re.sub(r'[\\/*?:"<>|]', '_', search_text)
+        output_file = os.path.join(artifact_dir, f"search_{safe_search_text}.txt")
+        
+        # Build ripgrep command with options from config
+        ripgrep_options = self.config.get("tool_options", {}).get("ripgrep", ["-i", "-n", "--color", "never"])
+        command = ["rg"]
+        command.extend(ripgrep_options)
+        
+        # Add include/exclude patterns if present
+        if self.include_patterns:
+            for pattern in self.include_patterns:
+                command.extend(["-g", pattern])
+        if self.exclude_patterns:
+            for pattern in self.exclude_patterns:
+                command.extend(["-g", f"!{pattern}"])
+        
+        # Add search pattern and path
+        command.append(search_text)
+        command.append(str(path))
+        
+        try:
+            # Run the command in a subprocess
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            output = result.stdout
+            
+            # Save the output to a file
+            safe_write(output_file, output)
+            
+            # Count the number of matches
+            match_count = len(output.strip().split('\n')) if output.strip() else 0
+            
+            self.results['search'] = {
+                "status": "success",
+                "file": str(output_file),
+                "pattern": search_text,
+                "matches": match_count
+            }
+            
+            logging.info(f"Search complete. Found {match_count} matches.")
+            return output_file
+                
+        except subprocess.CalledProcessError as e:
+            # Note: ripgrep returns 1 when no matches found (not an error)
+            if e.returncode == 1 and e.stderr == "":
+                self.results['search'] = {
+                    "status": "success",
+                    "file": str(output_file),
+                    "pattern": search_text,
+                    "matches": 0
+                }
+                
+                # Create an empty output file
+                safe_write(output_file, "")
+                
+                logging.info("Search complete. No matches found.")
+                return output_file
+            else:
+                # This is a genuine error
+                logging.error(f"Error executing command: {' '.join(command)}")
+                logging.error(f"Return code: {e.returncode}")
+                logging.error(f"Error output: {e.stderr}")
+                
+                self.results['search'] = {
+                    "status": "error",
+                    "message": f"Command failed with code {e.returncode}: {e.stderr}"
+                }
+                return None
+        except Exception as e:
+            logging.error(f"Unexpected error: {str(e)}")
+            
+            self.results['search'] = {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}"
+            }
+            return None
         
     def _analyze_binary(self, path, artifact_dir):
         """Analyze binary files."""
         logging.info(f"Analyzing binary files in {path}")
         
-        # Implementation to be added
-        self.results['binary'] = {
-            'status': 'skipped',
-            'message': 'Binary analysis not implemented yet'
-        }
+        # Binwalk only works on files, not directories
+        if os.path.isdir(path):
+            logging.info("Binary analysis only works on individual files.")
+            self.results['binary'] = {"status": "skipped", "message": "Not a file"}
+            return None
+        
+        # Skip files that don't match include patterns or match exclude patterns
+        if not self._should_process_file(path):
+            logging.info("File excluded by pattern")
+            self.results['binary'] = {"status": "skipped", "message": "File excluded by pattern"}
+            return None
+        
+        # Create output file
+        filename = os.path.basename(path)
+        output_file = os.path.join(artifact_dir, f"binary_analysis_{filename}.txt")
+        
+        # Build binwalk command with options from config
+        binwalk_options = self.config.get("tool_options", {}).get("binwalk", ["-B", "-e", "-M"])
+        command = ["binwalk"]
+        command.extend(binwalk_options)
+        command.append(str(path))
+        
+        try:
+            # Run the command in a subprocess
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            output = result.stdout
+            
+            # Save the output to a file
+            safe_write(output_file, output)
+            
+            # Try to determine if interesting data was found
+            interesting_data_found = False
+            if "DECIMAL" in output and "HEXADECIMAL" in output:
+                # This indicates binwalk found something
+                interesting_data_found = True
+            
+            self.results['binary'] = {
+                "status": "success",
+                "file": str(output_file),
+                "interesting_data": interesting_data_found
+            }
+            
+            logging.info(f"Binary analysis complete. Data found: {interesting_data_found}")
+            return output_file
+                
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error executing command: {' '.join(command)}")
+            logging.error(f"Return code: {e.returncode}")
+            logging.error(f"Error output: {e.stderr}")
+            
+            self.results['binary'] = {
+                "status": "error",
+                "message": f"Command failed with code {e.returncode}: {e.stderr}"
+            }
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error: {str(e)}")
+            
+            self.results['binary'] = {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}"
+            }
+            return None
         
     def _analyze_models(self, path, model_type, model_name, model_mode, artifact_dir):
         """

@@ -133,7 +133,9 @@ mkdir_guard() {
     fi
     
     # Special case for temp dirs
-    if [[ "$abs_path" == /tmp* ]] || [[ "$abs_path" == /var/tmp* ]] || [[ "$abs_path" == /private/tmp* ]]; then
+    # This is harmonized with Python implementation in artifact_guard.py
+    # Both implementations now explicitly reject all temporary system directories
+    if [[ "$abs_path" == /tmp* ]] || [[ "$abs_path" == /var/tmp* ]] || [[ "$abs_path" == /private/tmp* ]] || [[ "$abs_path" == /var/folders* ]]; then
       echo "ERROR: Temporary paths are not allowed: $dir" >&2
       echo "Use get_canonical_artifact_path tmp 'context' to create canonical temporary paths" >&2
       return 1

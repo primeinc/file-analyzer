@@ -37,7 +37,7 @@ if pip show mlx-fastvlm &>/dev/null; then
     log "✓ mlx-fastvlm package is already installed"
     log "No further setup needed."
     # Still run the model check to ensure models are available
-    python "$project_root/tools/download_models.py" list | tee -a "$log_file"
+    python "$project_root/src/download_models.py" list | tee -a "$log_file"
     exit 0
 fi
 
@@ -255,15 +255,15 @@ log "✓ FastVLM environment setup completed successfully"
 
 # Now check and download with our management system
 log "Checking for available models..."
-python "$project_root/tools/download_models.py" list | tee -a "$log_file"
+python "$project_root/src/download_models.py" list | tee -a "$log_file"
 
 log "Ensuring model is available through model management system..."
-python "$project_root/tools/download_models.py" download --size 0.5b | tee -a "$log_file"
+python "$project_root/src/download_models.py" download --size 0.5b | tee -a "$log_file"
 
 log "Setup completed at $(date)"
 log "You can now use FastVLM through the file analyzer system."
 log "To download additional models, run:"
-log "  python $project_root/tools/download_models.py download --size 1.5b"
-log "  python $project_root/tools/download_models.py download --size 7b"
+log "  python $project_root/src/download_models.py download --size 1.5b"
+log "  python $project_root/src/download_models.py download --size 7b"
 
 exit 0

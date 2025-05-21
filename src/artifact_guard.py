@@ -95,8 +95,8 @@ def get_canonical_artifact_path(type_name: str, context: str) -> str:
     if type_name not in ARTIFACT_TYPES:
         raise ValueError(f"Invalid artifact type: {type_name}. Valid types: {', '.join(ARTIFACT_TYPES)}")
     
-    # Clean context string (remove special chars, convert to lowercase)
-    clean_context = re.sub(r'[^a-z0-9]', '_', context.lower())
+    # Clean context string (remove special chars, convert to lowercase, preserve underscores)
+    clean_context = re.sub(r'[^a-z0-9_]', '_', context.lower())
     
     # Generate unique identifiers
     pid = os.getpid()
@@ -220,6 +220,8 @@ def validate_artifact_path(path: str) -> bool:
         r'^/private/tmp(/|$)',
         r'^/var/folders(/|$)'
     ]
+    
+    # Harmonized with artifact_guard_py_adapter.sh logic - never allow temporary paths
     if any(re.match(pattern, abs_path) for pattern in system_temp_patterns):
         # We explicitly reject temp directories for artifacts
         return False
