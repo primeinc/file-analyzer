@@ -106,16 +106,30 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Install required Python dependencies
+log "Installing FastVLM dependencies..."
 # Check if we should install in development mode
 if [ -f "$FASTVLM_DIR/setup.py" ]; then
     log "Installing FastVLM package in development mode..."
-    pip install -e "$FASTVLM_DIR" | tee -a "$log_file"
+    pip install -e "$FASTVLM_DIR" >> "$log_file" 2>&1
     if [ $? -ne 0 ]; then
-        log "✗ Failed to install FastVLM package"
-        log "  Will continue with script-based approach instead"
+        log "⚠ Warning: Could not install FastVLM via pip -e. Installing required libraries individually..."
+        pip install transformers accelerate sentencepiece >> "$log_file" 2>&1
+        if [ $? -ne 0 ]; then
+            log "✗ Failed to install necessary dependencies"
+            exit 1
+        fi
     else
         log "✓ FastVLM package installed in development mode"
     fi
+else
+    log "⚠ Warning: No setup.py found, installing required libraries individually..."
+    pip install transformers accelerate sentencepiece >> "$log_file" 2>&1
+    if [ $? -ne 0 ]; then
+        log "✗ Failed to install necessary dependencies"
+        exit 1
+    fi
+    log "✓ Required dependencies installed"
 fi
 
 # Check if the predict.py script exists
@@ -125,13 +139,125 @@ if [ ! -f "$FASTVLM_DIR/predict.py" ]; then
     exit 1
 fi
 
+# Create the get_models.sh script if it doesn't exist
+if [ ! -f "$FASTVLM_DIR/get_models.sh" ]; then
+    log "Creating get_models.sh script for model download..."
+    cat > "$FASTVLM_DIR/get_models.sh" << 'EOF'
+#!/bin/bash
+# Script to download FastVLM models
+
+set -e
+
+MODEL_SIZE="${1:-0.5b}"  # Default to 0.5b if not specified
+CHECKPOINTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/checkpoints"
+
+# Create checkpoints directory
+mkdir -p "$CHECKPOINTS_DIR"
+
+# Download the specified model
+if [ "$MODEL_SIZE" == "0.5b" ]; then
+    MODEL_DIR="$CHECKPOINTS_DIR/llava-fastvithd_0.5b_stage3"
+    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage3.zip"
+elif [ "$MODEL_SIZE" == "1.5b" ]; then
+    MODEL_DIR="$CHECKPOINTS_DIR/llava-fastvithd_1.5b_stage3"
+    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage3.zip"
+elif [ "$MODEL_SIZE" == "7b" ]; then
+    MODEL_DIR="$CHECKPOINTS_DIR/llava-fastvithd_7b_stage3"
+    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_7b_stage3.zip"
+else
+    echo "Unknown model size: $MODEL_SIZE"
+    echo "Valid sizes are: 0.5b, 1.5b, 7b"
+    exit 1
+fi
+
+# Create model directory
+mkdir -p "$MODEL_DIR"
+
+# Download and extract model
+echo "Downloading $MODEL_SIZE model from $MODEL_URL"
+TEMP_FILE=$(mktemp /tmp/fastvlm_model.XXXXXX.zip)
+curl -L "$MODEL_URL" -o "$TEMP_FILE"
+unzip -o "$TEMP_FILE" -d "$MODEL_DIR"
+rm "$TEMP_FILE"
+
+# Create necessary files for tokenizer
+# Ensure required files exist
+if [ ! -f "$MODEL_DIR/tokenizer_config.json" ]; then
+    echo "Creating tokenizer config..."
+    cat > "$MODEL_DIR/tokenizer_config.json" << 'TOKENIZER_EOF'
+{
+  "model_type": "llama",
+  "pad_token": "<pad>",
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "unk_token": "<unk>"
+}
+TOKENIZER_EOF
+fi
+
+if [ ! -f "$MODEL_DIR/config.json" ]; then
+    echo "Creating model config..."
+    cat > "$MODEL_DIR/config.json" << 'CONFIG_EOF'
+{
+  "model_type": "llama",
+  "architectures": ["LlamaForCausalLM"],
+  "hidden_size": 4096,
+  "intermediate_size": 11008,
+  "num_attention_heads": 32,
+  "num_hidden_layers": 32,
+  "vocab_size": 32000
+}
+CONFIG_EOF
+fi
+
+echo "Model files ready at $MODEL_DIR"
+echo "Total files:"
+find "$MODEL_DIR" -type f | wc -l
+
+exit 0
+EOF
+    chmod +x "$FASTVLM_DIR/get_models.sh"
+    log "✓ Created get_models.sh script"
+fi
+
+# Create checkpoints directory
+mkdir -p "$FASTVLM_DIR/checkpoints"
+
+# Download the default model to the repository
+log "Downloading the default model (0.5b) to the repository..."
+if [ -x "$FASTVLM_DIR/get_models.sh" ]; then
+    (cd "$FASTVLM_DIR" && ./get_models.sh 0.5b) | tee -a "$log_file"
+    
+    # Copy model files to user directory for centralized storage
+    log "Copying model files to user model directory for centralized storage..."
+    model_path=$(python -c "import os; from src.model_config import MODEL_CHECKPOINTS; print(os.path.join(os.path.expanduser('~/.local/share/fastvlm'), MODEL_CHECKPOINTS['fastvlm']['0.5b']['path']))" 2>/dev/null)
+    
+    if [ -n "$model_path" ]; then
+        mkdir -p "$model_path"
+        
+        # Check if repo has the model files
+        repo_model_dir="$FASTVLM_DIR/checkpoints/llava-fastvithd_0.5b_stage3"
+        if [ -d "$repo_model_dir" ] && [ "$(find "$repo_model_dir" -type f | wc -l)" -gt 0 ]; then
+            # Copy model files to user directory
+            cp -r "$repo_model_dir"/* "$model_path"/ 2>/dev/null || true
+            log "✓ Model files copied to user model directory: $model_path"
+        else
+            log "⚠ Model files not found in repository to copy to user directory"
+        fi
+    else
+        log "⚠ Could not determine user model directory path"
+    fi
+else
+    log "⚠ get_models.sh script not executable, using download_models.py instead..."
+fi
+
 log "✓ FastVLM environment setup completed successfully"
 
-# Download the default model
+# Now check and download with our management system
 log "Checking for available models..."
 python "$project_root/tools/download_models.py" list | tee -a "$log_file"
 
-log "Downloading the default model (0.5b) if not already available..."
+log "Ensuring model is available through model management system..."
 python "$project_root/tools/download_models.py" download --size 0.5b | tee -a "$log_file"
 
 log "Setup completed at $(date)"

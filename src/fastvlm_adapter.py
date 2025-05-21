@@ -136,7 +136,7 @@ class FastVLMAdapter:
         
     def predict(self, image_path: str, prompt: str = None, 
                 output_path: str = None, mode: str = "describe",
-                timeout_seconds: int = 60) -> Dict[str, Any]:
+                timeout_seconds: int = 60, mock: bool = False) -> Dict[str, Any]:
         """
         Run prediction with the FastVLM model.
         
@@ -146,6 +146,7 @@ class FastVLMAdapter:
             output_path: Path to save the output JSON (if None, uses a canonical artifact path)
             mode: Analysis mode (describe, detect, document)
             timeout_seconds: Timeout for the FastVLM process
+            mock: Whether to run in mock mode (for testing)
             
         Returns:
             Dictionary containing the prediction result
@@ -153,6 +154,36 @@ class FastVLMAdapter:
         if not self.initialized:
             if not self._initialize_model():
                 return {"error": "Model initialization failed"}
+                
+        # Use mock mode for testing when requested
+        if mock:
+            logger.info("Running in mock mode - will not actually invoke the model")
+            
+            mock_result = {
+                "description": f"This is a mock response for image {os.path.basename(image_path)}",
+                "tags": ["mock", "test", "image"],
+                "metadata": {
+                    "model": f"{self.model_type}_{self.model_size}",
+                    "execution_time": 0.1,
+                    "timestamp": datetime.now().isoformat(),
+                    "mock": True
+                }
+            }
+            
+            # Save result to output path if provided
+            if output_path:
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                
+                # Use PathGuard if available
+                if ARTIFACT_DISCIPLINE:
+                    with PathGuard(os.path.dirname(output_path)):
+                        with open(output_path, "w") as f:
+                            json.dump(mock_result, f, indent=2)
+                else:
+                    with open(output_path, "w") as f:
+                        json.dump(mock_result, f, indent=2)
+                        
+            return mock_result
                 
         # Validate image path
         if not os.path.exists(image_path):

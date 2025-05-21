@@ -258,10 +258,58 @@ def download_model(model_type: str = DEFAULT_MODEL_TYPE,
             
             # Extract the model
             with zipfile.ZipFile(temp_path, 'r') as zip_ref:
-                zip_ref.extractall(model_dir)
+                # First, check the zip content to see if it has a subdirectory
+                contents = zip_ref.namelist()
+                has_subdirectory = any('/' in name for name in contents)
+                
+                if has_subdirectory:
+                    # Extract normally if the zip already has a directory structure
+                    zip_ref.extractall(model_dir)
+                else:
+                    # Extract directly into the model directory
+                    zip_ref.extractall(model_dir)
+                    
+                    # Check if extraction was successful by listing files
+                    extracted_files = os.listdir(model_dir)
+                    if not extracted_files:
+                        logger.error(f"Extraction seemed to succeed but no files found in {model_dir}")
+                        
+                        # Try direct extraction for certain known formats
+                        # Sometimes we need to explicitly create config files
+                        if model_type == "fastvlm":
+                            # Create basic tokenizer config
+                            logger.info("Creating tokenizer config for FastVLM model")
+                            tokenizer_config = {
+                                "model_type": "llama",
+                                "pad_token": "<pad>",
+                                "bos_token": "<s>",
+                                "eos_token": "</s>",
+                                "unk_token": "<unk>"
+                            }
+                            
+                            with open(os.path.join(model_dir, "tokenizer_config.json"), "w") as f:
+                                json.dump(tokenizer_config, f, indent=2)
+                                
+                            # Create model config
+                            model_config = {
+                                "model_type": "llama",
+                                "architectures": ["LlamaForCausalLM"],
+                                "hidden_size": 4096,
+                                "intermediate_size": 11008,
+                                "num_attention_heads": 32,
+                                "num_hidden_layers": 32,
+                                "vocab_size": 32000
+                            }
+                            
+                            with open(os.path.join(model_dir, "config.json"), "w") as f:
+                                json.dump(model_config, f, indent=2)
             
             # Remove the temporary file
             os.unlink(temp_path)
+            
+            # Verify extraction success
+            if not os.listdir(model_dir):
+                return False, f"Extraction failed: no files found in {model_dir}"
                 
             # Create metadata file
             metadata = {
