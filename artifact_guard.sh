@@ -3,6 +3,9 @@
 # This script redefines key filesystem commands to enforce path discipline
 # Source this file in all scripts to prevent non-canonical artifact usage
 
+# Set ARTIFACT_QUIET=1 to suppress warnings and informational messages
+ARTIFACT_QUIET=${ARTIFACT_QUIET:-1}  # Default to quiet mode for less verbosity
+
 # Determine script directory even if run through a symlink
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
@@ -55,6 +58,7 @@ ARTIFACT_ROOTS_USED=()
 
 # Terminal colors for error messages
 RED='\033[0;31m'
+GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
@@ -164,10 +168,43 @@ validate_artifact_path() {
     return 0
   fi
   
+  # Allow standard project directories (internal structure)
+  if [[ "$abs_path" == "$SCRIPT_DIR"* ]] && \
+     ( [[ "$abs_path" == "$SCRIPT_DIR/src"* ]] || \
+       [[ "$abs_path" == "$SCRIPT_DIR/tools"* ]] || \
+       [[ "$abs_path" == "$SCRIPT_DIR/tests"* ]] || \
+       [[ "$abs_path" == "$SCRIPT_DIR/.git"* ]] || \
+       [[ "$abs_path" == "$SCRIPT_DIR/.github"* ]] || \
+       [[ "$abs_path" == "$SCRIPT_DIR/.githooks"* ]] ); then
+    # Project structure directory, allow it
+    return 0
+  fi
+  
+  # Allow files/dirs directly in project root
+  if [[ "$abs_path" == "$SCRIPT_DIR"/* ]] && \
+     [[ $(dirname "$abs_path") == "$SCRIPT_DIR" ]]; then
+    # Root directory files (README.md, etc.)
+    local base_name=$(basename "$abs_path")
+    # Prohibited patterns for directories or files in root
+    if [[ "$base_name" == test_* ]] || \
+       [[ "$base_name" == *_results ]] || \
+       [[ "$base_name" == fastvlm_test_* ]] || \
+       [[ "$base_name" == analysis_* ]]; then
+      # Legacy pattern, disallow
+      return 1
+    fi
+    # Basic file in root is okay
+    return 0
+  fi
+  
   # Special case: allow paths that start with /, have common system dirs, and don't have 'artifact' in the name
   if [[ "$abs_path" == /* ]] && \
      [[ "$abs_path" != */artifact* ]] && \
-     [[ "$abs_path" == */dev/* || "$abs_path" == */proc/* || "$abs_path" == */sys/* || "$abs_path" == */tmp/* || "$abs_path" == */var/* || "$abs_path" == */etc/* || "$abs_path" == */usr/* || "$abs_path" == */lib/* || "$abs_path" == */opt/* ]]; then
+     ( [[ "$abs_path" == */dev/* ]] || [[ "$abs_path" == */proc/* ]] || \
+       [[ "$abs_path" == */sys/* ]] || [[ "$abs_path" == */tmp/* ]] || \
+       [[ "$abs_path" == */var/* ]] || [[ "$abs_path" == */etc/* ]] || \
+       [[ "$abs_path" == */usr/* ]] || [[ "$abs_path" == */lib/* ]] || \
+       [[ "$abs_path" == */opt/* ]] || [[ "$abs_path" == */bin/* ]] ); then
     # System path, allow it
     return 0
   fi
@@ -231,6 +268,7 @@ mkdir_guard() {
     if ! validate_artifact_path "$dir"; then
       echo -e "${RED}${BOLD}ERROR: Non-canonical artifact path detected: $dir${NC}" >&2
       echo -e "${YELLOW}All artifact directories must be created using get_canonical_artifact_path or be in $ARTIFACTS_ROOT${NC}" >&2
+      echo -e "${YELLOW}Project structure directories (src/, tools/, tests/) are also allowed${NC}" >&2
       print_stack_trace
       return 1
     fi
@@ -265,6 +303,7 @@ touch_guard() {
     if ! validate_artifact_path "$file"; then
       echo -e "${RED}${BOLD}ERROR: Non-canonical artifact path detected: $file${NC}" >&2
       echo -e "${YELLOW}All artifact files must be created in $ARTIFACTS_ROOT${NC}" >&2
+      echo -e "${YELLOW}Project structure files (src/, tools/, tests/) are also allowed${NC}" >&2
       print_stack_trace
       return 1
     fi
@@ -295,6 +334,7 @@ cp_guard() {
   if ! validate_artifact_path "$target"; then
     echo -e "${RED}${BOLD}ERROR: Non-canonical artifact path detected for copy target: $target${NC}" >&2
     echo -e "${YELLOW}All artifact files must be created in $ARTIFACTS_ROOT${NC}" >&2
+    echo -e "${YELLOW}Project structure files (src/, tools/, tests/) are also allowed${NC}" >&2
     print_stack_trace
     return 1
   fi
@@ -324,12 +364,30 @@ mv_guard() {
   if ! validate_artifact_path "$target"; then
     echo -e "${RED}${BOLD}ERROR: Non-canonical artifact path detected for move target: $target${NC}" >&2
     echo -e "${YELLOW}All artifact files must be moved to $ARTIFACTS_ROOT${NC}" >&2
+    echo -e "${YELLOW}Project structure files (src/, tools/, tests/) are also allowed${NC}" >&2
     print_stack_trace
     return 1
   fi
   
   # If we get here, the target path is valid, execute the original command
   command mv "${args[@]}" "$target"
+}
+
+# Display project structure information
+show_project_structure() {
+  cat << EOF
+  
+${GREEN}${BOLD}Project Structure:${NC}
+  ├── ${GREEN}src/${NC}      - Core Python modules and libraries
+  ├── ${GREEN}tools/${NC}    - Command-line tools and utilities
+  ├── ${GREEN}tests/${NC}    - Test scripts and validation
+  └── ${GREEN}artifacts/${NC} - Canonical output storage
+      ├── analysis/   - Analysis results
+      ├── vision/     - Vision model outputs
+      ├── test/       - Test outputs
+      ├── benchmark/  - Performance benchmarks
+      └── tmp/        - Temporary files (auto-cleaned)
+EOF
 }
 
 # Warn about usage of unprotected commands (e.g., redirections)
@@ -362,9 +420,12 @@ alias touch=touch_guard
 alias cp=cp_guard
 alias mv=mv_guard
 
-# Warn about artifact discipline when this script is sourced
-warn_artifact_discipline
+# Show warnings and info only if not in quiet mode
+if [[ "$ARTIFACT_QUIET" != "1" ]]; then
+  warn_artifact_discipline
+  show_project_structure
 
-echo -e "${BOLD}Artifact path discipline enforced.${NC}"
-echo -e "Use ${BOLD}get_canonical_artifact_path <type> \"context\"${NC} to create canonical paths."
-echo -e "Valid artifact types: ${ARTIFACT_TYPES[*]}"
+  echo -e "${BOLD}Artifact path discipline enforced.${NC}"
+  echo -e "Use ${BOLD}get_canonical_artifact_path <type> \"context\"${NC} to create canonical paths."
+  echo -e "Valid artifact types: ${ARTIFACT_TYPES[*]}"
+fi
