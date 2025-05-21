@@ -2,6 +2,83 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## PR Review Workflow with GraphQL
+
+### Reviewing PR Comments and Resolving Them
+
+```bash
+# 1. Get PR ID
+gh api repos/OWNER/REPO/pulls/PR_NUMBER --jq .node_id
+
+# 2. Get all review threads from a PR
+gh api graphql -f query='
+query {
+  repository(owner: "primeinc", name: "file-analyzer") {
+    pullRequest(number: PR_NUMBER) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          path
+          line
+          comments(first: 5) {
+            nodes {
+              body
+              author {
+                login
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}'
+
+# 3. Add a general comment to the PR
+gh pr comment PR_NUMBER -b "Your comment here"
+
+# 4. Create a new review
+gh api graphql -f query='
+mutation {
+  addPullRequestReview(input: {
+    pullRequestId: "PR_ID_HERE",
+    event: COMMENT,
+    body: "Addressing review comments"
+  }) {
+    pullRequestReview {
+      id
+    }
+  }
+}'
+
+# 5. Submit a review
+gh api graphql -f query='
+mutation {
+  submitPullRequestReview(input: {
+    pullRequestReviewId: "REVIEW_ID_HERE",
+    event: COMMENT
+  }) {
+    pullRequestReview {
+      id
+    }
+  }
+}'
+
+# 6. Resolve a specific review thread
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {
+    threadId: "THREAD_ID_HERE"
+  }) {
+    thread {
+      id
+      isResolved
+    }
+  }
+}'
+```
+
 ## CRITICAL RULES
 
 1. **DO NOT MODIFY ANY FILES IN THE `libs/` DIRECTORY**: The `libs/` directory contains external libraries and dependencies that should NEVER be modified directly. If changes are needed to library functionality, create wrapper functions instead.
