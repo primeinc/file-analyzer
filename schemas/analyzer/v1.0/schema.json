@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "File Analyzer Output Schema",
+  "description": "Schema for validating output from the File Analyzer tool",
+  "type": "object",
+  "required": ["path", "time", "analyses"],
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Path to the analyzed file or directory"
+    },
+    "time": {
+      "type": "string",
+      "description": "ISO-formatted timestamp of the analysis",
+      "format": "date-time"
+    },
+    "analyses": {
+      "type": "object",
+      "description": "Results of various analysis types",
+      "properties": {
+        "metadata": {
+          "type": "object",
+          "description": "Metadata extraction results",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success", "error", "skipped"]
+            },
+            "file": {
+              "type": "string",
+              "description": "Path to the metadata output file"
+            },
+            "count": {
+              "type": "integer",
+              "description": "Number of metadata items extracted"
+            },
+            "message": {
+              "type": "string",
+              "description": "Error or status message"
+            }
+          }
+        },
+        "duplicates": {
+          "type": "object",
+          "description": "Duplicate file detection results",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success", "error", "skipped"]
+            },
+            "file": {
+              "type": "string",
+              "description": "Path to the duplicates output file"
+            },
+            "message": {
+              "type": "string",
+              "description": "Error or status message"
+            }
+          }
+        },
+        "ocr": {
+          "type": "object",
+          "description": "OCR results",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success", "error", "skipped"]
+            },
+            "file": {
+              "type": "string",
+              "description": "Path to the OCR output file"
+            },
+            "total": {
+              "type": "integer",
+              "description": "Total number of images processed"
+            },
+            "successful": {
+              "type": "integer",
+              "description": "Number of successfully processed images"
+            },
+            "failed": {
+              "type": "integer",
+              "description": "Number of failed images"
+            },
+            "message": {
+              "type": "string",
+              "description": "Error or status message"
+            }
+          }
+        },
+        "virus": {
+          "type": "object",
+          "description": "Malware scan results",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["clean", "threat_detected", "error", "skipped"]
+            },
+            "file": {
+              "type": "string",
+              "description": "Path to the scan output file"
+            },
+            "summary": {
+              "type": "object",
+              "description": "Summary of scan results"
+            },
+            "message": {
+              "type": "string",
+              "description": "Error or status message"
+            }
+          }
+        },
+        "search": {
+          "type": "object",
+          "description": "Content search results",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success", "error", "skipped"]
+            },
+            "file": {
+              "type": "string",
+              "description": "Path to the search output file"
+            },
+            "pattern": {
+              "type": "string",
+              "description": "Search pattern used"
+            },
+            "matches": {
+              "type": "integer",
+              "description": "Number of matches found"
+            },
+            "message": {
+              "type": "string",
+              "description": "Error or status message"
+            }
+          }
+        },
+        "binary": {
+          "type": "object",
+          "description": "Binary analysis results",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success", "error", "skipped"]
+            },
+            "file": {
+              "type": "string",
+              "description": "Path to the binary analysis output file"
+            },
+            "interesting_data": {
+              "type": "boolean",
+              "description": "Whether interesting data was found"
+            },
+            "message": {
+              "type": "string",
+              "description": "Error or status message"
+            }
+          }
+        },
+        "vision": {
+          "type": "object",
+          "description": "Vision model analysis results",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success", "error", "skipped"]
+            },
+            "model": {
+              "type": "string",
+              "description": "Name of the model used"
+            },
+            "mode": {
+              "type": "string",
+              "description": "Analysis mode used"
+            },
+            "files_processed": {
+              "type": "integer",
+              "description": "Number of files processed"
+            },
+            "successful": {
+              "type": "integer",
+              "description": "Number of successfully processed files"
+            },
+            "failed": {
+              "type": "integer",
+              "description": "Number of failed files"
+            },
+            "output_dir": {
+              "type": "string",
+              "description": "Path to the output directory"
+            },
+            "output_path": {
+              "type": "string",
+              "description": "Path to the output file (for single file analysis)"
+            },
+            "error": {
+              "type": "string",
+              "description": "Error message"
+            }
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Information about the runtime environment",
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "description": "Python version used"
+        },
+        "system": {
+          "type": "string",
+          "description": "Operating system"
+        },
+        "git_commit": {
+          "type": "string",
+          "description": "Git commit SHA"
+        },
+        "dependencies": {
+          "type": "object",
+          "description": "Key dependencies and their versions"
+        },
+        "artifacts_version": {
+          "type": "string",
+          "description": "Artifact system version"
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
