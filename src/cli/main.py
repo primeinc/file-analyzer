@@ -62,8 +62,8 @@ def setup_logging(verbose: bool = False, quiet: bool = False, json_logs: bool = 
     
     if json_logs:
         # Configure JSON logging
-        from pythonjsonlogger import jsonlogger
-        formatter = jsonlogger.JsonFormatter()
+        from pythonjsonlogger import json as jsonlog
+        formatter = jsonlog.JsonFormatter()
         
         # Create a handler for JSON logs
         if log_file:

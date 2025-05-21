@@ -100,7 +100,7 @@ class TestCliLogging(unittest.TestCase):
         logger.error("This error message should appear")
     
     @patch('logging.FileHandler')
-    @patch('pythonjsonlogger.jsonlogger.JsonFormatter')
+    @patch('pythonjsonlogger.json.JsonFormatter')
     def test_json_logging_to_file(self, mock_json_formatter, mock_file_handler):
         """Test JSON logging to a file."""
         # Mock both the file handler and JsonFormatter to avoid creating real files
@@ -142,7 +142,7 @@ class TestCliLogging(unittest.TestCase):
         """Test JSON logging to stdout."""
         # This test is simplified to just check if a JsonFormatter is used
         # We don't try to parse the actual output since that's too environment-dependent
-        with patch('pythonjsonlogger.jsonlogger.JsonFormatter') as mock_formatter:
+        with patch('pythonjsonlogger.json.JsonFormatter') as mock_formatter:
             # Mock the JsonFormatter and just verify it's used
             console, logger = setup_logging(json_logs=True)
             
