@@ -36,31 +36,31 @@ The File Analysis System is a unified tool for comprehensive file analysis that 
 
 ```bash
 # Run all analyses on a directory
-./analyze.sh -a <path_to_analyze>
+./tools/analyze.sh -a <path_to_analyze>
 
 # Run the Python script directly
-./file_analyzer.py --all <path_to_analyze>
+python src/analyzer.py --all <path_to_analyze>
 
 # Extract metadata and find duplicates
-./analyze.sh -m -d <path_to_analyze>
+./tools/analyze.sh -m -d <path_to_analyze>
 
 # Search for specific content
-./analyze.sh -s "password" <path_to_analyze>
+./tools/analyze.sh -s "password" <path_to_analyze>
 
 # OCR images in a directory
-./analyze.sh -o <path_to_analyze>
+./tools/analyze.sh -o <path_to_analyze>
 
 # Custom output directory
-./analyze.sh -a <path_to_analyze> -r /path/to/output
+./tools/analyze.sh -a <path_to_analyze> -r /path/to/output
 
 # Analyze images with AI vision models
-./analyze.sh -V <path_to_analyze>
+./tools/analyze.sh -V <path_to_analyze>
 
 # Use a specific vision model
-./analyze.sh -V --vision-model fastvlm <path_to_analyze>
+./tools/analyze.sh -V --vision-model fastvlm <path_to_analyze>
 
 # Document analysis mode
-./analyze.sh -V --vision-mode document <path_to_analyze>
+./tools/analyze.sh -V --vision-mode document <path_to_analyze>
 ```
 
 ### Analysis Options
@@ -79,31 +79,40 @@ The File Analysis System is a unified tool for comprehensive file analysis that 
 
 ## Architecture
 
-The system consists of two main components:
+The system consists of several main components:
 
-1. **analyze.sh**: A Bash wrapper script that provides a command-line interface and passes arguments to the Python script.
-
-2. **file_analyzer.py**: The core Python implementation that:
+1. **analyzer.py**: The core Python implementation that:
    - Defines a `FileAnalyzer` class to manage different analysis operations
-   - Uses ThreadPoolExecutor for parallel processing of OCR tasks
+   - Uses ThreadPoolExecutor for parallel processing
    - Executes external tools via subprocess
    - Generates JSON and text report files
    - Handles error cases and provides appropriate status messages
+
+2. **model_manager.py**: Centralized model management system:
+   - Manages model discovery and initialization
+   - Provides unified adapter interface
+   - Handles model downloads and validation
+   - Supports both single file and batch processing
+
+3. **model_analyzer.py**: Unified model analysis interface:
+   - Integrates with the core analyzer
+   - Provides standardized parameters and output
+   - Implements parallel processing for batch operations
 
 The system follows a modular design where each analysis type is encapsulated in its own method within the `FileAnalyzer` class, making it easy to add new analysis capabilities.
 
 ### Output Files
 
-The analyzer produces several output files with results:
+The analyzer produces several output files with results in canonical artifact paths:
 
-- `analysis_summary_[timestamp].json`: Overall summary
-- `metadata_[timestamp].json`: File metadata
-- `duplicates_[timestamp].txt`: Duplicate files
-- `ocr_results_[timestamp].json`: Text from images
-- `malware_scan_[timestamp].txt`: Malware scan results
-- `search_[text]_[timestamp].txt`: Content search results
-- `binary_analysis_[timestamp].txt`: Binary analysis
-- `vision_analysis_[timestamp].(txt|json)`: AI vision model analysis
+- `artifacts/analysis/<context>/analysis_summary.json`: Overall summary
+- `artifacts/analysis/<context>/metadata.json`: File metadata
+- `artifacts/analysis/<context>/duplicates.txt`: Duplicate files
+- `artifacts/analysis/<context>/ocr_results.json`: Text from images
+- `artifacts/analysis/<context>/malware_scan.txt`: Malware scan results
+- `artifacts/analysis/<context>/search_results.txt`: Content search results
+- `artifacts/analysis/<context>/binary_analysis.txt`: Binary analysis
+- `artifacts/vision/<context>/vision_analysis.json`: AI vision model analysis
 
 ## Dependencies
 
@@ -140,7 +149,24 @@ To add a new analysis type:
 
 2. Add a new command-line argument in `main()`
 
-3. Update the `analyze.sh` wrapper script to pass the new argument
+3. Update the analyze.sh wrapper script to pass the new argument
+
+### Adding a New Model Adapter
+
+To add a new model adapter:
+
+1. Create a new adapter file (e.g., `my_model_adapter.py`) that implements:
+   - `MyModelAdapter` class with `__init__`, `predict`, and `get_info` methods
+   - `create_adapter` function that returns an adapter instance
+
+2. Register the adapter with the model manager:
+   ```python
+   from src.my_model_adapter import create_adapter
+   manager = create_manager()
+   manager.adapters["my_model"] = create_adapter
+   ```
+
+3. Update the model analyzer configuration if needed
 
 ### Error Handling
 
@@ -181,31 +207,30 @@ The system employs a multi-stage approach to extract JSON from potentially malfo
 
 The extraction can handle nested objects, arrays, and quoted strings properly.
 
-### Retry Logic
+## Model Management System
 
-For vision model outputs that fail JSON validation:
+The file analyzer includes a centralized model management system:
 
-1. Initial attempt uses a standard JSON-formatted prompt
-2. If validation fails, a stronger prompt specifically emphasizing JSON format is used
-3. Multiple retry attempts with progressively stricter prompts
-4. Graceful fallback to structured text output with appropriate metadata
+1. **Model Storage**:
+   - User-level storage: `~/.local/share/fastvlm/`
+   - Project-level storage: `libs/ml-fastvlm/checkpoints/`
 
-### Test Infrastructure
+2. **Model Discovery**:
+   - Automatic path resolution across locations
+   - Model version and size management
+   - Download capability for missing models
 
-The JSON validation system includes comprehensive testing:
+3. **Unified Adapter Interface**:
+   - Common API for all model types
+   - Standard prediction interface
+   - Consistent output format
 
-- Unit tests for JSON extraction from various text formats
-- Tests for progressively corrupted JSON inputs
-- Tests for complete JSON parsing failure scenarios
-- Integration tests for the full validation pipeline
+4. **Model Analyzer**:
+   - High-level analysis capabilities
+   - Batch processing with parallelism
+   - Result tracking and summarization
 
-### Error Reporting
-
-Test scripts include enhanced error reporting:
-
-- Detailed error logs for debugging failed validations
-- Non-zero exit codes for CI/CD integration
-- Visual indicators (✓/✗) for test status feedback
+For more details, see the MODEL_ANALYSIS.md and MODELS.md documentation files.
 
 ## GitHub PR Review Thread Workflow
 
@@ -368,102 +393,3 @@ mutation {
   }
 }'
 ```
-
-## GitHub CLI Integration
-
-### Authentication and Token Management
-
-The GitHub CLI (gh) provides several methods to authenticate with GitHub's API:
-
-- **Authentication token retrieval**: Use `gh auth token` to display your current authentication token
-- **Environment variables**: Set `GH_TOKEN` for automation scenarios
-- **Automatic token refresh**: GitHub CLI manages token lifecycle automatically
-
-```bash
-# Get current authentication token
-TOKEN=$(gh auth token)
-
-# Print token status
-gh auth status
-```
-
-### Working with Pull Requests
-
-You can interact with pull requests directly using built-in commands or the API:
-
-#### Using Built-in Commands
-
-```bash
-# Comment on a pull request
-gh pr comment 1 --body "Great improvements!"
-
-# View PR details
-gh pr view 1 --json number,title,body,comments
-
-# Checkout a PR
-gh pr checkout 1
-```
-
-#### Using the GitHub API
-
-The `gh api` command allows direct access to GitHub's REST API:
-
-```bash
-# Get PR comments
-gh api repos/{owner}/{repo}/issues/1/comments
-
-# Post a comment on a PR
-gh api -X POST repos/{owner}/{repo}/issues/1/comments -f body="Nice work!"
-
-# Get detailed PR information
-gh api repos/{owner}/{repo}/pulls/1 --jq '.title, .body'
-```
-
-### Comment Types and Placement
-
-GitHub supports different types of comments on pull requests:
-
-1. **Regular PR comments**: Comments on the main PR conversation thread
-   ```bash
-   gh api -X POST repos/{owner}/{repo}/issues/{pr_number}/comments \
-     -f body="General comment on the PR"
-   ```
-
-2. **Line-specific review comments**: Comments on specific code in the diff
-   ```bash
-   gh api -X POST repos/{owner}/{repo}/pulls/{pr_number}/comments \
-     -f body="Comment on specific code" \
-     -f commit_id="{commit_sha}" \
-     -f path="path/to/file.py" \
-     -f line=42 \
-     -f side="RIGHT"
-   ```
-
-3. **Reply to an existing comment**: Thread comments
-   ```bash
-   gh api -X POST repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
-     -f body="Reply to previous comment"
-   ```
-
-### Automated PR Reviews
-
-You can use the GitHub CLI to automate PR review workflows:
-
-```bash
-# Approve a PR
-gh pr review 1 --approve
-
-# Request changes on a PR
-gh pr review 1 --request-changes --body "Please fix the tests"
-
-# Comment on a PR without approval/rejection
-gh pr review 1 --comment --body "Some suggestions to consider"
-```
-
-### Authentication Best Practices
-
-- Create separate tokens for different use cases to limit access scope
-- Store tokens securely using environment variables or GitHub Secrets
-- For GitHub Actions, use the built-in `GITHUB_TOKEN` when possible
-- Regularly rotate tokens used in automation workflows
-- Use fine-grained tokens with minimal permissions required
