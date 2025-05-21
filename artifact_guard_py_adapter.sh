@@ -65,13 +65,13 @@ function validate_artifact_path() {
 # Override mkdir to validate paths first
 mkdir_guard() {
   local dirs=()
-  local options=""
+  local options=()
   
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -*)
-        options+=" $1"
+        options+=("$1")
         shift
         ;;
       *)
