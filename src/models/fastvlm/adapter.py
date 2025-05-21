@@ -32,7 +32,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import model configuration
-from src.model_config import (
+from src.models.config import (
     get_model_path,
     get_model_info,
     download_model,
@@ -52,7 +52,7 @@ except ImportError:
 
 # Import artifact discipline tools if available
 try:
-    from src.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
+    from src.core.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
     ARTIFACT_DISCIPLINE = True
 except ImportError:
     ARTIFACT_DISCIPLINE = False

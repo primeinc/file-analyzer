@@ -28,7 +28,7 @@ from src.models.config import (
 
 # Import artifact discipline if available
 try:
-    from src.artifact_guard import (
+    from src.core.artifact_guard import (
         get_canonical_artifact_path,
         validate_artifact_path,
         PathGuard,
