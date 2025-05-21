@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Optional, Any, List, Tuple, Union
 
 # Import model configuration
-from src.model_config import (
+from src.models.config import (
     get_model_path,
     list_available_models,
     get_model_info,

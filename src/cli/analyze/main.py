@@ -18,10 +18,13 @@ from src.cli.common.config import config
 from src.cli.main import console
 
 # Import analyzer core
-from src import analyzer
+from src.core.analyzer import FileAnalyzer, verify_installation
 
 # Create Typer app for analyze subcommand
 app = typer.Typer(help="Analyze files and directories")
+
+# Dictionary to store verification results for rich output
+verification_results = {}
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
@@ -165,7 +168,7 @@ def all(
     options['model_mode'] = "describe"
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis with progress indicator
     with Progress(
@@ -253,7 +256,7 @@ def metadata(
     options = create_options_dict('metadata', results_dir=results_dir)
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
@@ -302,7 +305,7 @@ def duplicates(
     options = create_options_dict('duplicates', results_dir=results_dir)
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
@@ -361,7 +364,7 @@ def ocr(
     options = create_options_dict('ocr', results_dir=results_dir)
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
@@ -406,7 +409,7 @@ def virus(
     options = create_options_dict('virus', results_dir=results_dir)
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
@@ -472,7 +475,7 @@ def search(
     options = create_options_dict('search', results_dir=results_dir, search_text=text)
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
@@ -525,7 +528,7 @@ def binary(
     options = create_options_dict('binary', results_dir=results_dir)
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
@@ -600,7 +603,7 @@ def vision(
                                 model_name=model, model_size=size, model_mode=mode)
     
     # Initialize analyzer
-    file_analyzer = analyzer.FileAnalyzer(analysis_config)
+    file_analyzer = FileAnalyzer(analysis_config)
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
@@ -618,6 +621,72 @@ def vision(
     else:
         console.print(f"[red]Vision analysis failed:[/red] {results.get('vision', {}).get('error', 'Unknown error')}")
         raise typer.Exit(code=1)
+    
+    return 0
+
+@app.command()
+def verify(
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Enable verbose output"
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q", help="Suppress all output except errors"
+    ),
+):
+    """
+    Verify the installation and dependencies.
+    
+    Checks for required tools, libraries, and models needed by the file analyzer.
+    """
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
+    
+    console.print("[bold]Verifying file-analyzer installation...[/bold]")
+    
+    # Get verification results
+    verification = verify_installation()
+    
+    # Store verification results for later use
+    global verification_results
+    verification_results = verification
+    
+    # Print verification results in a more beautiful way
+    console.print("\n[bold green]System Information:[/bold green]")
+    for key, value in verification["system"].items():
+        console.print(f"  [blue]{key}:[/blue] {value}")
+    
+    console.print("\n[bold green]Core Dependencies:[/bold green]")
+    for key, value in verification["core_dependencies"].items():
+        if "Not installed" in value:
+            console.print(f"  [blue]{key}:[/blue] [yellow]{value}[/yellow]")
+        else:
+            console.print(f"  [blue]{key}:[/blue] {value}")
+    
+    console.print("\n[bold green]External Tools:[/bold green]")
+    for key, value in verification["external_tools"].items():
+        if "Not found" in value or "Error" in value:
+            console.print(f"  [blue]{key}:[/blue] [yellow]{value}[/yellow]")
+        else:
+            console.print(f"  [blue]{key}:[/blue] [green]{value}[/green]")
+    
+    console.print("\n[bold green]Vision Models:[/bold green]")
+    if "error" in verification["vision_models"]:
+        console.print(f"  [red]Error checking models:[/red] {verification['vision_models']['error']}")
+    else:
+        for key, value in verification["vision_models"].items():
+            console.print(f"  [blue]{key}:[/blue] [green]{value}[/green]")
+    
+    console.print("\n[bold]Verification complete.[/bold]")
+    
+    # Check if all required tools are present
+    missing_tools = [key for key, value in verification["external_tools"].items() 
+                  if "Not found" in value or "Error" in value]
+    
+    if missing_tools:
+        console.print("\n[yellow]Warning: The following external tools are missing:[/yellow]")
+        for tool in missing_tools:
+            console.print(f"  - {tool}")
+        console.print("\nSome analyzer functionality may be limited.")
     
     return 0
 

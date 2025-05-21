@@ -71,6 +71,9 @@ analyze = "src.cli.analyze.main:app"
 test = "src.cli.test.main:app"
 validate = "src.cli.validate.main:app"
 artifact = "src.cli.artifact.main:app"
+install = "src.cli.install.main:app"
+model = "src.cli.model.main:app"
+benchmark = "src.cli.benchmark.main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -21,9 +21,15 @@ from rich.table import Table
 # Import CLI common utilities
 from src.cli.common.config import config
 
+# Import the test hook directly
+from src.cli.test.hook import app as hook_app
+
 # Create Typer app for test subcommand
 app = typer.Typer(help="Run test suites and validation checks")
 console = Console()
+
+# Add hook subcommand
+app.add_typer(hook_app, name="hook")
 
 class TestRegistry:
     """

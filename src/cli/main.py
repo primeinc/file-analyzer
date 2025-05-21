@@ -151,6 +151,45 @@ def load_commands():
                 logger.debug("Registered artifact command")
             except Exception as e:
                 logger.error(f"Failed to load artifact command: {e}")
+        
+        # Register preflight directly - it's part of the artifact module
+        try:
+            from src.cli.artifact.preflight import app as preflight_app
+            app.add_typer(preflight_app, name='preflight')
+            logger.debug("Registered preflight command")
+        except Exception as e:
+            logger.error(f"Failed to load preflight command: {e}")
+        
+        # Register adapter command - it's part of the artifact module
+        try:
+            import src.cli.artifact.adapter
+            logger.debug("Registered adapter module for bash integration")
+        except Exception as e:
+            logger.error(f"Failed to load adapter command: {e}")
+        
+        # Register install command
+        try:
+            from src.cli.install.main import app as install_app
+            app.add_typer(install_app, name='install')
+            logger.debug("Registered install command")
+        except Exception as e:
+            logger.error(f"Failed to load install command: {e}")
+            
+        # Register model command
+        try:
+            from src.cli.model.main import app as model_app
+            app.add_typer(model_app, name='model')
+            logger.debug("Registered model command")
+        except Exception as e:
+            logger.error(f"Failed to load model command: {e}")
+            
+        # Register benchmark command
+        try:
+            from src.cli.benchmark.main import app as benchmark_app
+            app.add_typer(benchmark_app, name='benchmark')
+            logger.debug("Registered benchmark command")
+        except Exception as e:
+            logger.error(f"Failed to load benchmark command: {e}")
                 
     except Exception as e:
         logger.warning(f"Error discovering plugins: {e}")
@@ -195,6 +234,40 @@ def _import_builtin_commands():
         logger.debug("Registered artifact command")
     except ImportError:
         logger.warning("Could not import artifact command")
+    
+    try:
+        from src.cli.artifact.preflight import app as preflight_app
+        app.add_typer(preflight_app, name="preflight")
+        logger.debug("Registered preflight command")
+    except ImportError:
+        logger.warning("Could not import preflight command")
+    
+    try:
+        import src.cli.artifact.adapter
+        logger.debug("Registered adapter module for bash integration")
+    except ImportError:
+        logger.warning("Could not import adapter module")
+    
+    try:
+        from src.cli.install.main import app as install_app
+        app.add_typer(install_app, name="install")
+        logger.debug("Registered install command")
+    except ImportError:
+        logger.warning("Could not import install command")
+        
+    try:
+        from src.cli.model.main import app as model_app
+        app.add_typer(model_app, name="model")
+        logger.debug("Registered model command")
+    except ImportError:
+        logger.warning("Could not import model command")
+        
+    try:
+        from src.cli.benchmark.main import app as benchmark_app
+        app.add_typer(benchmark_app, name="benchmark")
+        logger.debug("Registered benchmark command")
+    except ImportError:
+        logger.warning("Could not import benchmark command")
 
 def capture_environment():
     """Capture and return environment details."""
@@ -260,7 +333,10 @@ def main(
     
     # Load subcommands
     load_commands()
-    print(f"- Subcommands: {[typer_instance.name for typer_instance in app.registered_typer_instances]}")
+    
+    # Show available commands (only in debug mode)
+    if verbose:
+        logger.debug(f"Registered subcommands: {[typer_instance.name for typer_instance in app.registered_typer_instances]}")
 
 # We're removing the version command and only using the --version flag option
 # to avoid confusing users with two different ways to get version information.

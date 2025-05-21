@@ -30,7 +30,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import artifact discipline components
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     get_canonical_artifact_path,
     validate_artifact_path,
     PathGuard,
@@ -38,10 +38,10 @@ from src.artifact_guard import (
 )
 
 # Import model management
-from src.model_manager import ModelManager, create_manager
+from src.models.manager import ModelManager, create_manager
 
 # Import JSON utilities
-from src.json_utils import JSONValidator, process_model_output
+from src.utils.json_utils import JSONValidator, process_model_output
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

@@ -27,16 +27,23 @@ from src.cli.common.config import config
 from src.cli.main import console
 
 # Import artifact_guard utilities
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     ARTIFACTS_ROOT, 
     ARTIFACT_TYPES,
     get_canonical_artifact_path, 
+    validate_artifact_path,
     setup_artifact_structure as setup_artifact_dir,
     cleanup_artifacts as cleanup_artifact_dirs
 )
 
+# Import script_checks subcommand
+from src.cli.artifact.script_checks import app as script_checks_app
+
 # Create Typer app for artifact subcommand
 app = typer.Typer(help="Manage artifact directories and outputs")
+
+# Add script_checks subcommand
+app.add_typer(script_checks_app, name="script-checks")
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
@@ -702,6 +709,136 @@ def env_file(
         return 0
     except Exception as e:
         console.print(f"[red]Failed to generate environment file:[/red] {str(e)}")
+        return 1
+
+@app.command("validate")
+def validate(
+    path: str = typer.Argument(..., help="Path to validate"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Enable verbose output"
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q", help="Suppress all output except errors"
+    ),
+):
+    """
+    Validate a path against artifact discipline with detailed feedback.
+    """
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
+    
+    try:
+        # Validate path against artifact discipline
+        is_valid = validate_artifact_path(path)
+        
+        if is_valid:
+            console.print(f"[green]Path IS valid according to artifact discipline.[/green]")
+            return 0
+        else:
+            # Get absolute path for better checking
+            project_root = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+            abs_path = os.path.abspath(path)
+            
+            # Provide more specific reasons why the path is invalid
+            console.print(f"[red]Path is NOT valid according to artifact discipline:[/red]")
+            
+            # Check if it's a system directory
+            if path.startswith('/tmp') or path.startswith('/var/tmp'):
+                console.print(f"[red]ERROR:[/red] Path is a system temporary directory. Use canonical artifact paths instead.")
+                console.print(f"  Use: get_canonical_artifact_path(\"tmp\", \"your_context\") for temporary files.")
+            
+            # Check if it's attempting path traversal
+            elif '..' in path:
+                console.print(f"[red]ERROR:[/red] Path contains parent directory references (..) which is not allowed.")
+                console.print(f"  Use absolute paths within the canonical artifact structure.")
+            
+            # Check if it's outside project directory
+            elif not path.startswith('/') and not abs_path.startswith(project_root):
+                console.print(f"[red]ERROR:[/red] Path is outside the project directory structure.")
+                
+            # Check if it's using a legacy pattern
+            elif any(pattern in path for pattern in ['analysis_results', 'vision_results']):
+                console.print(f"[red]ERROR:[/red] Path uses a legacy pattern that is not compatible with artifact discipline.")
+                console.print(f"  Replace legacy paths with canonical artifact paths.")
+            
+            # Check if it's in artifacts directory but not following canonical structure
+            elif path.startswith(ARTIFACTS_ROOT) and not any(f"/{t}/" in path for t in ARTIFACT_TYPES):
+                console.print(f"[red]ERROR:[/red] Path is in artifacts directory but doesn't follow canonical type structure.")
+                console.print(f"  Canonical paths must include a valid type: {', '.join(ARTIFACT_TYPES)}")
+            
+            # General guidance
+            console.print(f"\n[yellow]Valid paths must be within:[/yellow]")
+            console.print(f"1. {ARTIFACTS_ROOT} and follow canonical naming")
+            console.print(f"2. {project_root}/src, {project_root}/tools, {project_root}/tests")
+            console.print(f"3. Standard files in project root directory")
+            
+            console.print(f"\n[yellow]Example of valid canonical path:[/yellow]")
+            console.print(f"  {get_canonical_artifact_path('test', 'example_context')}")
+            
+            return 1
+    
+    except Exception as e:
+        console.print(f"[red]Failed to validate path:[/red] {str(e)}")
+        return 1
+
+@app.command("info")
+def info(
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Enable verbose output"
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q", help="Suppress all output except errors"
+    ),
+):
+    """
+    Show information about artifact discipline and project structure.
+    """
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
+    
+    try:
+        # Get project root directory
+        project_root = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+        
+        # Display project structure
+        console.print(f"\n[bold green]Project Structure:[/bold green]")
+        console.print(f"  ├── [green]src/[/green]      - Core Python modules and libraries")
+        console.print(f"  ├── [green]tools/[/green]    - Command-line tools and utilities")
+        console.print(f"  ├── [green]tests/[/green]    - Test scripts and validation")
+        console.print(f"  └── [green]artifacts/[/green] - Canonical output storage")
+        console.print(f"      ├── analysis/   - Analysis results")
+        console.print(f"      ├── vision/     - Vision model outputs")
+        console.print(f"      ├── test/       - Test outputs")
+        console.print(f"      ├── benchmark/  - Performance benchmarks")
+        console.print(f"      └── tmp/        - Temporary files (auto-cleaned)")
+        
+        # Warn about artifact discipline
+        console.print(f"\n[bold yellow]Artifact Discipline Warning:[/bold yellow]")
+        console.print("Remember that while artifact_guard.py provides protection via PathGuard and decorators,")
+        console.print("direct file operations may bypass this protection.")
+        console.print("")
+        console.print("For full artifact discipline, ensure all files are created within canonical directories")
+        console.print("obtained via [bold]get_canonical_artifact_path()[/bold].")
+        
+        console.print(f"\n[bold]Example:[/bold]")
+        console.print("  # Get a canonical artifact path")
+        console.print("  from src.artifact_guard import get_canonical_artifact_path, PathGuard")
+        console.print("  ")
+        console.print("  # Create canonical path")
+        console.print("  artifact_dir = get_canonical_artifact_path(\"test\", \"my_test_context\")")
+        console.print("  ")
+        console.print("  # Use PathGuard to enforce discipline")
+        console.print("  with PathGuard(artifact_dir):")
+        console.print("      with open(os.path.join(artifact_dir, \"output.txt\"), \"w\") as f:")
+        console.print("          f.write(\"Test output\")")
+        
+        # Print artifact types and root
+        console.print(f"\n[bold]Artifact types:[/bold] {', '.join(ARTIFACT_TYPES)}")
+        console.print(f"[bold]Artifacts root:[/bold] {ARTIFACTS_ROOT}")
+        
+        return 0
+    except Exception as e:
+        console.print(f"[red]Failed to display information:[/red] {str(e)}")
         return 1
 
 if __name__ == "__main__":
