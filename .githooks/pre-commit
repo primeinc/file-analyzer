@@ -1,64 +1,114 @@
 #!/bin/bash
-# pre-commit hook to enforce artifact discipline
+# Pre-commit hook to enforce artifact discipline and project structure
 
-# Set to prevent path traversal issues
-cd "$(git rev-parse --show-toplevel)" || exit 1
+# Exit on first error
+set -e
 
-# Run preflight check with appropriate flags for pre-commit
-# Allow legacy directories during transition but detect new script violations
-if ! ./preflight.sh --allow-legacy-dirs --no-tmp-clean; then
+# Determine repo root
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "Checking artifact discipline..."
+
+# 1. Run preflight check for artifact discipline
+if ! ./preflight.sh --no-tmp-clean; then
   echo "❌ Pre-commit hook failed: Artifact discipline violations detected."
   echo
   echo "🔍 Run './preflight.sh' to see details about the violations."
   echo "✅ Fix the issues and try committing again."
-  echo
-  echo "To bypass this check (NOT RECOMMENDED), use --no-verify:"
-  echo "    git commit --no-verify"
   exit 1
 fi
 
-# Check for paths in staged files that violate artifact discipline
-echo "Checking staged files for artifact path violations..."
+# 2. Run script conformity check on changed bash scripts
+CHANGED_SCRIPTS=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.sh$' || true)
+if [[ -n "$CHANGED_SCRIPTS" ]]; then
+  echo "Checking artifact guard sourcing in changed scripts..."
+  for script in $CHANGED_SCRIPTS; do
+    if [[ -f "$script" ]]; then
+      echo "Checking $script"
+      ./check_script_conformity.sh "$script" || {
+        echo "ERROR: $script does not conform to artifact discipline requirements."
+        echo "Please source artifact_guard.sh at the top of the script."
+        exit 1
+      }
+    fi
+  done
+fi
 
-# List of patterns to look for in staged files
+# 3. Check for legacy pattern usage in changed files
 LEGACY_PATTERNS=(
-  "mkdir -p.*_\$(date"
-  "output_dir=.*\$(date"
-  "OUTPUT_DIR=.*\$(date"
-  "analysis_results\/"
-  "test_output\/"
-  "fastvlm_test_results_"
+  "analysis_results"
+  "test_output"
+  "mkdir -p [^\"']*_[0-9]{8}_[0-9]{6}"
+  "fastvlm_test_results_[0-9]{8}_[0-9]{6}"
+  "\$(date +%Y%m%d_%H%M%S)"
   "test_data\/test_results"
 )
 
-# Check if any staged file contains a legacy pattern
-VIOLATIONS=0
-for file in $(git diff --cached --name-only); do
-  # Skip README and binary files
-  if [[ "$file" == *.md || "$file" == *.jpg || "$file" == *.png || "$file" == *.gif ]]; then
-    continue
-  fi
-  
-  # Skip the new artifact enforcement scripts themselves
-  if [[ "$file" == artifact_guard.sh || "$file" == preflight.sh || "$file" == cleanup.sh ]]; then
-    continue
-  fi
-  
+LEGACY_CHECK_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(sh|py|json|md)$' || true)
+if [[ -n "$LEGACY_CHECK_FILES" ]]; then
+  echo "Checking for legacy artifact patterns in changed files..."
+  VIOLATIONS=0
   for pattern in "${LEGACY_PATTERNS[@]}"; do
-    if git diff --cached -U0 "$file" | grep -q "$pattern"; then
-      echo "❌ $file contains legacy artifact pattern: $pattern"
-      ((VIOLATIONS++))
+    for file in $LEGACY_CHECK_FILES; do
+      # Skip documentation, configuration files, and test files
+      if [[ "$file" == "MIGRATION.md" || "$file" == "README.md" || "$file" == "ARTIFACTS.md" || 
+            "$file" == "preflight.sh" || "$file" =~ test_.*\.py || "$file" =~ tests/.*\.py ]]; then
+        continue
+      fi
+      
+      if grep -E "$pattern" "$file" > /dev/null 2>&1; then
+        echo "ERROR: File $file contains legacy pattern: $pattern"
+        ((VIOLATIONS++))
+      fi
+    done
+  done
+  
+  if [ $VIOLATIONS -gt 0 ]; then
+    echo "Please use canonical artifact paths from get_canonical_artifact_path."
+    exit 1
+  fi
+fi
+
+# 4. Check for correct project structure
+STRUCTURE_VIOLATIONS=0
+
+# Check if new Python files are in the correct location
+NEW_PY_FILES=$(git diff --cached --name-only --diff-filter=A | grep -E '\.py$' | grep -v "^src/" | grep -v "^tools/" | grep -v "^tests/" || true)
+if [[ -n "$NEW_PY_FILES" ]]; then
+  echo "ERROR: New Python files should be added to src/, tools/, or tests/ directories:"
+  echo "$NEW_PY_FILES"
+  ((STRUCTURE_VIOLATIONS++))
+fi
+
+# Check if new Bash scripts are in the correct location
+NEW_SH_FILES=$(git diff --cached --name-only --diff-filter=A | grep -E '\.sh$' | grep -v "^tools/" | grep -v "^tests/" || true)
+if [[ -n "$NEW_SH_FILES" ]]; then
+  # Allow specific root-level scripts
+  ALLOWED_ROOT_SCRIPTS=("artifact_guard.sh" "preflight.sh" "cleanup.sh" "migrate_artifacts.sh" "check_script_conformity.sh" "artifact_guard_py_adapter.sh")
+  
+  for script in $NEW_SH_FILES; do
+    script_name=$(basename "$script")
+    is_allowed=false
+    
+    for allowed in "${ALLOWED_ROOT_SCRIPTS[@]}"; do
+      if [[ "$script_name" == "$allowed" ]]; then
+        is_allowed=true
+        break
+      fi
+    done
+    
+    if [[ "$is_allowed" == "false" ]]; then
+      echo "ERROR: New Bash script $script should be added to tools/ or tests/ directory"
+      ((STRUCTURE_VIOLATIONS++))
     fi
   done
-done
+fi
 
-if [ $VIOLATIONS -gt 0 ]; then
-  echo
-  echo "❌ Pre-commit hook failed: $VIOLATIONS legacy artifact patterns found in staged files."
-  echo "🔧 Update scripts to use artifact_guard.sh and canonical paths."
-  echo "   See strict_example_test.sh for the correct pattern."
+if [ $STRUCTURE_VIOLATIONS -gt 0 ]; then
+  echo "Please follow the project structure guidelines in MIGRATION.md"
   exit 1
 fi
 
-echo "✅ Artifact discipline check passed."
+echo "✅ Artifact discipline and project structure check passed."
 exit 0

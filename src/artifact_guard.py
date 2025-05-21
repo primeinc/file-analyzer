@@ -1,9 +1,27 @@
 #!/usr/bin/env python3
 """
-artifact_guard.py - Python implementation of artifact path discipline
+artifact_guard.py - Canonical artifact path discipline enforcement
 
-This module enforces the use of canonical artifact paths in Python scripts,
+This module serves as the single source of truth for artifact path discipline,
 ensuring that all outputs follow the standardized directory structure.
+
+It provides:
+1. Path generation with canonical structure (get_canonical_artifact_path)
+2. Path validation against allowed patterns (validate_artifact_path)
+3. Runtime enforcement via context manager (PathGuard)
+4. CLI tools for artifact management (python -m src.artifact_guard)
+5. Path utilities for creating, moving, and managing artifacts
+
+Usage:
+    from src.artifact_guard import get_canonical_artifact_path, PathGuard
+    
+    # Create canonical artifact directory
+    artifact_dir = get_canonical_artifact_path("test", "my_test_context")
+    
+    # Use PathGuard to enforce discipline for file operations
+    with PathGuard(artifact_dir):
+        with open(os.path.join(artifact_dir, "output.txt"), "w") as f:
+            f.write("Test output")
 """
 
 import os
@@ -16,8 +34,11 @@ import tempfile
 import datetime
 import uuid
 import socket
+import argparse
+import glob
+import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Union, Tuple, Any, Callable
 
 # Known artifact types that match directory structure
 ARTIFACT_TYPES = ["analysis", "vision", "test", "benchmark", "tmp"]
@@ -174,23 +195,104 @@ def validate_artifact_path(path: str) -> bool:
     # For artifact discipline, we should NOT allow writing to system temp dirs
     # as these bypass our artifact structure
     
+    # Use more robust regex patterns for system directories
     # Special case for system directories that should NEVER be valid for artifact output
-    system_temp_dirs = ['/tmp/', tempfile.gettempdir()]
-    if any(abs_path.startswith(d) for d in system_temp_dirs):
+    system_temp_patterns = [
+        r'^/tmp(/|$)',
+        r'^/var/tmp(/|$)',
+        r'^/private/tmp(/|$)',
+        r'^/var/folders(/|$)'
+    ]
+    if any(re.match(pattern, abs_path) for pattern in system_temp_patterns):
         # We explicitly reject temp directories for artifacts
         return False
     
     # System directories that should be readable but not writable for artifacts
-    read_only_system_dirs = [
-        '/dev/', '/proc/', '/sys/', '/var/', '/etc/',
-        '/usr/', '/lib/', '/opt/', '/bin/'
+    system_dir_patterns = [
+        r'^/dev(/|$)', 
+        r'^/proc(/|$)', 
+        r'^/sys(/|$)', 
+        r'^/var(/|$)', 
+        r'^/etc(/|$)',
+        r'^/usr(/|$)', 
+        r'^/lib(/|$)', 
+        r'^/opt(/|$)', 
+        r'^/bin(/|$)',
+        r'^/sbin(/|$)',
+        r'^/Applications(/|$)',  # macOS applications
+        r'^/Library(/|$)',       # macOS system library
+        r'^/System(/|$)',        # macOS system
+        r'^/Windows(/|$)',       # Windows system
+        r'^/Program Files(/|$)', # Windows programs
+        r'^/Users/[^/]+/AppData(/|$)' # Windows user app data
     ]
-    if any(abs_path.startswith(d) for d in read_only_system_dirs):
+    if any(re.match(pattern, abs_path) for pattern in system_dir_patterns):
         # These directories are valid for the operating system but NOT for our artifacts
         return False
     
+    # Also check for paths that look like temporary directories
+    temp_path_patterns = [
+        r'(/|^)temp(/|$)',
+        r'(/|^)tmp(/|$)',
+        r'(/|^)temporary(/|$)'
+    ]
+    if any(re.search(pattern, abs_path.lower()) for pattern in temp_path_patterns):
+        # Also reject any directory that looks temporary but isn't in our canonical structure
+        if not abs_path.startswith(os.path.join(ARTIFACTS_ROOT, "tmp")):
+            return False
+    
     # Not a valid artifact path
     return False
+
+def enforce_path_discipline(func: Callable) -> Callable:
+    """
+    Decorator to enforce path discipline on functions that create or modify files.
+    
+    Args:
+        func: Function to decorate
+        
+    Returns:
+        Wrapped function that validates paths before execution
+        
+    Example:
+        @enforce_path_discipline
+        def write_data(output_file, data):
+            with open(output_file, 'w') as f:
+                f.write(data)
+    """
+    def wrapper(*args, **kwargs):
+        # Get the function signature
+        import inspect
+        sig = inspect.signature(func)
+        bound_args = sig.bind(*args, **kwargs)
+        
+        # Inspect parameter names and look for path-like parameters
+        for param_name, param_value in bound_args.arguments.items():
+            if isinstance(param_value, (str, Path)) and any(kw in param_name.lower() for kw in 
+                                                           ['path', 'file', 'dir', 'output', 'destination']):
+                if not validate_artifact_path(str(param_value)):
+                    # Get caller information for better error message
+                    caller_frame = sys._getframe(1)
+                    caller_info = f"{caller_frame.f_code.co_filename}:{caller_frame.f_lineno}"
+                    
+                    # Provide detailed error message
+                    raise ValueError(
+                        f"ERROR: Non-canonical artifact path detected: {param_value}\n"
+                        f"All artifact files must be created in {ARTIFACTS_ROOT}\n"
+                        f"Called from: {caller_info}\n"
+                        f"Hint: Use get_canonical_artifact_path() to generate valid artifact paths"
+                    )
+        
+        # Call the original function
+        return func(*args, **kwargs)
+    
+    # Update wrapper metadata
+    wrapper.__name__ = func.__name__
+    wrapper.__doc__ = func.__doc__
+    wrapper.__module__ = func.__module__
+    
+    return wrapper
+
 
 class PathGuard:
     """
@@ -201,6 +303,9 @@ class PathGuard:
             # All file operations within this block will be validated
             with open(os.path.join(artifact_dir, 'output.txt'), 'w') as f:
                 f.write("Safe output")
+                
+    This manager intercepts all calls to the built-in open() function and validates
+    paths to ensure they comply with artifact discipline.
     """
     def __init__(self, artifact_dir: str):
         self.artifact_dir = artifact_dir
@@ -243,28 +348,8 @@ class PathGuard:
         return self.original_open(file, mode, *args, **kwargs)
 
 # Function to shell out to the Bash implementation if needed
-def get_bash_canonical_path(type_name: str, context: str) -> str:
-    """
-    Get a canonical artifact path using the Bash implementation.
-    Useful for ensuring exact compatibility with the Bash version.
-    
-    Args:
-        type_name: Artifact type (analysis, vision, test, benchmark, tmp)
-        context: Description of the artifact context
-        
-    Returns:
-        Canonical path to the artifact directory from Bash
-        
-    Raises:
-        ValueError: If the bash command fails
-    """
-    bash_script = os.path.join(PROJECT_ROOT, "artifact_guard.sh")
-    try:
-        cmd = f'source "{bash_script}" && get_canonical_artifact_path {type_name} "{context}" && echo'
-        result = subprocess.check_output(['bash', '-c', cmd], universal_newlines=True).strip()
-        return result
-    except subprocess.SubprocessError as e:
-        raise ValueError(f"Failed to get canonical path from Bash: {e}")
+# REMOVED: Dependency on bash implementation
+# We no longer use the bash implementation - Python is now the single source of truth
 
 def print_warning():
     """Print a warning about artifact discipline."""
@@ -282,6 +367,234 @@ def print_warning():
     print("")
     print(f"Valid artifact types: {', '.join(ARTIFACT_TYPES)}")
 
+# Add safe file operation functions that respect artifact discipline
+
+def safe_copy(src: str, dst: str) -> str:
+    """
+    Copy a file with path discipline enforcement.
+    
+    Args:
+        src: Source file path
+        dst: Destination file path (must be in a canonical artifact location)
+        
+    Returns:
+        The destination path
+        
+    Raises:
+        ValueError: If the destination path violates artifact discipline
+    """
+    # Manually validate path here since the decorator sometimes misses validation
+    # when the parameter name doesn't match common path patterns
+    if not validate_artifact_path(str(dst)):
+        caller_frame = sys._getframe(1)
+        caller_info = f"{caller_frame.f_code.co_filename}:{caller_frame.f_lineno}"
+        raise ValueError(
+            f"ERROR: Non-canonical artifact path detected: {dst}\n"
+            f"All artifact files must be created in {ARTIFACTS_ROOT}\n"
+            f"Called from: {caller_info}\n"
+            f"Hint: Use get_canonical_artifact_path() to generate valid artifact paths"
+        )
+        
+    try:
+        shutil.copy2(src, dst)
+    except Exception as e:
+        raise IOError(f"Failed to copy {src} to {dst}: {str(e)}")
+    return dst
+
+@enforce_path_discipline
+def safe_move(src: str, dst: str) -> str:
+    """
+    Move a file with path discipline enforcement.
+    
+    Args:
+        src: Source file path
+        dst: Destination file path (must be in a canonical artifact location)
+        
+    Returns:
+        The destination path
+        
+    Raises:
+        ValueError: If the destination path violates artifact discipline
+    """
+    shutil.move(src, dst)
+    return dst
+
+@enforce_path_discipline
+def safe_mkdir(directory: str, mode: int = 0o777) -> str:
+    """
+    Create a directory with path discipline enforcement.
+    
+    Args:
+        directory: Directory path (must be in a canonical artifact location)
+        mode: Directory permissions (default: 0o777)
+        
+    Returns:
+        The directory path
+        
+    Raises:
+        ValueError: If the directory path violates artifact discipline
+    """
+    os.makedirs(directory, mode=mode, exist_ok=True)
+    return directory
+
+@enforce_path_discipline
+def safe_write(file_path: str, content: str, mode: str = 'w') -> str:
+    """
+    Write content to a file with path discipline enforcement.
+    
+    Args:
+        file_path: File path (must be in a canonical artifact location)
+        content: Content to write
+        mode: File open mode (default: 'w')
+        
+    Returns:
+        The file path
+        
+    Raises:
+        ValueError: If the file path violates artifact discipline
+    """
+    with open(file_path, mode) as f:
+        f.write(content)
+    return file_path
+
+def cleanup_artifacts(retention_days: int = 7, type_name: Optional[str] = None) -> int:
+    """
+    Clean up old artifacts based on retention policy.
+    
+    Args:
+        retention_days: Number of days to keep artifacts (default: 7)
+        type_name: Optional artifact type to clean up (if None, clean all types)
+        
+    Returns:
+        Number of artifacts cleaned up
+    """
+    import time
+    from datetime import datetime, timedelta
+    
+    # Calculate cutoff date
+    cutoff_date = datetime.now() - timedelta(days=retention_days)
+    cutoff_timestamp = cutoff_date.timestamp()
+    
+    # Get artifact types to clean up
+    types_to_clean = [type_name] if type_name else ARTIFACT_TYPES
+    
+    # Count artifacts cleaned up
+    cleaned_count = 0
+    
+    # Clean up each artifact type
+    for artifact_type in types_to_clean:
+        artifact_type_dir = os.path.join(ARTIFACTS_ROOT, artifact_type)
+        if not os.path.exists(artifact_type_dir):
+            continue
+            
+        # List all artifact directories of this type
+        for artifact_dir in os.listdir(artifact_type_dir):
+            artifact_path = os.path.join(artifact_type_dir, artifact_dir)
+            
+            # Skip if not a directory
+            if not os.path.isdir(artifact_path):
+                continue
+                
+            # Check manifest file for retention policy
+            manifest_path = os.path.join(artifact_path, 'manifest.json')
+            retention = retention_days  # Default retention
+            
+            if os.path.exists(manifest_path):
+                try:
+                    with open(manifest_path, 'r') as f:
+                        manifest = json.load(f)
+                        # Get retention days from manifest
+                        if 'retention_days' in manifest:
+                            retention = manifest['retention_days']
+                except (json.JSONDecodeError, IOError):
+                    # Use default retention if manifest is invalid
+                    pass
+                    
+            # Get artifact creation time
+            try:
+                created_time = os.path.getctime(artifact_path)
+            except OSError:
+                # Use directory modification time if creation time is not available
+                created_time = os.path.getmtime(artifact_path)
+                
+            # Check if artifact is older than retention period
+            if created_time < cutoff_timestamp:
+                try:
+                    # Remove the artifact directory
+                    shutil.rmtree(artifact_path)
+                    cleaned_count += 1
+                except (OSError, IOError) as e:
+                    print(f"Error cleaning up {artifact_path}: {str(e)}")
+                    
+    return cleaned_count
+
+def setup_artifact_structure() -> None:
+    """Create the artifact directory structure if it doesn't exist."""
+    # Create artifacts root directory
+    os.makedirs(ARTIFACTS_ROOT, exist_ok=True)
+    
+    # Create subdirectories for each artifact type
+    for artifact_type in ARTIFACT_TYPES:
+        os.makedirs(os.path.join(ARTIFACTS_ROOT, artifact_type), exist_ok=True)
+        
+    # Create artifacts.env file if it doesn't exist
+    env_file = os.path.join(PROJECT_ROOT, "artifacts.env")
+    if not os.path.exists(env_file):
+        with open(env_file, 'w') as f:
+            f.write(f"# Artifact configuration\n")
+            f.write(f"ARTIFACTS_ROOT={ARTIFACTS_ROOT}\n")
+            f.write(f"ARTIFACT_QUIET=1\n")
+
+def main() -> None:
+    """Command-line interface for artifact_guard.py"""
+    parser = argparse.ArgumentParser(description="Artifact path discipline management")
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    
+    # Create command
+    create_parser = subparsers.add_parser("create", help="Create a canonical artifact path")
+    create_parser.add_argument("type", choices=ARTIFACT_TYPES, help="Artifact type")
+    create_parser.add_argument("context", help="Artifact context description")
+    
+    # Validate command
+    validate_parser = subparsers.add_parser("validate", help="Validate a path against artifact discipline")
+    validate_parser.add_argument("path", help="Path to validate")
+    
+    # Cleanup command
+    cleanup_parser = subparsers.add_parser("cleanup", help="Clean up old artifacts")
+    cleanup_parser.add_argument("--days", type=int, default=7, help="Retention days (default: 7)")
+    cleanup_parser.add_argument("--type", choices=ARTIFACT_TYPES, help="Artifact type to clean up")
+    
+    # Setup command
+    setup_parser = subparsers.add_parser("setup", help="Set up artifact directory structure")
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    if args.command == "create":
+        # Create canonical artifact path
+        path = get_canonical_artifact_path(args.type, args.context)
+        print(path)
+    elif args.command == "validate":
+        # Validate path against artifact discipline
+        valid = validate_artifact_path(args.path)
+        print(f"Path {'IS' if valid else 'is NOT'} valid according to artifact discipline.")
+        sys.exit(0 if valid else 1)
+    elif args.command == "cleanup":
+        # Clean up old artifacts
+        count = cleanup_artifacts(args.days, args.type)
+        print(f"Cleaned up {count} artifact{'s' if count != 1 else ''}.")
+    elif args.command == "setup":
+        # Set up artifact directory structure
+        setup_artifact_structure()
+        print(f"Artifact directory structure set up at {ARTIFACTS_ROOT}")
+    else:
+        # Show help if no command specified
+        parser.print_help()
+
 # Print warning when the module is imported, only if environment variable is not set to quiet
 if os.environ.get("ARTIFACT_QUIET", "1") != "1":
     print_warning()
+
+# Execute main function if run as script
+if __name__ == "__main__":
+    main()

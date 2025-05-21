@@ -133,7 +133,8 @@ fi
 # Search for non-canonical artifact paths in scripts
 echo -e "\n${BOLD}Checking scripts for non-canonical artifact paths...${NC}"
 SCRIPT_FAILURES=0
-SCRIPT_FILES=$(find . -name "*.sh" -type f | grep -v "artifact_guard.sh" | grep -v "cleanup.sh" | grep -v "preflight.sh")
+# Exclude ml-fastvlm from script checks as it's a third-party library
+SCRIPT_FILES=$(find . -name "*.sh" -type f | grep -v "artifact_guard.sh" | grep -v "artifact_guard_py_adapter.sh" | grep -v "cleanup.sh" | grep -v "preflight.sh" | grep -v "./ml-fastvlm/")
 
 LEGACY_PATTERNS=(
   "analysis_results"
