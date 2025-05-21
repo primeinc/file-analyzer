@@ -30,7 +30,7 @@ fi
 
 # FUNCTION: get_canonical_artifact_path
 # Shell wrapper for Python implementation
-get_canonical_artifact_path() {
+function get_canonical_artifact_path() {
   if [[ $# -ne 2 ]]; then
     echo "ERROR: get_canonical_artifact_path requires 2 arguments: type and context" >&2
     return 1
@@ -45,7 +45,7 @@ get_canonical_artifact_path() {
 
 # FUNCTION: validate_artifact_path
 # Shell wrapper for Python implementation
-validate_artifact_path() {
+function validate_artifact_path() {
   if [[ $# -ne 1 ]]; then
     echo "ERROR: validate_artifact_path requires 1 argument: path" >&2
     return 1
