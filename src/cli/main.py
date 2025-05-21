@@ -23,10 +23,10 @@ app = typer.Typer(
     add_completion=True,
 )
 
-# Initialize console reference - actual instance will be created in main()
-console = None
+# Initialize a default console for use outside of the main CLI flow
+console = Console()
 
-def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Optional[str] = None, no_color: bool = False):
+def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Optional[str] = None, no_color: bool = False) -> Console:
     """
     Configure logging based on CLI options.
     
@@ -35,11 +35,12 @@ def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Opti
         json_logs: Output logs in JSON format
         log_file: Optional path to log file
         no_color: Disable colored output
+        
+    Returns:
+        Console: The configured console instance
     """
-    global console
-    
     # Create console with appropriate color settings
-    console = Console(color_system=None if no_color else "auto")
+    configured_console = Console(color_system=None if no_color else "auto")
     
     log_level = logging.DEBUG if verbose else logging.INFO
     
@@ -62,11 +63,16 @@ def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Opti
             level=log_level,
             format="%(message)s",
             datefmt="[%X]",
-            handlers=[RichHandler(console=console, rich_tracebacks=True)] 
+            handlers=[RichHandler(console=configured_console, rich_tracebacks=True)] 
         )
     
     logger = logging.getLogger("file-analyzer")
-    return logger
+    
+    # Update the global console reference for modules that access it directly
+    global console
+    console = configured_console
+    
+    return configured_console, logger
 
 def load_commands():
     """
@@ -158,9 +164,9 @@ def main(
         from importlib.metadata import version as get_version
         try:
             v = get_version("file-analyzer")
-            console.print(f"File Analyzer CLI v{v}")
+            typer.echo(f"File Analyzer CLI v{v}")
         except:
-            console.print("File Analyzer CLI (version unknown)")
+            typer.echo("File Analyzer CLI (version unknown)")
         raise typer.Exit()
     
     # Set up logging based on verbosity
@@ -172,7 +178,7 @@ def main(
         log_level = logging.INFO
         
     # Configure logging and console with color settings
-    logger = setup_logging(
+    configured_console, logger = setup_logging(
         verbose=verbose and not quiet,
         json_logs=log_json,
         log_file=log_file,
@@ -190,11 +196,7 @@ def main(
 @app.command()
 def version():
     """Show version information."""
-    global console
-    # Ensure console is initialized
-    if console is None:
-        console = Console()
-        
+    # Global console is already initialized at module level
     from importlib.metadata import version as get_version
     try:
         v = get_version("file-analyzer")

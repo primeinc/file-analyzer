@@ -13,7 +13,7 @@ import json
 import logging
 import platform
 from pathlib import Path
-from typing import Dict, Optional, Any, List
+from typing import Dict, Optional, Any, List, Tuple
 
 # Import model configuration
 from src.model_config import (
@@ -163,7 +163,7 @@ class Config:
     
     def download_model(self, model_type: str = DEFAULT_MODEL_TYPE, 
                       model_size: str = DEFAULT_MODEL_SIZE,
-                      force: bool = False) -> tuple[bool, str]:
+                      force: bool = False) -> Tuple[bool, str]:
         """
         Download model (wrapper for model_config.py).
         
