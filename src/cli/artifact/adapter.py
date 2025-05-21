@@ -27,6 +27,10 @@ def shell_command(command: str) -> str:
     """
     Generates a shell command to be sourced by bash scripts.
     
+    The implementation prioritizes performance by minimizing Python process spawning.
+    Instead of calling back to Python for every path validation, it implements
+    the validation logic directly in Bash for better performance in shell scripts.
+    
     Args:
         command: Command to generate shell for
         
@@ -45,6 +49,83 @@ def shell_command(command: str) -> str:
         return _generate_aliases()
     else:
         return f"echo 'Unknown command: {command}'"
+
+def _generate_validate_path_function() -> str:
+    """Generate a bash function to validate paths efficiently."""
+    return """
+# Function to validate paths without spawning a new Python process each time
+# Uses a list of allowed patterns and common validation rules
+validate_artifact_path() {
+  local path="$1"
+  
+  # Get absolute path if it's not already
+  if [[ ! "$path" = /* ]]; then
+    path="$(pwd)/$path"
+  fi
+  
+  # Check if path is in canonical artifact structure
+  if [[ "$path" == "$ARTIFACTS_ROOT"* ]]; then
+    # Path is in artifacts directory, check if it's in a valid subdirectory
+    local valid_subdirs=("analysis" "vision" "test" "benchmark" "json" "tmp")
+    local in_valid_subdir=false
+    
+    for subdir in "${valid_subdirs[@]}"; do
+      if [[ "$path" == "$ARTIFACTS_ROOT/$subdir"* ]]; then
+        in_valid_subdir=true
+        break
+      fi
+    done
+    
+    if [[ "$in_valid_subdir" == "true" ]]; then
+      return 0  # Valid canonical path
+    fi
+  fi
+  
+  # Check if path is in certain allowed directories
+  local project_root="$(dirname "$ARTIFACTS_ROOT")"
+  
+  # Allow src, tools, tests directories
+  if [[ "$path" == "$project_root/src"* ]] || 
+     [[ "$path" == "$project_root/tools"* ]] || 
+     [[ "$path" == "$project_root/tests"* ]]; then
+    return 0  # Valid path in allowed directories
+  fi
+  
+  # Allow some specific files in project root
+  if [[ "$path" == "$project_root/.gitignore" ]] || 
+     [[ "$path" == "$project_root/README.md" ]] || 
+     [[ "$path" == "$project_root/CLAUDE.md" ]] || 
+     [[ "$path" == "$project_root/pyproject.toml" ]] || 
+     [[ "$path" == "$project_root/artifacts.env" ]]; then
+    return 0  # Valid path for specific allowed files
+  fi
+  
+  # If we got here, path is not valid
+  return 1
+}
+
+validate_paths() {
+  local paths=("$@")
+  local invalid_paths=()
+  
+  for path in "${paths[@]}"; do
+    if ! validate_artifact_path "$path"; then
+      invalid_paths+=("$path")
+    fi
+  done
+  
+  if [[ ${#invalid_paths[@]} -gt 0 ]]; then
+    echo "ERROR: Non-canonical artifact path(s) detected:" >&2
+    for path in "${invalid_paths[@]}"; do
+      echo "  - $path" >&2
+    done
+    echo "All artifact paths must use canonical paths from get_canonical_artifact_path" >&2
+    return 1
+  fi
+  
+  return 0
+}
+"""
 
 def _generate_mkdir_guard() -> str:
     """Generate mkdir_guard function for bash."""
@@ -67,23 +148,10 @@ mkdir_guard() {
     esac
   done
   
-  # Validate each directory path
-  for dir in "${dirs[@]}"; do
-    # Get absolute path
-    local abs_path
-    if [[ "$dir" = /* ]]; then
-      abs_path="$dir"
-    else
-      abs_path="$(pwd)/$dir"
-    fi
-    
-    # Validate the path using Python
-    if ! python -m src.cli.artifact.adapter validate "$dir"; then
-      echo "ERROR: Non-canonical artifact path detected: $dir" >&2
-      echo "All artifact directories must be created using get_canonical_artifact_path" >&2
-      return 1
-    fi
-  done
+  # Validate all directory paths at once
+  if ! validate_paths "${dirs[@]}"; then
+    return 1
+  fi
   
   # If we get here, all paths are valid, execute the original command
   command mkdir "${options[@]}" "${dirs[@]}"
@@ -111,14 +179,10 @@ touch_guard() {
     esac
   done
   
-  # Validate each file path
-  for file in "${files[@]}"; do
-    if ! python -m src.cli.artifact.adapter validate "$file"; then
-      echo "ERROR: Non-canonical artifact path detected: $file" >&2
-      echo "All artifact files must be created in canonical paths" >&2
-      return 1
-    fi
-  done
+  # Validate all file paths at once
+  if ! validate_paths "${files[@]}"; then
+    return 1
+  fi
   
   # If we get here, all paths are valid, execute the original command
   command touch "${options[@]}" "${files[@]}"
@@ -166,8 +230,8 @@ cp_guard() {
     args=("${args[@]:0:${#args[@]}-1}")
   fi
   
-  # Validate target path
-  if ! python -m src.cli.artifact.adapter validate "$target"; then
+  # Validate target path using the shell function
+  if ! validate_artifact_path "$target"; then
     echo "ERROR: Non-canonical artifact path detected for copy target: $target" >&2
     echo "All artifact files must be created in canonical paths" >&2
     return 1
@@ -225,8 +289,8 @@ mv_guard() {
     args=("${args[@]:0:${#args[@]}-1}")
   fi
   
-  # Validate target path
-  if ! python -m src.cli.artifact.adapter validate "$target"; then
+  # Validate target path using the shell function
+  if ! validate_artifact_path "$target"; then
     echo "ERROR: Non-canonical artifact path detected for move target: $target" >&2
     echo "All artifact files must be moved to canonical paths" >&2
     return 1
@@ -281,7 +345,33 @@ get_artifact_path() {
   local type="$1"
   local name="$2"
   
-  python -m src.cli.artifact.adapter create "$type" "$name"
+  # Check if it's a standard type that we can handle directly in bash
+  local valid_types=("analysis" "vision" "test" "benchmark" "json" "tmp")
+  local found=false
+  
+  for valid_type in "${valid_types[@]}"; do
+    if [[ "$type" == "$valid_type" ]]; then
+      found=true
+      break
+    fi
+  done
+  
+  if [[ "$found" == "true" ]]; then
+    # Sanitize the name for use in paths
+    # Replace spaces and special characters with underscores
+    local safe_name=$(echo "$name" | tr ' ' '_' | tr -c '[:alnum:]_-' '_')
+    
+    # Add timestamp for uniqueness
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local path="$ARTIFACTS_ROOT/$type/${safe_name}_${timestamp}"
+    
+    # Create the directory
+    mkdir -p "$path"
+    echo "$path"
+  else
+    # Use the Python implementation for non-standard types or complex cases
+    python -m src.cli.artifact.adapter create "$type" "$name"
+  fi
 }
 
 # Clean temporary artifacts
@@ -293,7 +383,8 @@ clean_tmp_artifacts() {
 # Load path guards
 """)
         
-        # Add guard functions
+        # Add validation and guard functions
+        f.write(_generate_validate_path_function())
         f.write(_generate_mkdir_guard())
         f.write(_generate_touch_guard())
         f.write(_generate_cp_guard())
