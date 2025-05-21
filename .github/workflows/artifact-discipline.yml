@@ -1,0 +1,47 @@
+name: Artifact Discipline Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  check-artifact-discipline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up environment
+        run: |
+          chmod +x ./preflight.sh
+          chmod +x ./cleanup.sh
+          chmod +x ./artifact_guard.sh
+      
+      - name: Run preflight check with strict enforcement
+        run: |
+          # During transition, allow legacy directories but enforce script discipline
+          ./preflight.sh --allow-legacy-dirs
+      
+      - name: Verify artifact structure exists
+        run: |
+          # Ensure proper artifact directories exist
+          ls -la artifacts/
+          ls -la artifacts/test
+          ls -la artifacts/analysis
+          ls -la artifacts/vision
+          ls -la artifacts/benchmark
+          ls -la artifacts/tmp
+      
+      - name: Test script with path enforcement
+        run: |
+          # Run a test script to verify path enforcement works
+          chmod +x ./test_path_enforcement.sh
+          ./test_path_enforcement.sh
+      
+      - name: Verify no new non-canonical artifacts were created
+        run: |
+          # Check for artifact sprawl outside the canonical structure
+          ./cleanup.sh --check

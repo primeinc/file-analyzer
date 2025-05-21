@@ -1,0 +1,64 @@
+#!/bin/bash
+# pre-commit hook to enforce artifact discipline
+
+# Set to prevent path traversal issues
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# Run preflight check with appropriate flags for pre-commit
+# Allow legacy directories during transition but detect new script violations
+if ! ./preflight.sh --allow-legacy-dirs --no-tmp-clean; then
+  echo "❌ Pre-commit hook failed: Artifact discipline violations detected."
+  echo
+  echo "🔍 Run './preflight.sh' to see details about the violations."
+  echo "✅ Fix the issues and try committing again."
+  echo
+  echo "To bypass this check (NOT RECOMMENDED), use --no-verify:"
+  echo "    git commit --no-verify"
+  exit 1
+fi
+
+# Check for paths in staged files that violate artifact discipline
+echo "Checking staged files for artifact path violations..."
+
+# List of patterns to look for in staged files
+LEGACY_PATTERNS=(
+  "mkdir -p.*_\$(date"
+  "output_dir=.*\$(date"
+  "OUTPUT_DIR=.*\$(date"
+  "analysis_results\/"
+  "test_output\/"
+  "fastvlm_test_results_"
+  "test_data\/test_results"
+)
+
+# Check if any staged file contains a legacy pattern
+VIOLATIONS=0
+for file in $(git diff --cached --name-only); do
+  # Skip README and binary files
+  if [[ "$file" == *.md || "$file" == *.jpg || "$file" == *.png || "$file" == *.gif ]]; then
+    continue
+  fi
+  
+  # Skip the new artifact enforcement scripts themselves
+  if [[ "$file" == artifact_guard.sh || "$file" == preflight.sh || "$file" == cleanup.sh ]]; then
+    continue
+  fi
+  
+  for pattern in "${LEGACY_PATTERNS[@]}"; do
+    if git diff --cached -U0 "$file" | grep -q "$pattern"; then
+      echo "❌ $file contains legacy artifact pattern: $pattern"
+      ((VIOLATIONS++))
+    fi
+  done
+done
+
+if [ $VIOLATIONS -gt 0 ]; then
+  echo
+  echo "❌ Pre-commit hook failed: $VIOLATIONS legacy artifact patterns found in staged files."
+  echo "🔧 Update scripts to use artifact_guard.sh and canonical paths."
+  echo "   See strict_example_test.sh for the correct pattern."
+  exit 1
+fi
+
+echo "✅ Artifact discipline check passed."
+exit 0
