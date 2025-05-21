@@ -45,6 +45,7 @@ artifacts/
 ├── vision/    - Vision model outputs
 ├── test/      - Test results and validation
 ├── benchmark/ - Performance benchmarks
+├── json/      - JSON processing and validation results
 ├── tmp/       - Temporary files (auto-cleaned)
 ```
 
@@ -61,6 +62,9 @@ TEST_DIR=$(get_canonical_artifact_path test "descriptive_context")
 # Get a canonical artifact path for analysis results
 ANALYSIS_DIR=$(get_canonical_artifact_path analysis "meaningful_context")
 
+# Get a canonical artifact path for JSON processing results
+JSON_DIR=$(get_canonical_artifact_path json "json_validation")
+
 # Get a canonical artifact path for temporary files
 TMP_DIR=$(get_canonical_artifact_path tmp "temp_context")
 ```
@@ -75,7 +79,7 @@ artifacts/<type>/<context>_<git_hash>_<job_id>_<pid>_<timestamp>/
 
 Example:
 ```
-artifacts/test/path_enforcement_c0451da_local_will_22787_20250520_223409/
+artifacts/test/path_enforcement_c1aec05_local_will_22787_20250520_223409/
 ```
 
 **Note:** If the `context` ends with an underscore (`_`), a double underscore (`__`) is used between the `context` and the hash to avoid ambiguity.
@@ -83,7 +87,7 @@ artifacts/test/path_enforcement_c0451da_local_will_22787_20250520_223409/
 Examples:
 ```
 # Standard case
-artifacts/test/path_enforcement_c0451da_local_will_22787_20250520_223409/
+artifacts/test/path_enforcement_c1aec05_local_will_22787_20250520_223409/
 
 # Special case where context ends with an underscore
 artifacts/test/path_enforcement__c0451da_local_will_22787_20250520_223409/
@@ -97,7 +101,7 @@ Each canonical artifact directory automatically includes a manifest.json file:
 {
   "created": "2025-05-20T22:34:09Z",
   "owner": "will",
-  "git_commit": "c0451da",
+  "git_commit": "c1aec05",
   "ci_job": "local_will",
   "pid": "22787",
   "retention_days": 7,

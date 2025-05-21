@@ -363,7 +363,7 @@ The project includes a comprehensive test suite:
 
 ```bash
 # Run the automated test suite
-cd tests && ./test_fastvlm.sh
+./tests/test_fastvlm.sh
 
 # Test vision analysis capabilities with JSON validation
 ./tests/test_vision_integrations.py

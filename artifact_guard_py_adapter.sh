@@ -23,13 +23,46 @@ if [[ -z "${ARTIFACTS_ROOT:-}" ]]; then
     source "$SCRIPT_DIR/artifacts.env"
   else
     # Run Python setup and create artifacts.env
-    python "$SCRIPT_DIR/src/artifact_guard_cli.py" setup > /dev/null
+    python3 "$SCRIPT_DIR/src/artifact_guard_cli.py" setup > /dev/null
     source "$SCRIPT_DIR/artifacts.env"
   fi
 fi
 
 # FUNCTION: get_canonical_artifact_path
 # Shell wrapper for Python implementation
+# Create a fifo pipe for more efficient communication with Python
+PYTHON_PIPE="/tmp/artifact_guard_py_pipe_$$"
+PYTHON_PROCESS_PID=""
+
+# Function to initialize the Python process for batched commands
+# Only called when needed to avoid unnecessary process creation
+function _init_python_process() {
+  # If we already have a running Python process, do nothing
+  if [[ -n "$PYTHON_PROCESS_PID" && -d "/proc/$PYTHON_PROCESS_PID" ]]; then
+    return 0
+  fi
+  
+  # Create a fifo pipe for communication
+  rm -f "$PYTHON_PIPE"
+  mkfifo "$PYTHON_PIPE"
+  
+  # Start Python in the background, reading from the pipe
+  python3 "$SCRIPT_DIR/src/artifact_guard_cli.py" batch < "$PYTHON_PIPE" &
+  PYTHON_PROCESS_PID=$!
+  
+  # Register cleanup on exit
+  trap "_cleanup_python_process" EXIT
+}
+
+# Function to clean up Python process and fifo pipe
+function _cleanup_python_process() {
+  if [[ -n "$PYTHON_PROCESS_PID" ]]; then
+    kill $PYTHON_PROCESS_PID 2>/dev/null || true
+    PYTHON_PROCESS_PID=""
+  fi
+  rm -f "$PYTHON_PIPE" 2>/dev/null || true
+}
+
 function get_canonical_artifact_path() {
   if [[ $# -ne 2 ]]; then
     echo "ERROR: get_canonical_artifact_path requires 2 arguments: type and context" >&2
@@ -39,8 +72,15 @@ function get_canonical_artifact_path() {
   local type="$1"
   local context="$2"
   
-  # Call Python implementation
-  python "$SCRIPT_DIR/src/artifact_guard_cli.py" create "$type" "$context"
+  # Use direct call for simplicity until batch mode is needed
+  # For this simple case, the overhead of starting a new Python process
+  # is likely less than the complexity of maintaining a long-running process
+  python3 "$SCRIPT_DIR/src/artifact_guard_cli.py" create "$type" "$context"
+  
+  # NOTE: Batch mode implementation commented out for now as it would require
+  # changes to the Python implementation to support a batch CLI mode
+  # _init_python_process
+  # echo "create $type $context" > "$PYTHON_PIPE"
 }
 
 # FUNCTION: validate_artifact_path
@@ -54,7 +94,7 @@ function validate_artifact_path() {
   local path="$1"
   
   # Call Python implementation (capture return code)
-  if python "$SCRIPT_DIR/src/artifact_guard_cli.py" validate "$path" > /dev/null; then
+  if python3 "$SCRIPT_DIR/src/artifact_guard_cli.py" validate "$path" > /dev/null; then
     return 0  # Valid path (success)
   else
     return 1  # Invalid path (failure)
@@ -192,16 +232,39 @@ cp_guard() {
   # Extract all arguments
   local args=()
   local target=""
+  local has_t_option=false
+  local t_target=""
   
-  # Process arguments
+  # Process arguments - handle special cases like -t option
+  local i=0
   while [[ $# -gt 0 ]]; do
-    args+=("$1")
-    shift
+    # Check for -t option which specifies target directory before source files
+    if [[ "$1" == "-t" ]]; then
+      has_t_option=true
+      args+=("$1")
+      shift
+      # The next argument is the target directory
+      if [[ $# -gt 0 ]]; then
+        t_target="$1"
+        args+=("$1")
+        shift
+      fi
+    else
+      args+=("$1")
+      shift
+    fi
   done
   
-  # The last argument is the target
-  target="${args[${#args[@]}-1]}"
-  unset "args[${#args[@]}-1]"
+  # Determine the target path based on options
+  if [[ "$has_t_option" == "true" ]]; then
+    # Target is specified with -t option
+    target="$t_target"
+  else
+    # Standard case - last argument is the target
+    target="${args[${#args[@]}-1]}"
+    # Use array slicing instead of unset to avoid sparse arrays
+    args=("${args[@]:0:${#args[@]}-1}")
+  fi
   
   # Validate target path
   if ! validate_artifact_path "$target"; then
@@ -211,7 +274,13 @@ cp_guard() {
   fi
   
   # If we get here, the target path is valid, execute the original command
-  command cp "${args[@]}" "$target"
+  if [[ "$has_t_option" == "true" ]]; then
+    # Already have all arguments in place with the target
+    command cp "${args[@]}"
+  else
+    # Standard form: command cp sources target
+    command cp "${args[@]}" "$target"
+  fi
 }
 
 # FUNCTION: mv_guard
@@ -220,16 +289,39 @@ mv_guard() {
   # Extract all arguments
   local args=()
   local target=""
+  local has_t_option=false
+  local t_target=""
   
-  # Process arguments
+  # Process arguments - handle special cases like -t option
+  local i=0
   while [[ $# -gt 0 ]]; do
-    args+=("$1")
-    shift
+    # Check for -t option which specifies target directory before source files
+    if [[ "$1" == "-t" ]]; then
+      has_t_option=true
+      args+=("$1")
+      shift
+      # The next argument is the target directory
+      if [[ $# -gt 0 ]]; then
+        t_target="$1"
+        args+=("$1")
+        shift
+      fi
+    else
+      args+=("$1")
+      shift
+    fi
   done
   
-  # The last argument is the target
-  target="${args[${#args[@]}-1]}"
-  unset "args[${#args[@]}-1]"
+  # Determine the target path based on options
+  if [[ "$has_t_option" == "true" ]]; then
+    # Target is specified with -t option
+    target="$t_target"
+  else
+    # Standard case - last argument is the target
+    target="${args[${#args[@]}-1]}"
+    # Use array slicing instead of unset to avoid sparse arrays
+    args=("${args[@]:0:${#args[@]}-1}")
+  fi
   
   # Validate target path
   if ! validate_artifact_path "$target"; then
@@ -239,7 +331,13 @@ mv_guard() {
   fi
   
   # If we get here, the target path is valid, execute the original command
-  command mv "${args[@]}" "$target"
+  if [[ "$has_t_option" == "true" ]]; then
+    # Already have all arguments in place with the target
+    command mv "${args[@]}"
+  else
+    # Standard form: command mv sources target
+    command mv "${args[@]}" "$target"
+  fi
 }
 
 # Register the overridden commands
@@ -250,7 +348,7 @@ alias mv=mv_guard
 
 # Show warnings and info only if not in quiet mode
 if [[ "$ARTIFACT_QUIET" != "1" ]]; then
-  python "$SCRIPT_DIR/src/artifact_guard_cli.py" info
+  python3 "$SCRIPT_DIR/src/artifact_guard_cli.py" info
 fi
 
 # Echo success on load

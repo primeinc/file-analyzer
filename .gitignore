@@ -81,7 +81,8 @@ github_api_guide.md
 pr_review_responses.md
 
 # User-level model storage (local cache)
-~/.local/share/fastvlm/
+# Note: Users should add the following path to their global gitignore
+# ~/.local/share/fastvlm/
 .fastvlm/
 
 # External libraries - don't ignore libs directory, only model files

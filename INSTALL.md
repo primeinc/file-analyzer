@@ -57,8 +57,17 @@ First, install [Chocolatey](https://chocolatey.org/install), then:
 choco install exiftool tesseract ripgrep clamav
 
 # For tools not available in Chocolatey:
-# 1. rdfind: Use Windows Subsystem for Linux (WSL)
-# 2. binwalk: Use Windows Subsystem for Linux (WSL)
+# 1. rdfind: Available through Windows Subsystem for Linux (WSL) or native port
+#    - WSL method: Install Ubuntu via Microsoft Store, then `sudo apt install rdfind`
+#    - Native Windows version: Download from https://github.com/pauldreik/rdfind/releases
+#      and add to your PATH
+#
+# 2. binwalk: Available through Windows Subsystem for Linux or native installation
+#    - WSL method: Install Ubuntu via Microsoft Store, then `sudo apt install binwalk`
+#    - Native Windows method: 
+#      - Clone repository: `git clone https://github.com/ReFirmLabs/binwalk.git`
+#      - Install: `cd binwalk && python setup.py install`
+#      - Requires Python and dependencies from https://github.com/ReFirmLabs/binwalk/blob/master/INSTALL.md
 ```
 
 ## Verifying Installation

@@ -138,18 +138,28 @@ def _create_artifact_manifest(artifact_dir: str, artifact_type: str, context: st
     # This is more resilient to changes in the call stack
     caller = "unknown"
     try:
-        # Start with a depth of 2 to skip immediate callers
-        for depth in range(2, 6):  # Check a few frames up the stack
-            try:
-                frame = sys._getframe(depth)
-                filename = frame.f_code.co_filename
-                # Skip frames from this module
-                if not filename.endswith("artifact_guard.py"):
-                    caller = filename
+        # More robust approach using traceback module
+        import traceback
+        stack = traceback.extract_stack()
+        
+        # Filter out frames from this module and built-ins
+        external_frames = [
+            frame for frame in stack 
+            if not frame.filename.endswith(("artifact_guard.py", "pathlib.py", "<frozen importlib", "__init__.py"))
+            and not frame.filename.startswith("<")
+        ]
+        
+        # Get the most relevant caller (first external frame)
+        if external_frames:
+            # Use the most appropriate caller from the stack
+            caller = external_frames[0].filename
+            
+            # If we have multiple external frames, try to find a more specific one
+            # by looking for test or script files that might be the actual entry point
+            for frame in external_frames:
+                if any(keyword in frame.filename for keyword in ["test_", "_test", "script", "tools/"]):
+                    caller = frame.filename
                     break
-            except ValueError:
-                # Reached end of call stack
-                break
     except Exception:
         # Fall back to a safe value on any error
         pass
@@ -287,8 +297,17 @@ def enforce_path_discipline(func: Callable) -> Callable:
         
         # Inspect parameter names and look for path-like parameters
         for param_name, param_value in bound_args.arguments.items():
-            if isinstance(param_value, (str, Path)) and any(kw in param_name.lower() for kw in 
-                                                           ['path', 'file', 'dir', 'output', 'destination']):
+            # Enhanced detection of path parameters - more comprehensive list of keywords
+            # This fixes unreliability issues with the previous implementation
+            if isinstance(param_value, (str, Path)) and (
+                any(kw in param_name.lower() for kw in [
+                    'path', 'file', 'dir', 'directory', 'folder', 'output', 'destination',
+                    'target', 'location', 'artifact', 'save', 'write', 'out', 'result'
+                ]) or (
+                    # Also check if value looks like a path
+                    isinstance(param_value, str) and ('/' in param_value or '\\' in param_value)
+                )
+            ):
                 if not validate_artifact_path(str(param_value)):
                     # Get caller information for better error message
                     caller_frame = sys._getframe(1)
@@ -402,8 +421,9 @@ def safe_copy(src: str, dst: str) -> str:
     Raises:
         ValueError: If the destination path violates artifact discipline
     """
-    # Manually validate path here since the decorator sometimes misses validation
-    # when the parameter name doesn't match common path patterns
+    # Manual validation is kept for backwards compatibility
+    # The enhanced @enforce_path_discipline decorator is now more reliable
+    # but we maintain this direct validation for extra security
     if not validate_artifact_path(str(dst)):
         caller_frame = sys._getframe(1)
         caller_info = f"{caller_frame.f_code.co_filename}:{caller_frame.f_lineno}"

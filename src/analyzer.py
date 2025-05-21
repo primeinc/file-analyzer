@@ -213,13 +213,53 @@ class FileAnalyzer:
             # Try to parse JSON output
             try:
                 # ExifTool might return warnings before the JSON data
-                # Try to find the start of the JSON data (opening bracket)
-                json_start = output.find('[')
-                if json_start >= 0:
-                    json_data = output[json_start:]
-                    metadata = json.loads(json_data)
-                else:
-                    raise json.JSONDecodeError("No JSON start marker found", output, 0)
+                # First try direct parsing
+                try:
+                    metadata = json.loads(output)
+                except json.JSONDecodeError:
+                    # If direct parsing fails, try to find and extract valid JSON
+                    # Look for various possible JSON starts (array or object)
+                    for start_char, end_char in [('{', '}'), ('[', ']')]:
+                        json_start = output.find(start_char)
+                        if json_start >= 0:
+                            # Found potential JSON start, now find matching end
+                            json_data = output[json_start:]
+                            # Count opening/closing brackets to handle nested structures
+                            depth = 0
+                            end_pos = -1
+                            in_string = False
+                            escape_next = False
+                            
+                            for i, char in enumerate(json_data):
+                                if in_string:
+                                    if escape_next:
+                                        escape_next = False
+                                    elif char == '\\':
+                                        escape_next = True
+                                    elif char == '"':
+                                        in_string = False
+                                elif char == '"':
+                                    in_string = True
+                                elif char == start_char:
+                                    depth += 1
+                                elif char == end_char:
+                                    depth -= 1
+                                    if depth == 0:
+                                        end_pos = i + 1
+                                        break
+                            
+                            if end_pos > 0:
+                                # Found valid JSON structure
+                                json_data = json_data[:end_pos]
+                                try:
+                                    metadata = json.loads(json_data)
+                                    break  # Successfully parsed JSON
+                                except json.JSONDecodeError:
+                                    continue  # Try next pattern
+                    
+                    # If all attempts failed, raise exception
+                    if 'metadata' not in locals():
+                        raise json.JSONDecodeError("No valid JSON structure found", output, 0)
             except json.JSONDecodeError as e:
                 # If full parsing fails, try to get partial output
                 logging.error(f"JSON decode error: {str(e)}")
@@ -771,7 +811,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="File Analysis System")
     
     # Required arguments
-    parser.add_argument("path", help="Path to analyze (file or directory)")
+    parser.add_argument("path", nargs="?", help="Path to analyze (file or directory)", 
+                      default=".")
     
     # Analysis options
     parser.add_argument("-a", "--all", action="store_true", help="Run all analyses")
@@ -792,6 +833,10 @@ def parse_args():
     # Output options
     parser.add_argument("-r", "--results", metavar="DIR", help="Output directory")
     
+    # Verification option
+    parser.add_argument("--verify", action="store_true", 
+                      help="Verify installation and dependencies")
+    
     # Vision options
     parser.add_argument("--vision-model", choices=["fastvlm", "bakllava", "qwen2vl"], 
                       default="fastvlm", help="Vision model to use")
@@ -800,9 +845,81 @@ def parse_args():
     
     return parser.parse_args()
 
+def verify_installation():
+    """Verify the installation and dependencies."""
+    print("Verifying file-analyzer installation...")
+    
+    # Create a dictionary to track verification results
+    verification = {
+        "system": {},
+        "core_dependencies": {},
+        "external_tools": {},
+        "vision_models": {}
+    }
+    
+    # System information
+    import platform
+    verification["system"]["os"] = platform.system()
+    verification["system"]["version"] = platform.version()
+    verification["system"]["python"] = platform.python_version()
+    
+    # Check core dependencies
+    try:
+        import PIL
+        verification["core_dependencies"]["pillow"] = str(PIL.__version__)
+    except ImportError:
+        verification["core_dependencies"]["pillow"] = "Not installed"
+    
+    # Check external tools
+    tools = ["exiftool", "tesseract", "clamscan", "rdfind", "rg", "binwalk"]
+    for tool in tools:
+        try:
+            result = subprocess.run(["which", tool], capture_output=True, text=True)
+            if result.returncode == 0:
+                verification["external_tools"][tool] = "Installed: " + result.stdout.strip()
+            else:
+                verification["external_tools"][tool] = "Not found"
+        except Exception:
+            verification["external_tools"][tool] = "Error checking"
+    
+    # Check vision models
+    try:
+        # Import without initialization to avoid loading models
+        from src.model_manager import create_manager
+        manager = create_manager()
+        for model_name in manager.adapters:
+            verification["vision_models"][model_name] = "Available"
+    except Exception as e:
+        verification["vision_models"]["error"] = str(e)
+    
+    # Print verification results
+    print("\nSystem Information:")
+    for key, value in verification["system"].items():
+        print(f"  {key}: {value}")
+    
+    print("\nCore Dependencies:")
+    for key, value in verification["core_dependencies"].items():
+        print(f"  {key}: {value}")
+    
+    print("\nExternal Tools:")
+    for key, value in verification["external_tools"].items():
+        print(f"  {key}: {value}")
+    
+    print("\nVision Models:")
+    for key, value in verification["vision_models"].items():
+        print(f"  {key}: {value}")
+    
+    print("\nVerification complete.")
+    return verification
+
 def main():
     """Entry point for the file analyzer."""
     args = parse_args()
+    
+    # Handle verification mode
+    if args.verify:
+        verify_installation()
+        return 0
     
     # Create options dictionary from arguments
     options = {

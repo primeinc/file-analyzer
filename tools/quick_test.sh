@@ -22,7 +22,7 @@ echo -e "${BLUE}Results will be saved to: ${OUTPUT_DIR}${NC}"
 
 # Run basic environment check
 echo -e "${BLUE}Checking environment...${NC}"
-python -c "import fastvlm_test; checker = fastvlm_test.FastVLMAnalyzer(); issues = fastvlm_test.ERROR_HANDLER_AVAILABLE and fastvlm_test.FastVLMErrorHandler.check_environment() or []; print('Environment OK' if not issues else 'Environment issues found: ' + str(len(issues)))" > "$OUTPUT_DIR/environment_check.txt"
+python -c "import sys; sys.path.append('../src'); import fastvlm_analyzer, fastvlm_errors; checker = fastvlm_analyzer.FastVLMAnalyzer(); issues = fastvlm_errors.ERROR_HANDLER_AVAILABLE and fastvlm_errors.FastVLMErrorHandler.check_environment() or []; print('Environment OK' if not issues else 'Environment issues found: ' + str(len(issues)))" > "$OUTPUT_DIR/environment_check.txt"
 
 # Find available models
 echo -e "${BLUE}Looking for model files...${NC}"
