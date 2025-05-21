@@ -93,7 +93,15 @@ mkdir_guard() {
     
     # For -p option with relative paths, we need special handling
     # but must still validate paths in artifacts directory
-    if [[ "$options" == *"-p"* ]] && [[ ! "$dir" == /* ]]; then
+    local has_p_flag=false
+    for opt in "${options[@]}"; do
+      if [[ "$opt" == "-p" ]]; then
+        has_p_flag=true
+        break
+      fi
+    done
+    
+    if [[ "$has_p_flag" == true ]] && [[ ! "$dir" == /* ]]; then
       # Only allow relative paths within current directory that don't try
       # to escape to sensitive locations using ../
       if [[ "$dir" == *"../"* ]] || [[ "$abs_path" == *"/tmp"* ]] || [[ "$abs_path" == *"/var/tmp"* ]]; then
