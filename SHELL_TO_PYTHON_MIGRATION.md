@@ -13,7 +13,7 @@ This document outlines the plan for migrating shell scripts to Python CLI comman
 | tools/setup_fastvlm.sh  | ✅ Removed   | src/download_models.py                    |
 | tools/vision_test.sh    | ✅ Removed   | src/cli/analyze/main.py (vision command)  |
 | tools/direct_fastvlm_test.py | ✅ Removed | src/cli/analyze/main.py (vision command) |
-| cleanup.sh              | 🔄 In Progress | src/cli/artifact/main.py                |
+| cleanup.sh              | ✅ Removed   | src/cli/artifact/main.py                |
 | artifact_guard_py_adapter.sh | ⏳ Planned | src/artifact_guard.py                  |
 | check_all_scripts.sh    | ⏳ Planned | TBD                                         |
 | check_script_conformity.sh | ⏳ Planned | TBD                                      |
@@ -28,7 +28,7 @@ The scripts in the `tools/` directory that were direct wrappers around analyzer 
 
 ### Phase 2: Core Infrastructure Scripts (In Progress)
 
-#### cleanup.sh (In Progress)
+#### cleanup.sh (Completed)
 - Implementation: `src/cli/artifact/main.py`
 - CLI Commands:
   - `fa artifact setup` - Set up the artifact directory structure
@@ -40,10 +40,11 @@ The scripts in the `tools/` directory that were direct wrappers around analyzer 
   - `fa artifact env-file` - Generate artifacts.env file for sourcing in shell scripts
   - `fa artifact path TYPE NAME` - Get a canonical path in the artifact directory
 
-#### Migration Plan
-1. Add an explicit deprecation notice to cleanup.sh pointing to the new Python CLI commands
-2. Update documentation to reference new commands
-3. After a transition period, remove cleanup.sh
+#### Migration Status
+✅ Full Python implementation
+✅ Added to entry points in pyproject.toml
+✅ Added to CLI loader in src/cli/main.py
+✅ Removed original shell script
 
 ### Phase 3: Artifact Guard Migration (Planned)
 

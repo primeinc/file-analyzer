@@ -48,15 +48,11 @@ NC='\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARTIFACTS_ROOT="$SCRIPT_DIR/artifacts"
-CLEANUP_SCRIPT="$SCRIPT_DIR/cleanup.sh"
 ARTIFACT_GUARD_PYTHON="$SCRIPT_DIR/src/artifact_guard.py"
 ARTIFACT_GUARD_ADAPTER="$SCRIPT_DIR/artifact_guard_py_adapter.sh"
 
-# Check if required scripts exist
-if [ ! -f "$CLEANUP_SCRIPT" ]; then
-  echo -e "${RED}Error: cleanup.sh not found at $CLEANUP_SCRIPT${NC}" >&2
-  exit 1
-fi
+# Set path for Python scripts
+export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
 
 # Use the Python implementation or adapter - the original artifact_guard.sh is deprecated
 if [ ! -f "$ARTIFACT_GUARD_PYTHON" ]; then
@@ -72,14 +68,13 @@ fi
 # Ensure artifact directory structure exists
 if [ ! -d "$ARTIFACTS_ROOT" ]; then
   echo -e "${YELLOW}Creating artifact directory structure...${NC}"
-  $CLEANUP_SCRIPT --setup
+  python -m src.cli.artifact.main setup
 fi
 
 # Always clean the tmp directory for a fresh start
 if [ "$CLEAN_TMP" = true ]; then
   echo -e "${YELLOW}Cleaning temporary artifact directory...${NC}"
-  rm -rf "$ARTIFACTS_ROOT/tmp"/*
-  mkdir -p "$ARTIFACTS_ROOT/tmp"
+  python -m src.cli.artifact.main clean-tmp
 fi
 
 # Search for scripts without artifact_guard_py_adapter.sh sourcing
@@ -92,7 +87,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR" && pwd)"
 
 # Run find from project root explicitly
 # Exclude libs/ directory and ml-fastvlm files from script checks as they contain third-party libraries
-SCRIPT_FILES=$(cd "$PROJECT_ROOT" && find . -name "*.sh" -type f | grep -v "artifact_guard.sh" | grep -v "artifact_guard_py_adapter.sh" | grep -v "cleanup.sh" | grep -v "preflight.sh" | grep -v "/libs/" | grep -v "ml-fastvlm")
+SCRIPT_FILES=$(cd "$PROJECT_ROOT" && find . -name "*.sh" -type f | grep -v "artifact_guard.sh" | grep -v "artifact_guard_py_adapter.sh" | grep -v "preflight.sh" | grep -v "/libs/" | grep -v "ml-fastvlm")
 
 for script in $SCRIPT_FILES; do
   EXEMPT=false
@@ -134,9 +129,9 @@ else
   fi
 fi
 
-# Check for artifact sprawl using cleanup.sh
+# Check for artifact sprawl using Python CLI
 echo -e "\n${BOLD}Checking for artifact sprawl...${NC}"
-$CLEANUP_SCRIPT --check
+python -m src.cli.artifact.main check
 
 # If enforcing and sprawl detected, exit with error
 if [ $? -ne 0 ] && [ "$ENFORCE" = true ]; then
@@ -147,7 +142,7 @@ fi
 # Check presence of artifact.env and make sure all required scripts update it
 if [ ! -f "$SCRIPT_DIR/artifacts.env" ]; then
   echo -e "${YELLOW}Generating artifacts.env file...${NC}"
-  $CLEANUP_SCRIPT --generate-env
+  python -m src.cli.artifact.main env-file
 else
   echo -e "${GREEN}✓ artifacts.env file exists${NC}"
 fi
@@ -160,7 +155,7 @@ echo -e "2. Use ${YELLOW}get_canonical_artifact_path <type> \"context\"${NC} for
 echo -e "3. Write all files in canonical locations with manifests"
 echo -e "4. NOT bypass the artifact guard with manual paths"
 echo ""
-echo -e "Run ${BOLD}./cleanup.sh --help${NC} for more options."
+echo -e "Run ${BOLD}python -m src.cli.artifact.main --help${NC} for more options."
 echo ""
 
 exit 0
