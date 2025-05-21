@@ -18,7 +18,6 @@ jobs:
         run: |
           chmod +x ./preflight.sh
           chmod +x ./cleanup.sh
-          chmod +x ./artifact_guard.sh
           chmod +x ./artifact_guard_py_adapter.sh
       
       - name: Run preflight check with strict enforcement

@@ -4,7 +4,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD_SCRIPT="artifact_guard_py_adapter.sh"
-ALLOWED_UNSOURCED=("$GUARD_SCRIPT" "preflight.sh" "cleanup.sh" "check_script_conformity.sh" "artifacts.env" "artifact_guard_py_adapter.sh")
+ALLOWED_UNSOURCED=("$GUARD_SCRIPT" "preflight.sh" "cleanup.sh" "check_script_conformity.sh" "artifacts.env")
 
 # Color definitions
 RED='\033[0;31m'
@@ -27,7 +27,8 @@ check_script() {
   done
   
   # Look for any sourcing of artifact_guard.sh or artifact_guard_py_adapter.sh in the script
-  if grep -q "source.*artifact_guard.sh" "$script" || grep -q "\. .*artifact_guard.sh" "$script" || grep -q "source.*artifact_guard_py_adapter.sh" "$script"; then
+  if grep -q "source.*artifact_guard.sh" "$script" || grep -q "\. .*artifact_guard.sh" "$script" || 
+     grep -q "source.*artifact_guard_py_adapter.sh" "$script" || grep -q "\. .*artifact_guard_py_adapter.sh" "$script"; then
     echo -e "${GREEN}${BOLD}PASS${NC}: $script"
     return 0
   else
