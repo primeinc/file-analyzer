@@ -10,8 +10,9 @@ import logging
 import sys
 import os
 import platform
+import importlib
 from importlib.metadata import entry_points
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 
 import typer
 from rich.console import Console
@@ -105,97 +106,83 @@ def load_commands():
     """
     logger = logging.getLogger("file-analyzer")
     
+    # Define command mapping: name -> (module_path, object_name, is_module)
+    command_mapping = {
+        'analyze': ('src.cli.analyze.main', 'app', False),
+        'test': ('src.cli.test.hook', 'app', False),
+        'validate': ('src.cli.validate.main', 'app', False),
+        'artifact': ('src.cli.artifact.main', 'app', False),
+        'preflight': ('src.cli.artifact.preflight', 'app', False),
+        'adapter': ('src.cli.artifact.adapter', None, True),
+        'install': ('src.cli.install.main', 'app', False),
+        'model': ('src.cli.model.main', 'app', False),
+        'benchmark': ('src.cli.benchmark.main', 'app', False),
+    }
+    
     try:
         # Discover entry points
         discovered_commands = entry_points(group='fa.commands')
         
-        # First, correctly print what we found to debug
+        # Log discovered commands
         logger.debug(f"Found entry points: {list(discovered_commands)}")
         
-        # This section will EXPLICITLY register the commands we know about
-        # This provides better error reporting than the dynamic loading
+        # Create a map of entry names
         entry_map = {entry.name: entry for entry in discovered_commands}
         
-        # Register analyze if available
-        if 'analyze' in entry_map:
-            try:
-                from src.cli.analyze.main import app as analyze_app
-                app.add_typer(analyze_app, name='analyze')
-                logger.debug("Registered analyze command")
-            except Exception as e:
-                logger.error(f"Failed to load analyze command: {e}")
+        # Register commands that are in the entry points
+        for cmd_name, config in command_mapping.items():
+            if cmd_name in entry_map:
+                if len(config) == 2:
+                    register_command(cmd_name, config[0], config[1])
+                else:
+                    register_command(cmd_name, config[0], config[1], config[2])
         
-        # Register test if available
-        if 'test' in entry_map:
-            try:
-                from src.cli.test.hook import app as test_app
-                app.add_typer(test_app, name='test')
-                logger.debug("Registered test command")
-            except Exception as e:
-                logger.error(f"Failed to load test command: {e}")
+        # Register additional commands that aren't in entry points
+        if 'preflight' not in entry_map:
+            register_command('preflight', 'src.cli.artifact.preflight', 'app')
         
-        # Register validate if available
-        if 'validate' in entry_map:
-            try:
-                from src.cli.validate.main import app as validate_app
-                app.add_typer(validate_app, name='validate')
-                logger.debug("Registered validate command")
-            except Exception as e:
-                logger.error(f"Failed to load validate command: {e}")
-        
-        # Register artifact if available
-        if 'artifact' in entry_map:
-            try:
-                from src.cli.artifact.main import app as artifact_app
-                app.add_typer(artifact_app, name='artifact')
-                logger.debug("Registered artifact command")
-            except Exception as e:
-                logger.error(f"Failed to load artifact command: {e}")
-        
-        # Register preflight directly - it's part of the artifact module
-        try:
-            from src.cli.artifact.preflight import app as preflight_app
-            app.add_typer(preflight_app, name='preflight')
-            logger.debug("Registered preflight command")
-        except Exception as e:
-            logger.error(f"Failed to load preflight command: {e}")
-        
-        # Register adapter command - it's part of the artifact module
-        try:
-            import src.cli.artifact.adapter
-            logger.debug("Registered adapter module for bash integration")
-        except Exception as e:
-            logger.error(f"Failed to load adapter command: {e}")
-        
-        # Register install command
-        try:
-            from src.cli.install.main import app as install_app
-            app.add_typer(install_app, name='install')
-            logger.debug("Registered install command")
-        except Exception as e:
-            logger.error(f"Failed to load install command: {e}")
-            
-        # Register model command
-        try:
-            from src.cli.model.main import app as model_app
-            app.add_typer(model_app, name='model')
-            logger.debug("Registered model command")
-        except Exception as e:
-            logger.error(f"Failed to load model command: {e}")
-            
-        # Register benchmark command
-        try:
-            from src.cli.benchmark.main import app as benchmark_app
-            app.add_typer(benchmark_app, name='benchmark')
-            logger.debug("Registered benchmark command")
-        except Exception as e:
-            logger.error(f"Failed to load benchmark command: {e}")
+        if 'adapter' not in entry_map:
+            register_command('adapter', 'src.cli.artifact.adapter', None, True)
                 
     except Exception as e:
         logger.warning(f"Error discovering plugins: {e}")
         # Fallback to direct imports if entry points discovery fails
         logger.debug("Using direct imports for commands")
         _import_builtin_commands()
+
+def register_command(name, module_path, object_name="app", is_module=False):
+    """
+    Register a single command with error handling.
+    
+    Args:
+        name: Command name to register
+        module_path: Import path of the module containing the app
+        object_name: Name of the object to import (default: 'app')
+        is_module: Whether to import as a module rather than get an attribute
+        
+    Returns:
+        bool: True if registered successfully, False otherwise
+    """
+    logger = logging.getLogger("file-analyzer")
+    
+    try:
+        if is_module:
+            # Import the module without accessing an attribute
+            importlib.import_module(module_path)
+            logger.debug(f"Registered {name} module")
+        else:
+            # Import the Typer app and add it to the main app
+            module = importlib.import_module(module_path)
+            command_app = getattr(module, object_name)
+            app.add_typer(command_app, name=name)
+            logger.debug(f"Registered {name} command")
+        return True
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"Could not import {name} command: {str(e)}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to load {name} command: {str(e)}")
+        return False
 
 def _import_builtin_commands():
     """
@@ -206,68 +193,25 @@ def _import_builtin_commands():
     logger = logging.getLogger("file-analyzer")
     logger.warning("Using fallback command loader - entry points discovery failed")
     
-    # Try to import all known commands directly
-    try:
-        from src.cli.analyze.main import app as analyze_app
-        app.add_typer(analyze_app, name="analyze")
-        logger.debug("Registered analyze command")
-    except ImportError:
-        logger.warning("Could not import analyze command")
+    # Define all commands to load
+    commands = [
+        ("analyze", "src.cli.analyze.main", "app"),
+        ("test", "src.cli.test.hook", "app"),
+        ("validate", "src.cli.validate.main", "app"),
+        ("artifact", "src.cli.artifact.main", "app"),
+        ("preflight", "src.cli.artifact.preflight", "app"),
+        ("adapter", "src.cli.artifact.adapter", None, True),  # Import as module
+        ("install", "src.cli.install.main", "app"),
+        ("model", "src.cli.model.main", "app"),
+        ("benchmark", "src.cli.benchmark.main", "app"),
+    ]
     
-    try:
-        from src.cli.test.main import app as test_app
-        app.add_typer(test_app, name="test")
-        logger.debug("Registered test command")
-    except ImportError:
-        logger.warning("Could not import test command")
-        
-    try:
-        from src.cli.validate.main import app as validate_app
-        app.add_typer(validate_app, name="validate")
-        logger.debug("Registered validate command")
-    except ImportError:
-        logger.warning("Could not import validate command")
-        
-    try:
-        from src.cli.artifact.main import app as artifact_app
-        app.add_typer(artifact_app, name="artifact")
-        logger.debug("Registered artifact command")
-    except ImportError:
-        logger.warning("Could not import artifact command")
-    
-    try:
-        from src.cli.artifact.preflight import app as preflight_app
-        app.add_typer(preflight_app, name="preflight")
-        logger.debug("Registered preflight command")
-    except ImportError:
-        logger.warning("Could not import preflight command")
-    
-    try:
-        import src.cli.artifact.adapter
-        logger.debug("Registered adapter module for bash integration")
-    except ImportError:
-        logger.warning("Could not import adapter module")
-    
-    try:
-        from src.cli.install.main import app as install_app
-        app.add_typer(install_app, name="install")
-        logger.debug("Registered install command")
-    except ImportError:
-        logger.warning("Could not import install command")
-        
-    try:
-        from src.cli.model.main import app as model_app
-        app.add_typer(model_app, name="model")
-        logger.debug("Registered model command")
-    except ImportError:
-        logger.warning("Could not import model command")
-        
-    try:
-        from src.cli.benchmark.main import app as benchmark_app
-        app.add_typer(benchmark_app, name="benchmark")
-        logger.debug("Registered benchmark command")
-    except ImportError:
-        logger.warning("Could not import benchmark command")
+    # Register each command
+    for cmd in commands:
+        if len(cmd) == 3:
+            register_command(cmd[0], cmd[1], cmd[2])
+        else:
+            register_command(cmd[0], cmd[1], cmd[2], cmd[3])
 
 def capture_environment():
     """Capture and return environment details."""
