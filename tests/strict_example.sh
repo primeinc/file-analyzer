@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "$SCRIPT_DIR/preflight.sh" --allow-legacy-dirs --allow-legacy-scripts
 
 # Source the artifact guard to enforce path discipline
-source "$SCRIPT_DIR/artifact_guard.sh"
+source "$SCRIPT_DIR/artifact_guard_py_adapter.sh"
 
 # Test metadata
 TEST_NAME="strict_example"

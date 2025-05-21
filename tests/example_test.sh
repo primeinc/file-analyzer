@@ -1,5 +1,5 @@
 #!/bin/bash
-source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard_py_adapter.sh"
 # Example test script using canonical artifact structure
 # This demonstrates how to properly create and manage test artifacts.
 

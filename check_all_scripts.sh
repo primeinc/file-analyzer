@@ -1,5 +1,5 @@
 #!/bin/bash
-source "$(dirname "${BASH_SOURCE[0]}")/artifact_guard.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/artifact_guard_py_adapter.sh"
 # Check all scripts in our main project directories
 
 echo "Checking all scripts in src, tools, and tests directories..."

@@ -1,5 +1,5 @@
 #!/bin/bash
-source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard_py_adapter.sh"
 # Test the exit code functionality
 
 # Create an artifact directory for test results

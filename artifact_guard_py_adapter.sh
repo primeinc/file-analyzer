@@ -83,17 +83,35 @@ mkdir_guard() {
   
   # Validate each directory path
   for dir in "${dirs[@]}"; do
-    # Skip validation if -p and path is not absolute (better compatibility)
-    if [[ "$options" == *"-p"* ]] && [[ ! "$dir" == /* ]]; then
-      continue
-    fi
-    
     # Get absolute path
     local abs_path
     if [[ "$dir" = /* ]]; then
       abs_path="$dir"
     else
       abs_path="$(pwd)/$dir"
+    fi
+    
+    # For -p option with relative paths, we need special handling
+    # but must still validate paths in artifacts directory
+    if [[ "$options" == *"-p"* ]] && [[ ! "$dir" == /* ]]; then
+      # Only allow relative paths within current directory that don't try
+      # to escape to sensitive locations using ../
+      if [[ "$dir" == *"../"* ]] || [[ "$abs_path" == *"/tmp"* ]] || [[ "$abs_path" == *"/var/tmp"* ]]; then
+        echo "ERROR: Path traversal or temporary path not allowed: $dir" >&2
+        echo "Use get_canonical_artifact_path to create canonical paths" >&2
+        return 1
+      fi
+      
+      # Check if path is attempting to write to artifacts directory
+      if [[ "$abs_path" == *"/artifacts/"* ]]; then
+        # For artifacts directory, continue with strict validation below
+        :
+      else
+        # For other directories, allow if they are in project structure
+        if [[ "$abs_path" == *"/src/"* ]] || [[ "$abs_path" == *"/tools/"* ]] || [[ "$abs_path" == *"/tests/"* ]]; then
+          continue
+        fi
+      fi
     fi
     
     # Special case for temp dirs

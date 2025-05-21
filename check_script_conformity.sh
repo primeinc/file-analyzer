@@ -1,9 +1,9 @@
 #!/bin/bash
-# check_script_conformity.sh - Validate shell scripts for artifact_guard.sh sourcing
-# This script enforces the requirement that all shell scripts must source artifact_guard.sh
+# check_script_conformity.sh - Validate shell scripts for artifact guard sourcing
+# This script enforces the requirement that all shell scripts must source artifact_guard_py_adapter.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GUARD_SCRIPT="artifact_guard.sh"
+GUARD_SCRIPT="artifact_guard_py_adapter.sh"
 ALLOWED_UNSOURCED=("$GUARD_SCRIPT" "preflight.sh" "cleanup.sh" "check_script_conformity.sh" "artifacts.env" "artifact_guard_py_adapter.sh")
 
 # Color definitions
@@ -13,7 +13,7 @@ YELLOW='\033[0;33m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Check if a script properly sources artifact_guard.sh
+# Check if a script properly sources artifact_guard_py_adapter.sh
 check_script() {
   local script=$1
   local script_name=$(basename "$script")

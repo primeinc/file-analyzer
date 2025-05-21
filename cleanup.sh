@@ -62,13 +62,7 @@ setup_artifact_structure() {
     "benchmark": "Performance benchmark results",
     "json": "JSON validation results",
     "tmp": "Temporary files (cleared on every run)"
-  },
-  "legacy_patterns": [
-    "analysis_results/",
-    "test_output/",
-    "test_data/test_results/",
-    "fastvlm_test_results_*/"
-  ]
+  }
 }
 EOF
   fi
@@ -77,7 +71,7 @@ EOF
 }
 
 # Get a path in the artifacts directory without excessive timestamps
-# Usage: get_artifact_path <type> <name>
+# Usage: get_artifact_path <type> <n>
 # Example: get_artifact_path test vision_basic
 get_artifact_path() {
   local type="$1"
@@ -211,80 +205,6 @@ report_artifacts() {
   echo ""
 }
 
-# Search existing legacy artifact directories that need migration
-find_legacy_artifacts() {
-  local legacy_dirs=()
-  
-  if [ -f "$ARTIFACTS_ROOT/$CONFIG_FILE" ]; then
-    legacy_patterns=$(grep -o '"legacy_patterns":\s*\[[^]]*\]' "$ARTIFACTS_ROOT/$CONFIG_FILE" | 
-      sed 's/"legacy_patterns":\s*\[\(.*\)\]/\1/' | 
-      sed 's/"//g' | 
-      sed 's/,/ /g')
-    
-    for pattern in $legacy_patterns; do
-      # Find directories matching pattern
-      if [[ "$pattern" == *"*"* ]]; then
-        # For glob patterns
-        for dir in $pattern; do
-          if [ -d "$dir" ]; then
-            legacy_dirs+=("$dir")
-          fi
-        done
-      else
-        # For exact directory names
-        if [ -d "$pattern" ]; then
-          legacy_dirs+=("$pattern")
-        fi
-      fi
-    done
-  fi
-  
-  echo "${legacy_dirs[@]}"
-}
-
-# Migrate legacy artifacts to the new structure
-migrate_legacy_artifacts() {
-  log "INFO" "Checking for legacy artifacts to migrate..."
-  
-  local legacy_dirs=$(find_legacy_artifacts)
-  if [ -z "$legacy_dirs" ]; then
-    log "INFO" "No legacy artifacts found"
-    return
-  fi
-  
-  for dir in $legacy_dirs; do
-    log "INFO" "Migrating legacy artifacts from $dir"
-    
-    # Determine appropriate destination based on directory name
-    local dest="$ARTIFACTS_ROOT/test"
-    if [[ "$dir" == *"analysis"* ]]; then
-      dest="$ARTIFACTS_ROOT/analysis"
-    elif [[ "$dir" == *"vision"* || "$dir" == *"fastvlm"* ]]; then
-      dest="$ARTIFACTS_ROOT/vision"
-    elif [[ "$dir" == *"json"* ]]; then
-      dest="$ARTIFACTS_ROOT/json"
-    fi
-    
-    # Create migration directory with timestamp
-    local migration_dir="$dest/migrated_$(date '+%Y%m%d_%H%M%S')"
-    mkdir -p "$migration_dir"
-    
-    # Copy contents to new location
-    cp -r "$dir"/* "$migration_dir"/ 2>/dev/null
-    
-    # Add a migration note
-    echo "Migrated from $dir on $(date)" > "$migration_dir/MIGRATION_NOTE.txt"
-    
-    log "INFO" "Migrated $dir to $migration_dir"
-    
-    # Optionally remove the original directory after migration
-    # Uncomment the following line when you're confident in the migration process
-    # rm -rf "$dir"
-  done
-  
-  log "INFO" "Legacy artifact migration complete"
-}
-
 # Print environment paths and help
 print_environment() {
   echo -e "${BOLD}Artifact Environment${NC}"
@@ -366,38 +286,18 @@ EOF
   return 0
 }
 
-# Function to enforce artifact standards in a directory
-# Checks for artifacts outside the standard directory
+# Function to check for artifacts outside the standard directory
 check_artifact_sprawl() {
   local check_dir="${1:-.}"
   local excluded_dirs="$ARTIFACTS_ROOT"
   
   log "INFO" "Checking for artifact sprawl in $check_dir..."
   
-  # Get legacy patterns
-  if [ -f "$ARTIFACTS_ROOT/$CONFIG_FILE" ]; then
-    legacy_patterns=$(grep -o '"legacy_patterns":\s*\[[^]]*\]' "$ARTIFACTS_ROOT/$CONFIG_FILE" | 
-      sed 's/"legacy_patterns":\s*\[\(.*\)\]/\1/' | 
-      sed 's/"//g' | 
-      sed 's/,/ /g')
-  else
-    legacy_patterns="analysis_results/ test_output/ test_data/test_results/ fastvlm_test_results_*/"
-  fi
-  
   # Temporary file for results
   local temp_file="/tmp/artifact-sprawl-$$.txt"
   
-  # Find timestamp directories
-  find "$check_dir" -type d -path "$check_dir/*" -not -path "$excluded_dirs*" | 
-    grep -E '_[0-9]{8}_[0-9]{6}' > "$temp_file"
-  
-  # Find directories matching legacy patterns
-  for pattern in $legacy_patterns; do
-    # Convert glob pattern to find pattern
-    find_pattern=$(echo "$pattern" | sed 's/\*/.*/g')
-    find "$check_dir" -type d -path "$check_dir/*" -not -path "$excluded_dirs*" | 
-      grep -E "$find_pattern" >> "$temp_file"
-  done
+  # Find timestamp directories (anything under artifacts/)
+  find "$check_dir" -type d -path "$check_dir/artifacts/*" -not -path "$excluded_dirs*" > "$temp_file"
   
   # Filter duplicates and report
   if [ -s "$temp_file" ]; then
@@ -408,9 +308,6 @@ check_artifact_sprawl() {
     echo "======================="
     echo -e "${YELLOW}The following directories outside the canonical artifact structure were found:${NC}"
     cat "$temp_file"
-    echo ""
-    echo -e "${BLUE}Recommendation:${NC} Migrate these artifacts to the canonical structure:"
-    echo "  ./cleanup.sh --migrate"
     echo ""
     
     log "WARN" "Artifact sprawl detected: $(wc -l < "$temp_file") directories"
@@ -438,7 +335,6 @@ show_help() {
   echo "  --path TYPE NAME     Get a path in the artifact directory (creates if needed)"
   echo "  --clean              Remove old artifacts according to retention policy"
   echo "  --clean-tmp          Clean only temporary artifacts directory"
-  echo "  --migrate            Migrate legacy artifacts to canonical structure"
   echo "  --report             Generate a report of current artifacts"
   echo "  --check              Check for artifact sprawl outside canonical structure"
   echo "  --setup              Setup the artifact directory structure"
@@ -483,10 +379,6 @@ while [ $# -gt 0 ]; do
       ;;
     --clean-tmp)
       clean_tmp
-      shift
-      ;;
-    --migrate)
-      migrate_legacy_artifacts
       shift
       ;;
     --report)

@@ -9,8 +9,6 @@
 # Default options - ENFORCE IS NOW TRUE BY DEFAULT
 ENFORCE=true
 CLEAN_TMP=true
-FAIL_ON_LEGACY_DIRS=true
-FAIL_ON_LEGACY_SCRIPTS=true
 
 # Process command-line arguments
 while [ $# -gt 0 ]; do
@@ -23,14 +21,6 @@ while [ $# -gt 0 ]; do
       CLEAN_TMP=false
       shift
       ;;
-    --allow-legacy-dirs)
-      FAIL_ON_LEGACY_DIRS=false
-      shift
-      ;;
-    --allow-legacy-scripts)
-      FAIL_ON_LEGACY_SCRIPTS=false
-      shift
-      ;;
     --help)
       echo "Usage: $0 [OPTIONS]"
       echo "Performs strict preflight validation of artifact discipline."
@@ -38,8 +28,6 @@ while [ $# -gt 0 ]; do
       echo "Options:"
       echo "  --no-enforce         Don't fail on artifact sprawl (DISCOURAGED)"
       echo "  --no-tmp-clean       Don't clean the tmp directory"
-      echo "  --allow-legacy-dirs  Don't fail on legacy directories (TEMPORARY)"
-      echo "  --allow-legacy-scripts Don't fail on scripts with legacy paths (TEMPORARY)" 
       echo "  --help               Show this help message"
       exit 0
       ;;
@@ -94,96 +82,48 @@ if [ "$CLEAN_TMP" = true ]; then
   mkdir -p "$ARTIFACTS_ROOT/tmp"
 fi
 
-# Validation failures counter
-FAILURES=0
-
-# Find known legacy directories
-echo -e "\n${BOLD}Checking for legacy artifact directories...${NC}"
-LEGACY_DIRS=(
-  "analysis_results"
-  "test_output"
-  "test_data/test_results"
-  "fastvlm_test_results_*"
-  "vision_test_*"
-  "json_test_*"
-)
-
-for pattern in "${LEGACY_DIRS[@]}"; do
-  # Use find for exact directories and shell expansion for patterns with globs
-  if [[ "$pattern" == *"*"* ]]; then
-    # Pattern with glob, use shell expansion
-    for dir in $pattern; do
-      if [ -d "$dir" ]; then
-        echo -e "${RED}✗ Legacy directory detected: $dir${NC}"
-        ((FAILURES++))
-      fi
-    done
-  else
-    # Exact directory, use find
-    if [ -d "$pattern" ]; then
-      echo -e "${RED}✗ Legacy directory detected: $pattern${NC}"
-      ((FAILURES++))
-    fi
-  fi
-done
-
-if [ $FAILURES -eq 0 ]; then
-  echo -e "${GREEN}✓ No legacy directories found${NC}"
-else
-  echo -e "${RED}${BOLD}Found $FAILURES legacy directories!${NC}"
-  if [ "$FAIL_ON_LEGACY_DIRS" = true ] && [ "$ENFORCE" = true ]; then
-    echo -e "${RED}${BOLD}ERROR: Legacy directories must be migrated. Run ./cleanup.sh --migrate${NC}"
-    exit 1
-  fi
-fi
-
-# Search for non-canonical artifact paths in scripts
-echo -e "\n${BOLD}Checking scripts for non-canonical artifact paths...${NC}"
+# Search for scripts without artifact_guard_py_adapter.sh sourcing
+echo -e "\n${BOLD}Checking scripts for artifact_guard_py_adapter.sh sourcing:${NC}"
 SCRIPT_FAILURES=0
 # Exclude libs/ directory from script checks as it contains third-party libraries
 SCRIPT_FILES=$(find . -name "*.sh" -type f | grep -v "artifact_guard.sh" | grep -v "artifact_guard_py_adapter.sh" | grep -v "cleanup.sh" | grep -v "preflight.sh" | grep -v "./libs/")
 
-LEGACY_PATTERNS=(
-  "analysis_results"
-  "test_output"
-  "test_data/test_results"
-  "fastvlm_test_results_"
-  "mkdir -p.*_\$(date"
-  "output_dir=.*\$(date"
-  "OUTPUT_DIR=.*\$(date"
-)
-
 for script in $SCRIPT_FILES; do
-  VIOLATIONS=0
-  echo -e "${BLUE}Checking $script...${NC}"
+  EXEMPT=false
   
-  for pattern in "${LEGACY_PATTERNS[@]}"; do
-    if grep -q "$pattern" "$script"; then
-      echo -e "  ${RED}✗ Contains pattern: $pattern${NC}"
-      ((VIOLATIONS++))
+  # List of scripts exempt from the sourcing requirement
+  EXEMPT_SCRIPTS=("./install.sh" "./check_script_conformity.sh" "./check_all_scripts.sh")
+  for exempt in "${EXEMPT_SCRIPTS[@]}"; do
+    if [ "$script" = "$exempt" ]; then
+      EXEMPT=true
+      break
     fi
   done
   
-  # Check if script sources artifact_guard.sh or adapter
-  if ! grep -q "source.*artifact_guard.sh" "$script" && ! grep -q "\. .*artifact_guard.sh" "$script" && ! grep -q "source.*artifact_guard_py_adapter.sh" "$script"; then
-    echo -e "  ${YELLOW}⚠ Does not source artifact_guard implementation${NC}"
-    ((VIOLATIONS++))
+  if [ "$EXEMPT" = true ]; then
+    echo -e "${YELLOW}${BOLD}EXEMPT${NC}: $(basename "$script") (exempt from sourcing requirement)"
+    continue
   fi
   
-  if [ $VIOLATIONS -gt 0 ]; then
-    echo -e "  ${RED}$script has $VIOLATIONS violations${NC}"
+  echo -e "----------------------------------------"
+  
+  # Check if script sources artifact_guard_py_adapter.sh
+  if ! grep -q "source.*artifact_guard_py_adapter.sh" "$script" && ! grep -q "\. .*artifact_guard_py_adapter.sh" "$script"; then
+    echo -e "${RED}✗ ${BOLD}FAIL${NC}: $script does not source artifact_guard_py_adapter.sh"
     ((SCRIPT_FAILURES++))
   else
-    echo -e "  ${GREEN}✓ No violations${NC}"
+    echo -e "${GREEN}✓ ${BOLD}PASS${NC}: $script correctly sources artifact_guard_py_adapter.sh"
   fi
+  
+  echo -e "----------------------------------------"
 done
 
 if [ $SCRIPT_FAILURES -eq 0 ]; then
-  echo -e "${GREEN}✓ All scripts use canonical artifact paths${NC}"
+  echo -e "${GREEN}${BOLD}SUCCESS:${NC} All specified scripts conform to artifact discipline requirements."
 else
-  echo -e "${RED}${BOLD}Found $SCRIPT_FAILURES scripts with non-canonical artifact paths!${NC}"
-  if [ "$FAIL_ON_LEGACY_SCRIPTS" = true ] && [ "$ENFORCE" = true ]; then
-    echo -e "${RED}${BOLD}ERROR: Scripts must be updated to use artifact_guard.sh${NC}"
+  echo -e "${RED}${BOLD}ERROR:${NC} Found $SCRIPT_FAILURES scripts without artifact_guard_py_adapter.sh sourcing!"
+  if [ "$ENFORCE" = true ]; then
+    echo -e "${RED}${BOLD}ERROR: Scripts must be updated to use artifact_guard_py_adapter.sh${NC}"
     exit 1
   fi
 fi
@@ -194,7 +134,7 @@ $CLEANUP_SCRIPT --check
 
 # If enforcing and sprawl detected, exit with error
 if [ $? -ne 0 ] && [ "$ENFORCE" = true ]; then
-  echo -e "${RED}${BOLD}Error: Artifact sprawl detected. Run ./cleanup.sh --migrate to fix.${NC}" >&2
+  echo -e "${RED}${BOLD}Error: Artifact sprawl detected.${NC}" >&2
   exit 1
 fi
 

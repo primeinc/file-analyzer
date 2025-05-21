@@ -14,10 +14,10 @@ This project employs a strict artifact management system to prevent uncontrolled
 
 Every script MUST follow these non-negotiable requirements:
 
-1. **Source the Guard**: All bash scripts MUST source artifact_guard.sh immediately after shebang
+1. **Source the Guard**: All bash scripts MUST source artifact_guard_py_adapter.sh immediately after shebang
    ```bash
    #!/bin/bash
-   source "$(dirname "${BASH_SOURCE[0]}")/artifact_guard.sh"
+   source "$(dirname "${BASH_SOURCE[0]}")/artifact_guard_py_adapter.sh"
    ```
 
 2. **Use Canonical Paths Only**: All artifacts MUST use paths from get_canonical_artifact_path
@@ -110,7 +110,7 @@ Use test_path_enforcement.sh to verify correct enforcement behavior:
 
 ### Checking Script Conformity
 
-Use check_script_conformity.sh to ensure all scripts source artifact_guard.sh:
+Use check_script_conformity.sh to ensure all scripts source artifact_guard_py_adapter.sh:
 
 ```bash
 ./check_script_conformity.sh
