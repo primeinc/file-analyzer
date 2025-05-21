@@ -109,13 +109,49 @@ def load_commands():
         # Discover entry points
         discovered_commands = entry_points(group='fa.commands')
         
-        for entry in discovered_commands:
+        # First, correctly print what we found to debug
+        logger.debug(f"Found entry points: {list(discovered_commands)}")
+        
+        # This section will EXPLICITLY register the commands we know about
+        # This provides better error reporting than the dynamic loading
+        entry_map = {entry.name: entry for entry in discovered_commands}
+        
+        # Register analyze if available
+        if 'analyze' in entry_map:
             try:
-                command_app = entry.load()  # Loads the Typer app object
-                app.add_typer(command_app, name=entry.name)
-                logger.debug(f"Registered command group: {entry.name}")
+                from src.cli.analyze.main import app as analyze_app
+                app.add_typer(analyze_app, name='analyze')
+                logger.debug("Registered analyze command")
             except Exception as e:
-                logger.error(f"Failed to load command plugin '{entry.name}': {e}")
+                logger.error(f"Failed to load analyze command: {e}")
+        
+        # Register test if available
+        if 'test' in entry_map:
+            try:
+                from src.cli.test.main import app as test_app
+                app.add_typer(test_app, name='test')
+                logger.debug("Registered test command")
+            except Exception as e:
+                logger.error(f"Failed to load test command: {e}")
+        
+        # Register validate if available
+        if 'validate' in entry_map:
+            try:
+                from src.cli.validate.main import app as validate_app
+                app.add_typer(validate_app, name='validate')
+                logger.debug("Registered validate command")
+            except Exception as e:
+                logger.error(f"Failed to load validate command: {e}")
+        
+        # Register artifact if available
+        if 'artifact' in entry_map:
+            try:
+                from src.cli.artifact.main import app as artifact_app
+                app.add_typer(artifact_app, name='artifact')
+                logger.debug("Registered artifact command")
+            except Exception as e:
+                logger.error(f"Failed to load artifact command: {e}")
+                
     except Exception as e:
         logger.warning(f"Error discovering plugins: {e}")
         # Fallback to direct imports if entry points discovery fails
@@ -125,11 +161,14 @@ def load_commands():
 def _import_builtin_commands():
     """
     Import built-in commands directly as a fallback if entry points discovery fails.
+    
+    This is a fallback loader that doesn't depend on entry points.
     """
     logger = logging.getLogger("file-analyzer")
+    logger.warning("Using fallback command loader - entry points discovery failed")
     
+    # Try to import all known commands directly
     try:
-        # Attempt to import the analyze command
         from src.cli.analyze.main import app as analyze_app
         app.add_typer(analyze_app, name="analyze")
         logger.debug("Registered analyze command")
@@ -137,7 +176,6 @@ def _import_builtin_commands():
         logger.warning("Could not import analyze command")
     
     try:
-        # Attempt to import the test command
         from src.cli.test.main import app as test_app
         app.add_typer(test_app, name="test")
         logger.debug("Registered test command")
@@ -145,12 +183,18 @@ def _import_builtin_commands():
         logger.warning("Could not import test command")
         
     try:
-        # Attempt to import the validate command
         from src.cli.validate.main import app as validate_app
         app.add_typer(validate_app, name="validate")
         logger.debug("Registered validate command")
     except ImportError:
         logger.warning("Could not import validate command")
+        
+    try:
+        from src.cli.artifact.main import app as artifact_app
+        app.add_typer(artifact_app, name="artifact")
+        logger.debug("Registered artifact command")
+    except ImportError:
+        logger.warning("Could not import artifact command")
 
 def capture_environment():
     """Capture and return environment details."""
@@ -161,6 +205,7 @@ def capture_environment():
         "user": os.getenv("USER", "unknown"),
         "pwd": os.getcwd(),
     }
+
 
 @app.callback()
 def main(
@@ -215,6 +260,7 @@ def main(
     
     # Load subcommands
     load_commands()
+    print(f"- Subcommands: {[typer_instance.name for typer_instance in app.registered_typer_instances]}")
 
 # We're removing the version command and only using the --version flag option
 # to avoid confusing users with two different ways to get version information.

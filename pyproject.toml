@@ -70,6 +70,7 @@ include = ["src*"]
 analyze = "src.cli.analyze.main:app"
 test = "src.cli.test.main:app"
 validate = "src.cli.validate.main:app"
+artifact = "src.cli.artifact.main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
