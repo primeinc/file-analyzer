@@ -133,9 +133,26 @@ def _create_artifact_manifest(artifact_dir: str, artifact_type: str, context: st
     # Default retention days
     retention_days = 7
     
-    # Determine the calling script
-    frame = sys._getframe(2)
-    caller = frame.f_code.co_filename if frame else "unknown"
+    # Determine the calling script - use a more robust approach
+    # Walk the call stack to find the most appropriate caller
+    # This is more resilient to changes in the call stack
+    caller = "unknown"
+    try:
+        # Start with a depth of 2 to skip immediate callers
+        for depth in range(2, 6):  # Check a few frames up the stack
+            try:
+                frame = sys._getframe(depth)
+                filename = frame.f_code.co_filename
+                # Skip frames from this module
+                if not filename.endswith("artifact_guard.py"):
+                    caller = filename
+                    break
+            except ValueError:
+                # Reached end of call stack
+                break
+    except Exception:
+        # Fall back to a safe value on any error
+        pass
     
     # Create manifest JSON
     manifest = {

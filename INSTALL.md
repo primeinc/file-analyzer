@@ -66,7 +66,7 @@ choco install exiftool tesseract ripgrep clamav
 After installation, you can verify that all tools are properly installed and available in your PATH by running:
 
 ```bash
-python3 -m file_analysis_tool --verify
+file-analyzer --verify
 
 ## Vision Model Dependencies (Optional)
 

@@ -78,6 +78,17 @@ Example:
 artifacts/test/path_enforcement_c0451da_local_will_22787_20250520_223409/
 ```
 
+**Note:** If the `context` ends with an underscore (`_`), a double underscore (`__`) is used between the `context` and the hash to avoid ambiguity.
+
+Examples:
+```
+# Standard case
+artifacts/test/path_enforcement_c0451da_local_will_22787_20250520_223409/
+
+# Special case where context ends with an underscore
+artifacts/test/path_enforcement__c0451da_local_will_22787_20250520_223409/
+```
+
 ### Manifest Files
 
 Each canonical artifact directory automatically includes a manifest.json file:

@@ -138,4 +138,3 @@ The Python implementation provides additional features not available in the shel
 - **Safe File Operations**: Built-in utilities for common operations
 
 For more details, see the [Python Artifact Discipline](PYTHON_ARTIFACT_DISCIPLINE.md) documentation.
-EOF

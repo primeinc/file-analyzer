@@ -80,5 +80,7 @@ cleanup.log
 github_api_guide.md
 pr_review_responses.md
 
-# External libraries
-libs/
+# External libraries - ignore only specific large content
+libs/ml-fastvlm/checkpoints/
+# Uncomment if using git-lfs for large model files
+# *.gguf
