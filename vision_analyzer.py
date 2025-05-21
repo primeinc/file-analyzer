@@ -115,6 +115,40 @@ class VisionAnalyzer:
         
         self.resolution = resolution or "512x512"
         
+        # Determine model size/variant
+        self.model_size = self._determine_model_size()
+        
+    def _determine_model_size(self):
+        """Determine the model size/variant based on model name and path.
+        
+        Returns:
+            str: Model size/variant (e.g., "0.5B", "1.5B", "7B") or empty string if unknown
+        """
+        if self.model_name == "fastvlm":
+            # Get model_path from config or default options
+            model_path = str(self.config.get("model_path") or self.model_info["model_options"]["default"])
+            
+            # Determine size from path
+            if "0.5b" in model_path.lower():
+                return "0.5B"
+            elif "1.5b" in model_path.lower():
+                return "1.5B"
+            elif "7b" in model_path.lower():
+                return "7B"
+        
+        # Add logic for other models as needed
+        return ""
+
+    def get_model_display_name(self):
+        """Get a display name for the model including size information if available.
+        
+        Returns:
+            str: Model name with size information (e.g., "FastVLM 1.5B")
+        """
+        if self.model_size:
+            return f"{self.model_info['name']} {self.model_size}"
+        return self.model_info["name"]
+            
     def check_dependencies(self):
         """Check if the required dependencies for the selected vision model are installed."""
         model_info = self.model_info

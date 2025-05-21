@@ -646,19 +646,9 @@ class FileAnalyzer:
             # Collect performance metrics
             total_time = 0
             avg_time = 0
-            model_name = analyzer.model_info["name"]
-            model_size = ""
             
-            # Extract model size/variant if possible
-            if model_name == "FastVLM":
-                # Get model_path from config or default options
-                model_path = str(analyzer.config.get("model_path") or analyzer.model_info["model_options"]["default"])
-                if "0.5b" in model_path.lower():
-                    model_size = "0.5B"
-                elif "1.5b" in model_path.lower():
-                    model_size = "1.5B"
-                elif "7b" in model_path.lower():
-                    model_size = "7B"
+            # Get model name with size information directly from VisionAnalyzer
+            model_display_name = analyzer.get_model_display_name()
             
             # Calculate metrics
             for result_text in results.values():
@@ -680,7 +670,7 @@ class FileAnalyzer:
             
             # Add to results metadata
             performance_metrics = {
-                "model": f"{model_name}{' ' + model_size if model_size else ''}",
+                "model": model_display_name,
                 "total_time": total_time,
                 "average_time": avg_time,
                 "images_processed": len(results)
