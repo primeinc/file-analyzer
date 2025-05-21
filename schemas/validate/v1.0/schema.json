@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Validation Output Schema",
+  "description": "Schema for validating output from the Validation tool",
+  "type": "object",
+  "required": ["success", "timestamp", "total_files"],
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Overall validation success status"
+    },
+    "timestamp": {
+      "type": "number",
+      "description": "Unix timestamp of the validation run"
+    },
+    "artifact_dir": {
+      "type": "string",
+      "description": "Path to the artifact directory that was validated"
+    },
+    "output_dir": {
+      "type": "string",
+      "description": "Path to the output directory for validation results"
+    },
+    "total_files": {
+      "type": "integer",
+      "description": "Total number of files validated",
+      "minimum": 0
+    },
+    "passed": {
+      "type": "integer",
+      "description": "Number of files that passed validation",
+      "minimum": 0
+    },
+    "failed": {
+      "type": "integer",
+      "description": "Number of files that failed validation",
+      "minimum": 0
+    },
+    "results": {
+      "type": "array",
+      "description": "Individual file validation results",
+      "items": {
+        "type": "object",
+        "required": ["file", "success"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Path to the validated file"
+          },
+          "relative_path": {
+            "type": "string",
+            "description": "Path relative to the artifact directory"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Validation success status"
+          },
+          "errors": {
+            "type": "array",
+            "description": "Validation errors",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "JSON path to the error location"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Error message"
+                    },
+                    "schema_path": {
+                      "type": "string",
+                      "description": "Path to the schema element that failed validation"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Validation warnings",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "JSON path to the warning location"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Warning message"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Information about the validation environment",
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "description": "Python version used"
+        },
+        "system": {
+          "type": "string",
+          "description": "Operating system"
+        },
+        "jsonschema_version": {
+          "type": "string",
+          "description": "Version of the jsonschema library used"
+        },
+        "schema_type": {
+          "type": "string",
+          "description": "Type of schema used for validation"
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Version of the schema used for validation"
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
