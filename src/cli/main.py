@@ -26,13 +26,14 @@ app = typer.Typer(
 # Initialize a default console for use outside of the main CLI flow
 console = Console()
 
-def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Optional[str] = None, 
+def setup_logging(verbose: bool = False, quiet: bool = False, json_logs: bool = False, log_file: Optional[str] = None, 
                no_color: bool = False, ci: bool = False) -> Tuple[Console, logging.Logger]:
     """
     Configure logging based on CLI options.
     
     Args:
         verbose: Enable verbose logging
+        quiet: Suppress all output except errors
         json_logs: Output logs in JSON format
         log_file: Optional path to log file
         no_color: Disable colored output
@@ -51,12 +52,18 @@ def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Opti
     }
     configured_console = Console(**console_options)
     
-    log_level = logging.DEBUG if verbose else logging.INFO
+    # Set log level based on verbose/quiet flags
+    if quiet:
+        log_level = logging.ERROR
+    elif verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
     
     if json_logs:
         # Configure JSON logging
-        import json_log_formatter
-        formatter = json_log_formatter.JSONFormatter()
+        from pythonjsonlogger import jsonlogger
+        formatter = jsonlogger.JsonFormatter()
         
         # Create a handler for JSON logs
         if log_file:
@@ -194,7 +201,8 @@ def main(
         
     # Configure logging and console with color settings
     configured_console, logger = setup_logging(
-        verbose=verbose and not quiet,
+        verbose=verbose, 
+        quiet=quiet,
         json_logs=log_json,
         log_file=log_file,
         no_color=no_color,

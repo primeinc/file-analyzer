@@ -42,6 +42,12 @@ dev = [
     "isort>=5.12.0",
 ]
 
+vision = [
+    "mlx>=0.3.0",
+    "mlx-fastvlm>=0.1.0",
+    "mlx-vlm>=0.0.10",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/primeinc/file-analyzer"
 "Bug Tracker" = "https://github.com/primeinc/file-analyzer/issues"
