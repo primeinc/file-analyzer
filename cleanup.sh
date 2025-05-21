@@ -13,7 +13,7 @@ done
 SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 # Constants
-ARTIFACTS_ROOT="$SCRIPT_DIR/artifacts"
+ARTIFACTS_ROOT="$(realpath "$SCRIPT_DIR/artifacts")"
 CONFIG_FILE=".artifact-config.json"
 LOG_FILE="$SCRIPT_DIR/cleanup.log"
 DEFAULT_RETENTION_DAYS=7
@@ -82,10 +82,19 @@ EOF
 get_artifact_path() {
   local type="$1"
   local name="${2:-output}"
-  local artifact_path="$ARTIFACTS_ROOT/$type/$name"
   
-  mkdir -p "$artifact_path"
-  echo "$artifact_path"
+  case "$type" in
+    analysis|vision|test|benchmark|json|tmp)
+      local artifact_path="$ARTIFACTS_ROOT/$type/$name"
+      mkdir -p "$artifact_path"
+      echo "$artifact_path"
+      ;;
+    *)
+      echo "Unknown artifact type: $type" >&2
+      echo "Valid types: analysis, vision, test, benchmark, json, tmp" >&2
+      return 1
+      ;;
+  esac
 }
 
 # Prevent running more than one cleanup process at a time
@@ -107,19 +116,48 @@ cleanup_lock() {
 
 # Clean artifacts based on retention policy
 clean_artifacts() {
-  local retention_days=$DEFAULT_RETENTION_DAYS
+  local default_retention_days=$DEFAULT_RETENTION_DAYS
   
   if [ -f "$ARTIFACTS_ROOT/$CONFIG_FILE" ]; then
-    retention_days=$(grep -o '"retention_days":[^,}]*' "$ARTIFACTS_ROOT/$CONFIG_FILE" | sed 's/"retention_days"://')
+    # Use Python JSON parser to extract retention_days value
+    default_retention_days=$(python3 "$SCRIPT_DIR/src/json_parser.py" "$ARTIFACTS_ROOT/$CONFIG_FILE" "retention_days" "$DEFAULT_RETENTION_DAYS")
+    # If empty result, use default
+    if [ -z "$default_retention_days" ]; then
+      default_retention_days=$DEFAULT_RETENTION_DAYS
+    fi
   fi
 
-  log "INFO" "Cleaning artifacts older than $retention_days days..."
+  log "INFO" "Cleaning artifacts based on retention policies (default: $default_retention_days days)..."
 
-  # Find and remove old run directories within artifacts structure
-  find "$ARTIFACTS_ROOT" -type d -path "$ARTIFACTS_ROOT/*/*/*" -mtime +$retention_days | while read dir; do
-    if [[ "$dir" != *".git"* ]]; then
-      log "INFO" "Removing old artifact: $dir"
+  # Find all artifact directories
+  find "$ARTIFACTS_ROOT" -type d -path "$ARTIFACTS_ROOT/*/*/*" | while read dir; do
+    if [[ "$dir" == *".git"* ]]; then
+      continue
+    fi
+    
+    # Check for manifest file to get specific retention policy
+    local manifest_file="$dir/manifest.json"
+    local retention_days=$default_retention_days
+    
+    if [ -f "$manifest_file" ]; then
+      # Extract retention_days from manifest using Python JSON parser
+      local manifest_retention=$(python3 "$SCRIPT_DIR/src/json_parser.py" "$manifest_file" "retention_days" "")
+      if [ -n "$manifest_retention" ]; then
+        retention_days=$manifest_retention
+      fi
+    fi
+    
+    # Get age in days
+    local creation_time=$(stat -c "%Y" "$dir" 2>/dev/null || stat -f "%m" "$dir" 2>/dev/null)
+    local current_time=$(date +%s)
+    local age_days=$(( (current_time - creation_time) / 86400 ))
+    
+    # Check if artifact is older than its specific retention period
+    if [ $age_days -gt $retention_days ]; then
+      log "INFO" "Removing old artifact: $dir (age: $age_days days, retention: $retention_days days)"
       rm -rf "$dir"
+    else
+      log "INFO" "Keeping artifact: $dir (age: $age_days days, retention: $retention_days days)"
     fi
   done
 
@@ -303,7 +341,7 @@ get_artifact_path() {
   local name="$2"
   
   case "$type" in
-    analysis|vision|test|benchmark|tmp)
+    analysis|vision|test|benchmark|json|tmp)
       dir_var="ARTIFACTS_${type^^}"
       dir_path="${!dir_var}/$name"
       mkdir -p "$dir_path"
@@ -311,7 +349,7 @@ get_artifact_path() {
       ;;
     *)
       echo "Unknown artifact type: $type" >&2
-      echo "Valid types: analysis, vision, test, benchmark, tmp" >&2
+      echo "Valid types: analysis, vision, test, benchmark, json, tmp" >&2
       return 1
       ;;
   esac
@@ -387,32 +425,6 @@ check_artifact_sprawl() {
   fi
 }
 
-# Show help
-show_help() {
-  echo -e "${BOLD}Artifact Cleanup Utility${NC}"
-  echo "======================="
-  echo "Manages the lifecycle of all test artifacts in a canonical location."
-  echo ""
-  echo "Usage: $0 [OPTIONS]"
-  echo ""
-  echo "Options:"
-  echo "  --clean               Clean old artifacts according to retention policy"
-  echo "  --migrate             Migrate legacy artifacts to canonical structure"
-  echo "  --report              Generate a report of current artifacts"
-  echo "  --check               Check for artifact sprawl outside canonical structure"
-  echo "  --new-run TYPE NAME   Create a new run directory for a specific type"
-  echo "  --setup               Setup the artifact directory structure"
-  echo "  --env                 Print environment variables for scripts"
-  echo "  --help                Show this help message"
-  echo ""
-  echo "Examples:"
-  echo "  $0 --clean            # Clean up old artifacts"
-  echo "  $0 --new-run test vision_test    # Create a new test run directory"
-  echo "  $0 --report           # Show artifact usage report"
-  echo "  $0 --check            # Check for artifacts outside canonical structure"
-  echo "  $0 --migrate          # Migrate legacy artifacts to canonical structure"
-  echo ""
-}
 
 # Show help
 show_help() {

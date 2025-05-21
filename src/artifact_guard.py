@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Tuple, Any, Callable
 
 # Known artifact types that match directory structure
-ARTIFACT_TYPES = ["analysis", "vision", "test", "benchmark", "tmp"]
+ARTIFACT_TYPES = ["analysis", "vision", "test", "benchmark", "json", "tmp"]
 
 # Determine project root and artifacts root
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
