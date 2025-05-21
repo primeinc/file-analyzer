@@ -195,7 +195,25 @@ if [ -f "$ZIP_PATH" ]; then
 else
     # Download model
     echo "Downloading $MODEL_SIZE model from $MODEL_URL"
-    curl -L "$MODEL_URL" -o "$ZIP_PATH"
+    # Use a temporary directory to download to avoid naming conflicts
+    TMP_DOWNLOAD_DIR=$(mktemp -d)
+    TMP_ZIP_FILE="$TMP_DOWNLOAD_DIR/model.zip"
+    
+    # Download to temporary location
+    echo "Downloading to temporary file: $TMP_ZIP_FILE"
+    curl -L "$MODEL_URL" -o "$TMP_ZIP_FILE"
+    
+    # If download successful, move to final location
+    if [ $? -eq 0 ]; then
+        echo "Moving downloaded file to $ZIP_PATH"
+        mv "$TMP_ZIP_FILE" "$ZIP_PATH"
+    else
+        echo "Download failed!"
+        exit 1
+    fi
+    
+    # Clean up temporary directory
+    rmdir "$TMP_DOWNLOAD_DIR"
 fi
 
 # Extract model
@@ -254,10 +272,75 @@ log "Cleaning up any duplicate downloads..."
 find "$FASTVLM_DIR/checkpoints" -name "*.zip.*" -type f -exec rm -f {} \;
 [ $? -eq 0 ] && log "✓ Cleaned up duplicate downloads"
 
-# Download the default model to the repository
-log "Downloading the default model (0.5b) to the repository..."
-if [ -x "$FASTVLM_DIR/get_models.sh" ]; then
-    (cd "$FASTVLM_DIR" && ./get_models.sh 0.5b) | tee -a "$log_file"
+# Download the default model directly
+log "Downloading the default model (0.5b) directly..."
+
+MODEL_SIZE="0.5b"
+MODEL_NAME="llava-fastvithd_0.5b_stage2"
+MODEL_DIR="$FASTVLM_DIR/checkpoints/$MODEL_NAME" 
+MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage2.zip"
+ZIP_PATH="$FASTVLM_DIR/checkpoints/$MODEL_NAME.zip"
+
+# Create model directory if needed
+mkdir -p "$MODEL_DIR"
+
+# Check if model directory already exists and contains files
+if [ -d "$MODEL_DIR" ] && [ "$(find "$MODEL_DIR" -type f | wc -l)" -gt 5 ]; then
+    log "Model already exists in $MODEL_DIR. Skipping download."
+else
+    # Download model if needed
+    if [ -f "$ZIP_PATH" ]; then
+        log "Using existing download at $ZIP_PATH"
+    else
+        log "Downloading $MODEL_SIZE model from $MODEL_URL"
+        # Download to final location directly
+        curl -L "$MODEL_URL" -o "$ZIP_PATH"
+        
+        if [ $? -ne 0 ]; then
+            log "Download failed!"
+            exit 1
+        fi
+    fi
+    
+    # Extract model
+    log "Extracting model to $MODEL_DIR"
+    unzip -o "$ZIP_PATH" -d "$MODEL_DIR"
+    
+    # Remove zip file after successful extraction
+    log "Removing zip file after extraction"
+    rm -f "$ZIP_PATH"
+    
+    # Create necessary tokenizer files if they don't exist
+    if [ ! -f "$MODEL_DIR/tokenizer_config.json" ]; then
+        log "Creating tokenizer config..."
+        cat > "$MODEL_DIR/tokenizer_config.json" << 'TOKENIZER_EOF'
+{
+  "model_type": "llama",
+  "pad_token": "<pad>",
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "unk_token": "<unk>"
+}
+TOKENIZER_EOF
+    fi
+
+    if [ ! -f "$MODEL_DIR/config.json" ]; then
+        log "Creating model config..."
+        cat > "$MODEL_DIR/config.json" << 'CONFIG_EOF'
+{
+  "model_type": "llama",
+  "architectures": ["LlamaForCausalLM"],
+  "hidden_size": 4096,
+  "intermediate_size": 11008,
+  "num_attention_heads": 32,
+  "num_hidden_layers": 32,
+  "vocab_size": 32000
+}
+CONFIG_EOF
+    fi
+    
+    log "✓ Model ready at $MODEL_DIR"
+fi
     
     # Copy model files to user directory for centralized storage
     log "Copying model files to user model directory for centralized storage..."
@@ -266,11 +349,10 @@ if [ -x "$FASTVLM_DIR/get_models.sh" ]; then
     if [ -n "$model_path" ]; then
         mkdir -p "$model_path"
         
-        # Check if repo has the model files
-        repo_model_dir="$FASTVLM_DIR/checkpoints/llava-fastvithd_0.5b_stage2"
-        if [ -d "$repo_model_dir" ] && [ "$(find "$repo_model_dir" -type f | wc -l)" -gt 0 ]; then
+        # Check if repo has the model files in our directly-managed model directory
+        if [ -d "$MODEL_DIR" ] && [ "$(find "$MODEL_DIR" -type f | wc -l)" -gt 0 ]; then
             # Copy model files to user directory
-            cp -r "$repo_model_dir"/* "$model_path"/ 2>/dev/null || true
+            cp -r "$MODEL_DIR"/* "$model_path"/ 2>/dev/null || true
             log "✓ Model files copied to user model directory: $model_path"
         else
             log "⚠ Model files not found in repository to copy to user directory"
