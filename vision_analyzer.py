@@ -177,11 +177,25 @@ class VisionAnalyzer:
         Returns:
             Path to preprocessed image (or original if preprocessing not available)
         """
+        # IMPORTANT: Always log preprocessing attempt - this is a critical requirement
+        print(f"PREPROCESSING IMAGE: {image_path}")
+        
+        # Check if this image has already been preprocessed to avoid duplicate preprocessing
+        # Images in temp directory with our prefix are already preprocessed
+        if "fastvlm_temp_" in os.path.basename(image_path):
+            print(f"Image already preprocessed, skipping duplicate preprocessing")
+            return image_path
+        
         if not PIL_AVAILABLE:
             # Skip preprocessing if PIL is not available
+            print(f"⚠️ WARNING: PIL not available, skipping preprocessing. RAW IMAGE WILL BE USED!")
             return image_path
             
         try:
+            # Get original image size for comparison
+            orig_size = os.path.getsize(image_path)
+            print(f"Original image size: {orig_size/1024:.1f}KB")
+            
             # Get resolution based on mode
             resolution = self.resolution
             if "resolution" in self.model_info:
@@ -197,14 +211,18 @@ class VisionAnalyzer:
             except (ValueError, AttributeError):
                 width, height = 512, 512
                 
+            print(f"Target resolution: {width}x{height}")
+                
             # Open and resize image
             img = Image.open(image_path)
             
-            # Skip processing if image is already optimal size
+            # Log original dimensions
             orig_width, orig_height = img.size
-            if orig_width == width and orig_height == height:
-                return image_path
-                
+            print(f"Original dimensions: {orig_width}x{orig_height}")
+            
+            # ALWAYS PROCESS THE IMAGE regardless of current size
+            # Images should be normalized even if already at target resolution
+            
             # Preserve aspect ratio
             if orig_width > orig_height:
                 new_width = width
@@ -212,6 +230,8 @@ class VisionAnalyzer:
             else:
                 new_height = height
                 new_width = int(orig_width * (height / orig_height))
+                
+            print(f"New dimensions with preserved aspect ratio: {new_width}x{new_height}")
                 
             # Resize image
             resized_img = img.resize((new_width, new_height), Image.LANCZOS)
@@ -225,9 +245,15 @@ class VisionAnalyzer:
             temp_path = os.path.join(temp_dir, f"fastvlm_temp_{os.path.basename(image_path)}")
             new_img.save(temp_path)
             
+            # Log size reduction
+            new_size = os.path.getsize(temp_path)
+            reduction = (1 - new_size/orig_size) * 100
+            print(f"PREPROCESSED: {orig_size/1024:.1f}KB → {new_size/1024:.1f}KB ({reduction:.1f}% reduction)")
+            
             return temp_path
         except Exception as e:
-            print(f"Error preprocessing image: {e}")
+            print(f"⚠️ ERROR preprocessing image: {e}")
+            print(f"⚠️ WARNING: Using original image without preprocessing!")
             return image_path
     
     def analyze_image(self, image_path, prompt=None, mode="describe"):

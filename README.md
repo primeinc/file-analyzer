@@ -193,6 +193,18 @@ FastVLM is Apple's efficient vision language model designed specifically for App
 
 ### Installation
 
+```bash
+# Install MLX framework and FastVLM model 
+pip install mlx mlx-fastvlm
+
+# Download the model (automatic when first used)
+fastvlm download apple/fastvlm-1.5b-instruct
+```
+
+#### Alternative Manual Installation
+
+If you prefer more control over the installation process:
+
 1. Install MLX framework for Apple Silicon optimization:
    ```bash
    pip install mlx
