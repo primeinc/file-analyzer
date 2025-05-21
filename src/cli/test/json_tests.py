@@ -246,13 +246,18 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
             from src.vision import parse_args
             
             # Create command-line args
-            args = parse_args([
+            cli_args = [
                 "--image", primary_test_image,
                 "--output", output_file,
                 "--format", "json",
-                "--model-size", model_size,
-                "--mock" if use_mock else "--no-mock"  # Use mock if requested
-            ])
+                "--model-size", model_size
+            ]
+            
+            # Only add --mock if it's requested (following standard boolean flag patterns)
+            if use_mock:
+                cli_args.append("--mock")
+                
+            args = parse_args(cli_args)
             
             # Run vision analysis
             try:

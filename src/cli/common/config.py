@@ -370,6 +370,7 @@ class Config:
         except Exception as e:
             # Unexpected errors should be re-raised after logging
             logger.critical(f"Unexpected error creating artifact path: {e}")
+            # No fallback for unexpected errors - just re-raise them
             raise
 
 # Create a global configuration instance
