@@ -71,3 +71,14 @@ ml-fastvlm/checkpoints/
 # Artifacts directory (canonical artifact storage)
 artifacts/
 artifacts.env
+
+# Log files
+cleanup.log
+*.log
+
+# Local documentation
+github_api_guide.md
+pr_review_responses.md
+
+# External libraries
+libs/
