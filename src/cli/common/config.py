@@ -43,27 +43,47 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Helper function to find the project root directory
-def find_project_root(marker: str = "config.json") -> Path:
+def find_project_root(marker: str = "config.json", fallback: bool = True) -> Optional[Path]:
     """
     Find the project root directory by looking for a marker file.
     
     Args:
         marker: A file that indicates the project root (default: config.json)
+        fallback: Whether to use fallback paths if marker isn't found
         
     Returns:
-        Path to the project root directory
-        
-    Raises:
-        FileNotFoundError: If the project root marker isn't found
+        Path to the project root directory, or None if marker isn't found and fallback=False
     """
     current_path = Path(__file__).resolve()
+    
+    # Try to find marker in parent directories
     for parent in current_path.parents:
         if (parent / marker).exists():
             return parent
-    raise FileNotFoundError(f"Project root marker '{marker}' not found.")
+            
+    # If marker not found and fallback is enabled
+    if fallback:
+        logger.warning(f"Project root marker '{marker}' not found. Using fallback paths.")
+        
+        # First fallback: Use parent dir of src
+        for parent in current_path.parents:
+            if parent.name == "src" and parent.parent:
+                return parent.parent
+        
+        # Second fallback: Use 3 levels up from current file (typical CLI structure)
+        if len(current_path.parents) >= 3:
+            return current_path.parents[2]
+        
+        # Last resort: Use current working directory
+        logger.warning("Using current working directory as fallback project root")
+        return Path.cwd()
+    
+    # Return None if no marker found and fallback disabled
+    logger.warning(f"Project root marker '{marker}' not found and fallback disabled")
+    return None
 
-# Project root directory
-PROJECT_ROOT = find_project_root()
+# Project root directory with graceful fallback
+PROJECT_ROOT = find_project_root() or Path.cwd()
 
 # Default configuration file
 DEFAULT_CONFIG_FILE = PROJECT_ROOT / "config.json"
@@ -78,6 +98,10 @@ class Config:
     This class provides a unified interface for accessing configuration
     settings from various sources (config files, environment variables,
     command-line arguments) in a prioritized manner.
+    
+    The Config class is designed to be resilient to missing config files
+    or project root directories, allowing basic CLI functionality to work
+    even without a properly configured environment.
     """
     
     def __init__(self, config_file: Optional[str] = None):
@@ -86,18 +110,44 @@ class Config:
         
         Args:
             config_file: Path to configuration file (defaults to config.json in project root)
+                         Can be None if no config file is available
         """
-        self.config_file = Path(config_file) if config_file else DEFAULT_CONFIG_FILE
+        # Handle the case where config_file is provided
+        if config_file:
+            self.config_file = Path(config_file)
+        # Handle case where DEFAULT_CONFIG_FILE might point to a missing file
+        elif DEFAULT_CONFIG_FILE and Path(DEFAULT_CONFIG_FILE).exists():
+            self.config_file = DEFAULT_CONFIG_FILE
+        # Fallback to None if no valid config file
+        else:
+            logger.warning("No valid configuration file found, using environment variables and defaults only")
+            self.config_file = None
+            
+        # Load config with graceful fallback to empty dict
         self.config = self._load_config()
         
-        # Add runtime information
+        # Determine schemas_dir with fallback
+        schemas_dir = SCHEMA_DIR if SCHEMA_DIR and SCHEMA_DIR.exists() else None
+        if not schemas_dir and PROJECT_ROOT:
+            # Try alternate schema locations if SCHEMA_DIR doesn't exist
+            candidates = [
+                PROJECT_ROOT / "schemas",
+                PROJECT_ROOT / "src" / "schemas",
+                Path.cwd() / "schemas"
+            ]
+            for candidate in candidates:
+                if candidate.exists():
+                    schemas_dir = candidate
+                    break
+                    
+        # Add runtime information with safe defaults and fallbacks
         self.runtime = {
-            "project_root": str(PROJECT_ROOT),
+            "project_root": str(PROJECT_ROOT) if PROJECT_ROOT else str(Path.cwd()),
             "python_version": platform.python_version(),
             "system": platform.system(),
             "platform": platform.platform(),
             "artifact_discipline": ARTIFACT_DISCIPLINE,
-            "schemas_dir": str(SCHEMA_DIR),
+            "schemas_dir": str(schemas_dir) if schemas_dir else "schemas",
         }
         
     def _load_config(self) -> Dict[str, Any]:
@@ -105,19 +155,34 @@ class Config:
         Load configuration from file.
         
         Returns:
-            Configuration dictionary
+            Configuration dictionary with empty dict as fallback
         """
+        # Handle case where config_file is None
+        if not self.config_file:
+            logger.debug("No configuration file specified, using defaults")
+            return {}
+            
+        # Handle case where config_file doesn't exist
         if not self.config_file.exists():
             logger.warning(f"Configuration file {self.config_file} not found, using defaults")
             return {}
             
+        # Try to load and parse the config file
         try:
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
             logger.debug(f"Loaded configuration from {self.config_file}")
             return config
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing configuration file {self.config_file}: {e}")
+            logger.warning("Using default configuration instead")
+            return {}
+        except (IOError, PermissionError) as e:
+            logger.error(f"Error accessing configuration file {self.config_file}: {e}")
+            logger.warning("Using default configuration instead")
+            return {}
         except Exception as e:
-            logger.error(f"Error loading configuration: {e}")
+            logger.error(f"Unexpected error loading configuration: {e}")
             return {}
     
     def get(self, key: str, default: Any = None) -> Any:
@@ -207,23 +272,47 @@ class Config:
         Returns:
             Path to schema file or None if not found
         """
-        schema_path = SCHEMA_DIR / schema_type / version
-        
-        if not schema_path.exists():
-            logger.warning(f"Schema directory {schema_path} not found")
+        # Try using schema directory from runtime settings
+        schemas_dir_str = self.runtime.get("schemas_dir")
+        if not schemas_dir_str:
+            logger.warning("No schemas directory configured")
             return None
             
-        # Look for main schema file
-        schema_file = schema_path / "schema.json"
-        if schema_file.exists():
-            return schema_file
+        # Convert string path to Path object
+        try:
+            schemas_dir = Path(schemas_dir_str)
+        except Exception as e:
+            logger.error(f"Invalid schemas directory path: {e}")
+            return None
+        
+        # Check multiple possible schema locations
+        schema_locations = [
+            schemas_dir / schema_type / version,  # Standard: schemas/type/version/
+            schemas_dir / version / schema_type,  # Alternative: schemas/version/type/
+            schemas_dir / schema_type,            # Simplified: schemas/type/
+            schemas_dir                           # Direct: schemas/
+        ]
+        
+        # Try each location
+        for schema_path in schema_locations:
+            if not schema_path.exists():
+                continue
+                
+            # Try different file naming patterns
+            schema_files = [
+                schema_path / "schema.json",                # Standard: schema.json
+                schema_path / f"{schema_type}.json",        # Type-specific: type.json
+                schema_path / f"{schema_type}_{version}.json", # Versioned: type_version.json
+                schema_path / "schema" / "schema.json"      # Nested: schema/schema.json
+            ]
             
-        # Look for type-specific schema file
-        schema_file = schema_path / f"{schema_type}.json"
-        if schema_file.exists():
-            return schema_file
-            
-        logger.warning(f"Schema file not found in {schema_path}")
+            # Return first matching file
+            for schema_file in schema_files:
+                if schema_file.exists():
+                    return schema_file
+                    
+        # No schema file found after trying all locations
+        logger.warning(f"No schema file found for {schema_type} version {version}")
         return None
     
     def get_artifact_path(self, artifact_type: str, context: str) -> str:
@@ -237,17 +326,34 @@ class Config:
         Returns:
             Canonical artifact path
         """
-        if not ARTIFACT_DISCIPLINE:
+        try:
+            # Try to use artifact discipline if available
+            if ARTIFACT_DISCIPLINE:
+                return get_canonical_artifact_path(artifact_type, context)
+                
             # Fallback without artifact discipline
             from datetime import datetime
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_dir = os.path.join(PROJECT_ROOT, "artifacts", artifact_type, 
+            
+            # Use PROJECT_ROOT if available, otherwise fall back to current directory
+            base_dir = PROJECT_ROOT if PROJECT_ROOT else Path.cwd()
+            
+            # Create artifacts directory path
+            output_dir = os.path.join(base_dir, "artifacts", artifact_type, 
                                f"{context}_{timestamp}")
+            
+            # Ensure directory exists
             os.makedirs(output_dir, exist_ok=True)
             return output_dir
             
-        # Use artifact discipline
-        return get_canonical_artifact_path(artifact_type, context)
+        except Exception as e:
+            # Ultimate fallback: temporary directory
+            logger.error(f"Error creating artifact path: {e}")
+            logger.warning("Using fallback temporary directory for artifacts")
+            
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix=f"file_analyzer_{artifact_type}_")
+            return temp_dir
 
 # Create a global configuration instance
 config = Config()
