@@ -156,14 +156,14 @@ mkdir -p "$CHECKPOINTS_DIR"
 
 # Download the specified model
 if [ "$MODEL_SIZE" == "0.5b" ]; then
-    MODEL_NAME="llava-fastvithd_0.5b_stage3"
-    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage3.zip"
+    MODEL_NAME="llava-fastvithd_0.5b_stage2"
+    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage2.zip"
 elif [ "$MODEL_SIZE" == "1.5b" ]; then
-    MODEL_NAME="llava-fastvithd_1.5b_stage3"
-    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage3.zip"
+    MODEL_NAME="llava-fastvithd_1.5b_stage2"
+    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage2.zip"
 elif [ "$MODEL_SIZE" == "7b" ]; then
-    MODEL_NAME="llava-fastvithd_7b_stage3"
-    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_7b_stage3.zip"
+    MODEL_NAME="llava-fastvithd_7b_stage2"
+    MODEL_URL="https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_7b_stage2.zip"
 else
     echo "Unknown model size: $MODEL_SIZE"
     echo "Valid sizes are: 0.5b, 1.5b, 7b"
@@ -249,6 +249,11 @@ fi
 # Create checkpoints directory
 mkdir -p "$FASTVLM_DIR/checkpoints"
 
+# Clean up duplicate downloads if they exist
+log "Cleaning up any duplicate downloads..."
+find "$FASTVLM_DIR/checkpoints" -name "*.zip.*" -type f -exec rm -f {} \;
+[ $? -eq 0 ] && log "✓ Cleaned up duplicate downloads"
+
 # Download the default model to the repository
 log "Downloading the default model (0.5b) to the repository..."
 if [ -x "$FASTVLM_DIR/get_models.sh" ]; then
@@ -262,7 +267,7 @@ if [ -x "$FASTVLM_DIR/get_models.sh" ]; then
         mkdir -p "$model_path"
         
         # Check if repo has the model files
-        repo_model_dir="$FASTVLM_DIR/checkpoints/llava-fastvithd_0.5b_stage3"
+        repo_model_dir="$FASTVLM_DIR/checkpoints/llava-fastvithd_0.5b_stage2"
         if [ -d "$repo_model_dir" ] && [ "$(find "$repo_model_dir" -type f | wc -l)" -gt 0 ]; then
             # Copy model files to user directory
             cp -r "$repo_model_dir"/* "$model_path"/ 2>/dev/null || true
