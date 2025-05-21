@@ -60,6 +60,9 @@ def setup_logging(verbose: bool = False, quiet: bool = False, json_logs: bool = 
     else:
         log_level = logging.INFO
     
+    # Clear existing handlers to prevent duplicates if setup_logging is called multiple times
+    logging.root.handlers.clear()
+    
     if json_logs:
         # Configure JSON logging
         from pythonjsonlogger import json as jsonlog

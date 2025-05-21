@@ -14,6 +14,11 @@ import json
 import tempfile
 import os
 from unittest.mock import patch, MagicMock, mock_open
+
+# Add project root to path for imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 from rich.console import Console
 
 # Import the setup_logging function from our CLI module
@@ -186,6 +191,20 @@ class TestCliLogging(unittest.TestCase):
         
         # Check that color system is disabled
         self.assertIsNone(console.color_system)
+        
+    def test_handler_clearing(self):
+        """Test that existing handlers are cleared when setup_logging is called multiple times."""
+        # Add a dummy handler to root logger
+        dummy_handler = logging.StreamHandler()
+        logging.root.addHandler(dummy_handler)
+        original_handler_count = len(logging.root.handlers)
+        
+        # Call setup_logging multiple times
+        setup_logging()
+        setup_logging()
+        
+        # The number of handlers should remain consistent (not increase with each call)
+        self.assertLessEqual(len(logging.root.handlers), original_handler_count)
     
     def test_combined_modes(self):
         """Test combinations of different modes."""

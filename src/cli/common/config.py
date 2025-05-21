@@ -363,14 +363,14 @@ class Config:
             # Ultimate fallback: temporary directory - capture filesystem-related errors
             logger.error(f"Error creating artifact path: {e}")
             logger.warning("Using fallback temporary directory for artifacts")
-        except Exception as e:
-            # Unexpected errors should be re-raised after logging
-            logger.critical(f"Unexpected error creating artifact path: {e}")
-            raise
             
             import tempfile
             temp_dir = tempfile.mkdtemp(prefix=f"file_analyzer_{artifact_type}_")
             return temp_dir
+        except Exception as e:
+            # Unexpected errors should be re-raised after logging
+            logger.critical(f"Unexpected error creating artifact path: {e}")
+            raise
 
 # Create a global configuration instance
 config = Config()
