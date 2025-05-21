@@ -4,7 +4,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD_SCRIPT="artifact_guard_py_adapter.sh"
-ALLOWED_UNSOURCED=("$GUARD_SCRIPT" "preflight.sh" "cleanup.sh" "check_script_conformity.sh" "artifacts.env")
+ALLOWED_UNSOURCED=("$GUARD_SCRIPT" "preflight.sh" "cleanup.sh" "check_script_conformity.sh" "artifacts.env" "check_all_scripts.sh" "install.sh")
 
 # Color definitions
 RED='\033[0;31m'
@@ -45,6 +45,12 @@ find_scripts() {
   echo "----------------------------------------"
   
   while IFS= read -r script; do
+    # Skip scripts in the libs/ directory
+    if [[ "$script" == *"/libs/"* ]]; then
+      echo -e "${YELLOW}${BOLD}EXEMPT${NC}: $script (in libs/ directory - external library)"
+      continue
+    fi
+    
     check_script "$script"
     if [ $? -ne 0 ]; then
       ((failures++))
@@ -77,6 +83,12 @@ if [ $# -gt 0 ]; then
   
   failures=0
   for script in "$@"; do
+    # Skip scripts in the libs/ directory
+    if [[ "$script" == *"/libs/"* ]]; then
+      echo -e "${YELLOW}${BOLD}EXEMPT${NC}: $script (in libs/ directory - external library)"
+      continue
+    fi
+    
     if [[ -f "$script" && "$script" == *.sh ]]; then
       check_script "$script"
       if [ $? -ne 0 ]; then

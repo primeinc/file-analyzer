@@ -85,8 +85,8 @@ fi
 # Search for scripts without artifact_guard_py_adapter.sh sourcing
 echo -e "\n${BOLD}Checking scripts for artifact_guard_py_adapter.sh sourcing:${NC}"
 SCRIPT_FAILURES=0
-# Exclude libs/ directory from script checks as it contains third-party libraries
-SCRIPT_FILES=$(find . -name "*.sh" -type f | grep -v "artifact_guard.sh" | grep -v "artifact_guard_py_adapter.sh" | grep -v "cleanup.sh" | grep -v "preflight.sh" | grep -v "./libs/")
+# Exclude libs/ directory and ml-fastvlm files from script checks as they contain third-party libraries
+SCRIPT_FILES=$(find . -name "*.sh" -type f | grep -v "artifact_guard.sh" | grep -v "artifact_guard_py_adapter.sh" | grep -v "cleanup.sh" | grep -v "preflight.sh" | grep -v "/libs/" | grep -v "ml-fastvlm")
 
 for script in $SCRIPT_FILES; do
   EXEMPT=false
