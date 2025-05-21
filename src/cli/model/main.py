@@ -27,7 +27,7 @@ from src.cli.common.config import config
 from src.cli.main import console
 
 # Import artifact_guard utilities
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     get_canonical_artifact_path,
     validate_artifact_path,
     PathGuard
@@ -356,9 +356,12 @@ def download_model_cmd(
             console.print(f"[yellow]Removing existing model directory...[/yellow]")
             shutil.rmtree(model_path)
         
+        # Ensure the model path exists
+        os.makedirs(model_path, exist_ok=True)
+        
         # Extract the model
         console.print(f"[bold]Extracting model files...[/bold]")
-        if not extract_zip(tmp_path, model_dir):
+        if not extract_zip(tmp_path, model_path):
             console.print(f"[red]Failed to extract model files.[/red]")
             os.remove(tmp_path)
             return 1

@@ -23,8 +23,14 @@ from src.core.analyzer import FileAnalyzer, verify_installation
 # Create Typer app for analyze subcommand
 app = typer.Typer(help="Analyze files and directories")
 
-# Dictionary to store verification results for rich output
-verification_results = {}
+# Create a class to store state across command invocations
+class AnalyzeState:
+    """Class to store state for the analyze command."""
+    def __init__(self):
+        self.verification_results = {}
+
+# Initialize state
+state = AnalyzeState()
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
@@ -646,9 +652,8 @@ def verify(
     # Get verification results
     verification = verify_installation()
     
-    # Store verification results for later use
-    global verification_results
-    verification_results = verification
+    # Store verification results in the state object
+    state.verification_results = verification
     
     # Print verification results in a more beautiful way
     console.print("\n[bold green]System Information:[/bold green]")

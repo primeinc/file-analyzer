@@ -26,14 +26,14 @@ from src.cli.common.config import config
 from src.cli.main import console
 
 # Import artifact_guard utilities
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     get_canonical_artifact_path,
     validate_artifact_path,
     PathGuard
 )
 
 # Import benchmark utilities
-from src.cli.benchmark.main import find_test_images, get_image_info
+from src.cli.benchmark.utils import find_test_images, get_image_info
 
 # Get canonical artifact path for cache
 CACHE_DIR = get_canonical_artifact_path("benchmark", "cache")

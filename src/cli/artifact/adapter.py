@@ -14,12 +14,13 @@ import subprocess
 from typing import List, Dict, Optional, Tuple, Any
 
 # Import core artifact guard functionality
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     get_canonical_artifact_path,
     validate_artifact_path,
     cleanup_artifacts,
     setup_artifact_structure,
-    ARTIFACTS_ROOT
+    ARTIFACTS_ROOT,
+    ARTIFACT_TYPES
 )
 
 def shell_command(command: str) -> str:
@@ -308,7 +309,7 @@ def main():
     
     # Create command
     create_parser = subparsers.add_parser("create", help="Create a canonical artifact path")
-    create_parser.add_argument("type", choices=["analysis", "vision", "test", "benchmark", "json", "tmp"], 
+    create_parser.add_argument("type", choices=ARTIFACT_TYPES, 
                               help="Artifact type")
     create_parser.add_argument("context", help="Artifact context description")
     
