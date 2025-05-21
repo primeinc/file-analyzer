@@ -1,5 +1,5 @@
 {
-    "default_output_dir": "analysis_results",
+    "default_output_dir": "artifacts/analysis",
     "max_threads": 4,
     "max_ocr_images": 50,
     "max_metadata_files": 20,
