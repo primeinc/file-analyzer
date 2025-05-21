@@ -506,10 +506,12 @@ TESTS = {
 
 if __name__ == "__main__":
     # Simple test
-    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(logging.INFO)
     result = run_test({
         "name": "fastvlm",
         "verbose": True,
         "use_mock": True,
+        "logger": logger,
     })
     print(json.dumps(result, indent=2))

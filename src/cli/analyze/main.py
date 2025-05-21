@@ -75,8 +75,9 @@ def all(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    # Use the existing logger configured in main.py
     logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Check if path exists
     if not os.path.exists(path):
@@ -166,7 +167,8 @@ def metadata(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Create configuration for analyzer
     analysis_config = {
@@ -231,7 +233,8 @@ def duplicates(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Check if path is a directory
     if not os.path.isdir(path):
@@ -302,7 +305,8 @@ def ocr(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Create configuration for analyzer
     analysis_config = {
@@ -368,7 +372,8 @@ def virus(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Create configuration for analyzer
     analysis_config = {}
@@ -445,7 +450,8 @@ def search(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Create configuration for analyzer
     analysis_config = {
@@ -511,7 +517,8 @@ def binary(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Check if path is a file
     if not os.path.isfile(path):
@@ -593,7 +600,8 @@ def vision(
     elif quiet:
         log_level = logging.ERROR
     
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
     
     # Create configuration for analyzer
     analysis_config = {

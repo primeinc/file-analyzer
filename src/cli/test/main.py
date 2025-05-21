@@ -193,19 +193,9 @@ def run(
     elif quiet:
         log_level = logging.ERROR
     
-    # Configure logging
-    if log_json:
-        # Configure JSON logging
-        import json_log_formatter
-        formatter = json_log_formatter.JSONFormatter()
-        handler = logging.StreamHandler()
-        handler.setFormatter(formatter)
-        logging.basicConfig(level=log_level, handlers=[handler])
-    else:
-        # Configure regular logging
-        logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
-    
+    # Use the existing logger configured in main.py
     logger = logging.getLogger("file-analyzer.test")
+    logger.setLevel(log_level)
     
     # Create output directory if specified
     if output_dir:

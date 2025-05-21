@@ -62,7 +62,7 @@ def schema(
     """
     Validate a JSON file against a schema.
     """
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    # Use the existing logger configured in main.py
     logger = logging.getLogger("file-analyzer.validate")
     
     # Check if file exists
@@ -205,7 +205,7 @@ def images(
     """
     Compare two images using various methods.
     """
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    # Use the existing logger configured in main.py
     logger = logging.getLogger("file-analyzer.validate")
     
     # Check if images exist
@@ -448,7 +448,7 @@ def run(
     """
     Run a comprehensive validation on analysis artifacts.
     """
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    # Use the existing logger configured in main.py
     logger = logging.getLogger("file-analyzer.validate")
     
     # Check if artifact directory exists
@@ -676,7 +676,7 @@ def manifest(
     """
     Validate a manifest file and its referenced artifacts.
     """
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    # Use the existing logger configured in main.py
     logger = logging.getLogger("file-analyzer.validate")
     
     # Check if manifest file exists

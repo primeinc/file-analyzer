@@ -23,10 +23,10 @@ app = typer.Typer(
     add_completion=True,
 )
 
-# Initialize console for rich output
-console = Console()
+# Initialize console reference - actual instance will be created in main()
+console = None
 
-def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Optional[str] = None):
+def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Optional[str] = None, no_color: bool = False):
     """
     Configure logging based on CLI options.
     
@@ -34,7 +34,13 @@ def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Opti
         verbose: Enable verbose logging
         json_logs: Output logs in JSON format
         log_file: Optional path to log file
+        no_color: Disable colored output
     """
+    global console
+    
+    # Create console with appropriate color settings
+    console = Console(color_system=None if no_color else "auto")
+    
     log_level = logging.DEBUG if verbose else logging.INFO
     
     if json_logs:
@@ -56,7 +62,7 @@ def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Opti
             level=log_level,
             format="%(message)s",
             datefmt="[%X]",
-            handlers=[RichHandler(rich_tracebacks=True)] 
+            handlers=[RichHandler(console=console, rich_tracebacks=True)] 
         )
     
     logger = logging.getLogger("file-analyzer")
@@ -157,10 +163,6 @@ def main(
             console.print("File Analyzer CLI (version unknown)")
         raise typer.Exit()
     
-    # Configure console based on options
-    if no_color:
-        console = Console(color_system=None)
-    
     # Set up logging based on verbosity
     if quiet:
         log_level = logging.ERROR
@@ -169,11 +171,12 @@ def main(
     else:
         log_level = logging.INFO
         
-    # Configure logging
+    # Configure logging and console with color settings
     logger = setup_logging(
         verbose=verbose and not quiet,
         json_logs=log_json,
-        log_file=log_file
+        log_file=log_file,
+        no_color=no_color
     )
     
     # Capture environment for debugging/reproducibility
@@ -187,6 +190,11 @@ def main(
 @app.command()
 def version():
     """Show version information."""
+    global console
+    # Ensure console is initialized
+    if console is None:
+        console = Console()
+        
     from importlib.metadata import version as get_version
     try:
         v = get_version("file-analyzer")
