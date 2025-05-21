@@ -10,10 +10,7 @@ import os
 import sys
 import json
 import time
-import shutil
 import logging
-import tempfile
-import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -392,7 +389,7 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
                         if console:
                             console.print(f"  ✓ Valid JSON")
                             
-                        # Check for required fields
+                        # First, check for basic required fields
                         if 'description' in json_data and 'tags' in json_data:
                             validation_result["has_required_fields"] = True
                             if console:
@@ -400,6 +397,37 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
                         else:
                             if console:
                                 console.print(f"  ✗ Missing required fields (acceptable for testing)")
+
+                        # Now, try to validate against the schema if jsonschema is available
+                        try:
+                            import jsonschema
+                            
+                            # Get the schema path from config
+                            schema_path = context["config"].get_schema_path("fastvlm", "v1.0")
+                            
+                            if schema_path and os.path.exists(schema_path):
+                                # Load the schema
+                                with open(schema_path, 'r') as schema_file:
+                                    schema = json.load(schema_file)
+                                
+                                # Validate against schema
+                                try:
+                                    jsonschema.validate(json_data, schema)
+                                    validation_result["schema_valid"] = True
+                                    if console:
+                                        console.print(f"  ✓ Valid against schema")
+                                except jsonschema.exceptions.ValidationError as schema_error:
+                                    validation_result["schema_valid"] = False
+                                    validation_result["schema_error"] = str(schema_error)
+                                    if console:
+                                        console.print(f"  ✗ Schema validation error (acceptable for testing)")
+                            else:
+                                if console:
+                                    console.print(f"  ⚠ Schema not found for validation")
+                        except ImportError:
+                            # jsonschema not available, skip schema validation
+                            if console and verbose:
+                                console.print(f"  ⚠ jsonschema package not available, skipping schema validation")
                     else:
                         validation_result["error"] = "File not found"
                 except json.JSONDecodeError as e:
@@ -425,11 +453,8 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
         }
         errors.append(f"JSON validation test failed: {str(e)}")
     
-    # Make the results directory browseable
-    try:
-        os.chmod(output_dir, 0o755)
-    except:
-        pass
+    # Ensure output directory is accessible
+    # Note: Explicit permissions no longer set as os.makedirs creates with sufficient permissions
     
     # Write summary of all tests
     if console:

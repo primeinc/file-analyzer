@@ -7,9 +7,7 @@ interface to the core file analysis functionality in src/analyzer.py.
 """
 
 import os
-import sys
 import logging
-from pathlib import Path
 from typing import Optional, List
 
 import typer
@@ -25,6 +23,22 @@ from src import analyzer
 # Create Typer app for analyze subcommand
 app = typer.Typer(help="Analyze files and directories")
 console = Console()
+
+def get_logger(verbose: bool = False, quiet: bool = False):
+    """
+    Configure and return the logger for analyze commands.
+    
+    Args:
+        verbose: Enable verbose output
+        quiet: Suppress all output except errors
+        
+    Returns:
+        Configured logger instance
+    """
+    log_level = logging.DEBUG if verbose else (logging.ERROR if quiet else logging.INFO)
+    logger = logging.getLogger("file-analyzer")
+    logger.setLevel(log_level)
+    return logger
 
 @app.callback()
 def callback():
@@ -69,15 +83,8 @@ def all(
     """
     Run all analysis types on the specified path.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    # Use the existing logger configured in main.py
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Check if path exists
     if not os.path.exists(path):
@@ -129,7 +136,29 @@ def all(
     
     # Print summary
     console.print("\n[bold]Analysis Complete[/bold]")
-    console.print(f"Results path: {results.get('analyses', {}).get('metadata', {}).get('file', '')}")
+    
+    # Find a results path from the available analyses in a more robust way
+    results_path = ""
+    analyses = results.get('analyses', {})
+    
+    # Try to find any output file from the analyses, prioritizing in this order
+    for analysis_type in ['metadata', 'vision', 'ocr', 'duplicates', 'virus', 'search', 'binary']:
+        if analysis_type in analyses:
+            analysis_result = analyses[analysis_type]
+            if 'file' in analysis_result:
+                results_path = analysis_result['file']
+                break
+            elif 'output_path' in analysis_result:
+                results_path = analysis_result['output_path']
+                break
+            elif 'output_dir' in analysis_result:
+                results_path = analysis_result['output_dir']
+                break
+    
+    if results_path:
+        console.print(f"Results path: {results_path}")
+    else:
+        console.print("Results saved to output directory")
     
     # Return success
     return 0
@@ -161,14 +190,8 @@ def metadata(
     """
     Extract metadata from files.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Create configuration for analyzer
     analysis_config = {
@@ -227,14 +250,8 @@ def duplicates(
     """
     Find duplicate files.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Check if path is a directory
     if not os.path.isdir(path):
@@ -299,14 +316,8 @@ def ocr(
     """
     Perform OCR on images.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Create configuration for analyzer
     analysis_config = {
@@ -366,14 +377,8 @@ def virus(
     """
     Scan for malware.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Create configuration for analyzer
     analysis_config = {}
@@ -444,14 +449,8 @@ def search(
     """
     Search file contents for specific text.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Create configuration for analyzer
     analysis_config = {
@@ -511,14 +510,8 @@ def binary(
     """
     Analyze binary files.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Check if path is a file
     if not os.path.isfile(path):
@@ -594,14 +587,8 @@ def vision(
     """
     Analyze images with AI vision models.
     """
-    log_level = logging.INFO
-    if verbose:
-        log_level = logging.DEBUG
-    elif quiet:
-        log_level = logging.ERROR
-    
-    logger = logging.getLogger("file-analyzer")
-    logger.setLevel(log_level)
+    # Get configured logger
+    logger = get_logger(verbose, quiet)
     
     # Create configuration for analyzer
     analysis_config = {

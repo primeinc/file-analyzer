@@ -11,7 +11,7 @@ import sys
 import os
 import platform
 from importlib.metadata import entry_points
-from typing import Optional
+from typing import Optional, Tuple
 
 import typer
 from rich.console import Console
@@ -26,7 +26,8 @@ app = typer.Typer(
 # Initialize a default console for use outside of the main CLI flow
 console = Console()
 
-def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Optional[str] = None, no_color: bool = False) -> Console:
+def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Optional[str] = None, 
+               no_color: bool = False, ci: bool = False) -> Tuple[Console, logging.Logger]:
     """
     Configure logging based on CLI options.
     
@@ -35,12 +36,20 @@ def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Opti
         json_logs: Output logs in JSON format
         log_file: Optional path to log file
         no_color: Disable colored output
+        ci: Run in CI mode (disables animations and colors)
         
     Returns:
-        Console: The configured console instance
+        tuple[Console, Logger]: The configured console and logger instances
     """
     # Create console with appropriate color settings
-    configured_console = Console(color_system=None if no_color else "auto")
+    # CI mode disables animations and potentially colors
+    console_options = {
+        "color_system": None if no_color or ci else "auto",
+        "highlight": not ci,
+        "markup": not ci,
+        "emoji": not ci,
+    }
+    configured_console = Console(**console_options)
     
     log_level = logging.DEBUG if verbose else logging.INFO
     
@@ -59,11 +68,17 @@ def setup_logging(verbose: bool = False, json_logs: bool = False, log_file: Opti
         logging.basicConfig(level=log_level, handlers=[handler])
     else:
         # Configure rich colored logging
+        rich_handler_options = {
+            "console": configured_console,
+            "rich_tracebacks": True,
+            "show_time": not ci,
+            "show_path": not ci
+        }
         logging.basicConfig(
             level=log_level,
-            format="%(message)s",
+            format="%(message)s" if not ci else "%(levelname)s: %(message)s",
             datefmt="[%X]",
-            handlers=[RichHandler(console=configured_console, rich_tracebacks=True)] 
+            handlers=[RichHandler(**rich_handler_options)] 
         )
     
     logger = logging.getLogger("file-analyzer")
@@ -182,7 +197,8 @@ def main(
         verbose=verbose and not quiet,
         json_logs=log_json,
         log_file=log_file,
-        no_color=no_color
+        no_color=no_color,
+        ci=ci
     )
     
     # Capture environment for debugging/reproducibility

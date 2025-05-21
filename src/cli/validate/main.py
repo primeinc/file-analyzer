@@ -196,7 +196,8 @@ def images(
         "pixel", "--method", "-m", help="Comparison method: pixel, hash, or ssim"
     ),
     threshold: float = typer.Option(
-        0.1, "--threshold", "-t", help="Threshold for comparison (0.0-1.0)"
+        0.1, "--threshold", "-t", 
+        help="Comparison tolerance (0.0-1.0): For 'pixel' mode, higher values are more strict. For 'hash' and 'ssim' modes, higher values are less strict (allow more differences)."
     ),
     strict: bool = typer.Option(
         False, "--strict", help="Fail on any difference (exact match required)"

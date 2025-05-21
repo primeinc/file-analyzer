@@ -10,9 +10,7 @@ import os
 import sys
 import json
 import time
-import shutil
 import logging
-import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -20,6 +18,56 @@ from typing import Dict, Any, Optional, List
 from src.benchmark_fastvlm import download_test_images, find_test_images, run_benchmark
 import src.fastvlm_analyzer
 import src.fastvlm_errors
+
+# Define a mock analyzer for testing without creating files
+class MockAnalyzer:
+    """Mock analyzer for testing without real FastVLM model."""
+    def __init__(self):
+        self.model_info = {'name': 'MockModel'}
+        self.model_path = '/mock/path'
+        
+    def analyze_image(self, path, prompt=None, mode="describe"):
+        """Simulate analyzing an image."""
+        # Add slight delay to simulate processing
+        time.sleep(0.1)
+        
+        if mode == "describe":
+            return {
+                "description": f"Mock analysis of image: {path}",
+                "tags": ["test", "mock", "benchmark"],
+                "metadata": {
+                    "time": 0.1,
+                    "model": "MockModel"
+                }
+            }
+        elif mode == "detect":
+            return {
+                "objects": [
+                    {"label": "mock object", "confidence": 0.95, "bbox": [10, 10, 100, 100]},
+                    {"label": "test item", "confidence": 0.85, "bbox": [150, 150, 200, 200]}
+                ],
+                "metadata": {
+                    "time": 0.1,
+                    "model": "MockModel"
+                }
+            }
+        elif mode == "document":
+            return {
+                "text": "This is mock extracted text from the document.",
+                "document_type": "mock document",
+                "metadata": {
+                    "time": 0.1,
+                    "model": "MockModel"
+                }
+            }
+        else:
+            return {
+                "error": f"Unknown mode: {mode}",
+                "metadata": {
+                    "time": 0.1,
+                    "model": "MockModel"
+                }
+            }
 
 def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -145,78 +193,24 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
         errors.append(f"Model discovery failed: {str(e)}")
         use_mock = True
         
-    # 3. Create a mock analyzer if needed
+    # 3. Use our built-in mock analyzer if needed
     if use_mock:
         if console:
-            console.print(f"[blue]Creating a mock analyzer for testing...[/blue]")
+            console.print(f"[blue]Using mock analyzer for testing...[/blue]")
             
         try:
-            # Create mock analyzer module
-            mock_analyzer_path = os.path.join(output_dir, "mock_analyzer.py")
-            with open(mock_analyzer_path, "w") as f:
-                f.write('''import time
-
-class MockAnalyzer:
-    """Mock analyzer for testing without real FastVLM model."""
-    def __init__(self):
-        self.model_info = {'name': 'MockModel'}
-        self.model_path = '/mock/path'
-        
-    def analyze_image(self, path, prompt=None, mode="describe"):
-        """Simulate analyzing an image."""
-        # Add slight delay to simulate processing
-        time.sleep(0.1)
-        
-        if mode == "describe":
-            return {
-                "description": f"Mock analysis of image: {path}",
-                "tags": ["test", "mock", "benchmark"],
-                "metadata": {
-                    "time": 0.1,
-                    "model": "MockModel"
-                }
-            }
-        elif mode == "detect":
-            return {
-                "objects": [
-                    {"label": "mock object", "confidence": 0.95, "bbox": [10, 10, 100, 100]},
-                    {"label": "test item", "confidence": 0.85, "bbox": [150, 150, 200, 200]}
-                ],
-                "metadata": {
-                    "time": 0.1,
-                    "model": "MockModel"
-                }
-            }
-        elif mode == "document":
-            return {
-                "text": "This is mock extracted text from the document.",
-                "document_type": "mock document",
-                "metadata": {
-                    "time": 0.1,
-                    "model": "MockModel"
-                }
-            }
-        else:
-            return {
-                "error": f"Unknown mode: {mode}",
-                "metadata": {
-                    "time": 0.1,
-                    "model": "MockModel"
-                }
-            }
-''')
+            # Use our built-in MockAnalyzer class
             results["mock_analyzer"] = {
                 "status": "ok",
-                "message": "Mock analyzer created",
-                "path": mock_analyzer_path
+                "message": "Using built-in MockAnalyzer class"
             }
         except Exception as e:
-            logger.error(f"Error creating mock analyzer: {e}")
+            logger.error(f"Error setting up mock analyzer: {e}")
             results["mock_analyzer"] = {
                 "status": "error",
-                "message": f"Error creating mock analyzer: {str(e)}"
+                "message": f"Error setting up mock analyzer: {str(e)}"
             }
-            errors.append(f"Mock analyzer creation failed: {str(e)}")
+            errors.append(f"Mock analyzer setup failed: {str(e)}")
             
     # 4. Use or download standard sample images
     if console:
@@ -256,37 +250,30 @@ class MockAnalyzer:
             console.print(f"[blue]Running benchmark with mock analyzer...[/blue]")
             
         try:
-            # First, create the mock analyzer
-            sys.path.insert(0, output_dir)
-            try:
-                from mock_analyzer import MockAnalyzer
-                mock_analyzer = MockAnalyzer()
+            # Use our built-in MockAnalyzer class
+            mock_analyzer = MockAnalyzer()
+            
+            # Find test images
+            image_files = find_test_images()
+            
+            if image_files:
+                logger.info(f"Running benchmark with {len(image_files)} test images")
+                output_file = os.path.join(output_dir, "mock_benchmark_results.json")
+                benchmark_results = run_benchmark(mock_analyzer, image_files, output_file)
                 
-                # Find test images
-                image_files = find_test_images()
-                
-                if image_files:
-                    logger.info(f"Running benchmark with {len(image_files)} test images")
-                    output_file = os.path.join(output_dir, "mock_benchmark_results.json")
-                    benchmark_results = run_benchmark(mock_analyzer, image_files, output_file)
-                    
-                    results["mock_benchmark"] = {
-                        "status": "ok",
-                        "message": f"Mock benchmark completed with {len(image_files)} images",
-                        "output_file": output_file,
-                        "benchmark_results": benchmark_results
-                    }
-                else:
-                    logger.warning("No test images found for testing")
-                    results["mock_benchmark"] = {
-                        "status": "warning",
-                        "message": "No test images found for testing"
-                    }
-                    errors.append("No test images found for benchmark")
-            finally:
-                # Remove output_dir from Python path
-                if output_dir in sys.path:
-                    sys.path.remove(output_dir)
+                results["mock_benchmark"] = {
+                    "status": "ok",
+                    "message": f"Mock benchmark completed with {len(image_files)} images",
+                    "output_file": output_file,
+                    "benchmark_results": benchmark_results
+                }
+            else:
+                logger.warning("No test images found for testing")
+                results["mock_benchmark"] = {
+                    "status": "warning",
+                    "message": "No test images found for testing"
+                }
+                errors.append("No test images found for benchmark")
                 
         except Exception as e:
             logger.error(f"Error running mock benchmark: {e}")
@@ -392,15 +379,9 @@ class MockAnalyzer:
                 console.print(f"[blue]Testing different analysis modes...[/blue]")
                 
             try:
-                # If using mock, use the mock analyzer
+                # If using mock, use the built-in mock analyzer
                 if use_mock:
-                    sys.path.insert(0, output_dir)
-                    try:
-                        from mock_analyzer import MockAnalyzer
-                        analyzer = MockAnalyzer()
-                    finally:
-                        if output_dir in sys.path:
-                            sys.path.remove(output_dir)
+                    analyzer = MockAnalyzer()
                 else:
                     # Use real analyzer
                     analyzer = src.fastvlm_analyzer.FastVLMAnalyzer(model_size=model_size)
@@ -484,11 +465,8 @@ class MockAnalyzer:
             "results": results
         }, f, indent=2)
         
-    # Make the results directory browseable
-    try:
-        os.chmod(output_dir, 0o755)
-    except:
-        pass
+    # Ensure output directory is accessible
+    # Note: Explicit permissions no longer set as os.makedirs creates with sufficient permissions
         
     # Return test results
     return {
