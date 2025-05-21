@@ -10,10 +10,41 @@ Unified tool for comprehensive file analysis combining:
 - binwalk: Binary analysis
 - Vision Models: AI-powered image analysis (FastVLM, BakLLaVA, Qwen2-VL)
 
+## Project Structure
+
+```
+├── src/                        # Core source code (Python modules)
+│   ├── analyzer.py             # Main analyzer module
+│   ├── vision.py               # Vision analysis module
+│   └── json_utils.py           # JSON processing utilities
+│
+├── tools/                      # Command-line tools and utilities
+│   ├── analyze.sh              # Main CLI wrapper
+│   ├── vision_test.sh          # Vision model testing
+│   ├── json_test.sh            # JSON output testing
+│   ├── benchmark_fastvlm.py    # Model benchmarking tools
+│   └── ...                     # Other utility scripts
+│
+├── tests/                      # Test scripts and validation
+│   ├── test_path_enforcement.sh
+│   ├── strict_example.sh       
+│   ├── test_fastvlm.sh
+│   └── ...                     # Test harnesses
+│
+├── artifacts/                  # Canonical storage for outputs
+│   ├── analysis/               # Analysis results
+│   ├── vision/                 # Vision model outputs
+│   ├── test/                   # Test results
+│   ├── benchmark/              # Performance benchmarks
+│   └── tmp/                    # Temporary files
+│
+└── artifact_guard.sh           # Runtime path enforcement
+```
+
 ## Usage
 
 ```bash
-./analyze.sh [options] path_to_analyze
+./tools/analyze.sh [options] path_to_analyze
 ```
 
 ### Options
@@ -40,65 +71,62 @@ Unified tool for comprehensive file analysis combining:
 
 ```bash
 # Run all analyses on a directory
-./analyze.sh -a ~/Documents
+./tools/analyze.sh -a ~/Documents
 
 # Extract metadata and scan for duplicates
-./analyze.sh -m -d ~/Pictures
+./tools/analyze.sh -m -d ~/Pictures
 
 # Search for specific content
-./analyze.sh -s "password" ~/Downloads
+./tools/analyze.sh -s "password" ~/Downloads
 
 # OCR images in a directory
-./analyze.sh -o ~/Screenshots
+./tools/analyze.sh -o ~/Screenshots
 
 # Include only specific file types
-./analyze.sh -a -i "*.jpg" -i "*.png" ~/Pictures
+./tools/analyze.sh -a -i "*.jpg" -i "*.png" ~/Pictures
 
 # Exclude specific patterns
-./analyze.sh -a -x "*.log" -x "*.tmp" ~/Documents
+./tools/analyze.sh -a -x "*.log" -x "*.tmp" ~/Documents
 
 # Use a custom config file
-./analyze.sh -a -c ~/my_config.json ~/Documents
+./tools/analyze.sh -a -c ~/my_config.json ~/Documents
 
 # Analyze images with AI vision models
-./analyze.sh -V ~/Pictures
+./tools/analyze.sh -V ~/Pictures
 
 # Use a specific vision model
-./analyze.sh -V --vision-model fastvlm ~/Pictures
+./tools/analyze.sh -V --vision-model fastvlm ~/Pictures
 
 # Use document analysis mode for extracting text
-./analyze.sh -V --vision-mode document ~/Documents
+./tools/analyze.sh -V --vision-mode document ~/Documents
 
 # Use custom format (JSON is default and recommended)
-./analyze.sh -V --vision-format json ~/Pictures
-
-# Examine the JSON output
-cat analysis_results/vision_analysis_*.json
+./tools/analyze.sh -V --vision-format json ~/Pictures
 ```
 
 ## Output
 
-Results are saved to the current directory (or specified output directory):
+Results are saved to the canonical artifacts directory structure:
 
-- `analysis_summary_[timestamp].json`: Overall summary
-- `metadata_[timestamp].json`: File metadata
-- `duplicates_[timestamp].txt`: Duplicate files
-- `ocr_results_[timestamp].json`: Text from images
-- `malware_scan_[timestamp].txt`: Malware scan results
-- `search_[text]_[timestamp].txt`: Content search results
-- `binary_analysis_[timestamp].txt`: Binary analysis
-- `vision_analysis_[timestamp].json`: AI vision model analysis (JSON format)
-- `vision_metrics_[timestamp].json`: Vision analysis performance metrics
+- `artifacts/analysis/<context>_<unique_id>/summary.json`: Overall summary
+- `artifacts/analysis/<context>_<unique_id>/metadata.json`: File metadata
+- `artifacts/analysis/<context>_<unique_id>/duplicates.txt`: Duplicate files
+- `artifacts/analysis/<context>_<unique_id>/ocr_results.json`: Text from images
+- `artifacts/analysis/<context>_<unique_id>/malware_scan.txt`: Malware scan results
+- `artifacts/analysis/<context>_<unique_id>/search_results.txt`: Content search results
+- `artifacts/analysis/<context>_<unique_id>/binary_analysis.txt`: Binary analysis
+- `artifacts/vision/<context>_<unique_id>/vision_analysis.json`: AI vision model analysis
+- `artifacts/vision/<context>_<unique_id>/vision_metrics.json`: Vision analysis performance metrics
 
 ## Configuration
 
-The system supports custom configuration files in JSON format. Create a `config.json` file in the current directory or specify a custom path with the `-c` option.
+The system supports custom configuration files in JSON format. Create a `config.json` in the current directory or specify a custom path with the `-c` option.
 
 Example configuration:
 
 ```json
 {
-  "default_output_dir": "analysis_results",
+  "default_output_dir": "artifacts/analysis",
   "max_threads": 4,
   "max_ocr_images": 50,
   "file_extensions": {
@@ -244,12 +272,12 @@ Common issues and solutions:
 
 1. **Out of Memory Errors**: Use a smaller model or reduce batch size
 2. **Slow Performance**: Ensure Metal acceleration is enabled
-3. **Model Loading Failures**: Check model files with `fastvlm_errors.py`
+3. **Model Loading Failures**: Check model files with `tools/fastvlm_errors.py`
 4. **Image Format Errors**: Ensure images are in supported formats (JPG, PNG)
 
 For more detailed error diagnostics, run:
 ```bash
-./fastvlm_errors.py
+./tools/fastvlm_errors.py
 ```
 
 ## Installation
@@ -298,13 +326,13 @@ The project includes a comprehensive test suite:
 
 ```bash
 # Run the automated test suite
-cd test_data && ./run_tests.sh
+cd tests && ./test_fastvlm.sh
 
 # Test vision analysis capabilities with JSON validation
-./test_vision.sh
+./tests/test_vision_integrations.py
 
-# Test JSON output formatting and validation
-./test_json_output.sh
+# Test JSON output formatting and validation (secure path handling)
+./tools/json_test.sh
 ```
 
 The test suite verifies:
@@ -314,14 +342,55 @@ The test suite verifies:
 - File filtering with include/exclude patterns
 - Vision model integration with JSON validation
 - Performance metrics collection
+- Path validation and enforcement
+- Secure file operations with PathGuard
 
-## Using the Python Script Directly
+### Security Features in Tests
 
-```bash
-./file_analyzer.py [options] path_to_analyze
+All test scripts implement robust security measures:
+
+1. **Path Validation and Clean-up**: 
+   - Strict validation of output paths before any file operations
+   - Use of path guard pattern to prevent accidental writes to system directories
+   - Safe directory cleaning with `find "$output_dir" -mindepth 1 -delete` instead of dangerous `rm -rf`
+   - Multiple safety checks before performing destructive operations
+
+2. **Output Directory Safety**:
+   - Canonical artifact paths with automatic validation
+   - Directory existence checks before all operations
+   - Explicit rejection of empty paths, root paths, and system directories
+   - Guards against path traversal attacks
+
+## Using the Python Module Directly
+
+```python
+from src.analyzer import FileAnalyzer
+from src.artifact_guard import get_canonical_artifact_path, PathGuard
+
+# Get a canonical artifact path for output
+output_dir = get_canonical_artifact_path("analysis", "my_analysis")
+
+# Create analyzer with canonical output path
+analyzer = FileAnalyzer("/path/to/analyze", output_dir=output_dir)
+
+# Use PathGuard to enforce artifact discipline for all file operations
+with PathGuard(output_dir):
+    analyzer.extract_metadata()
+    analyzer.find_duplicates()
+    results = analyzer.get_results()
 ```
 
-Options are the same as the shell wrapper but use full format (e.g., `--metadata` instead of `-m`).
+## Artifact Management
+
+This project uses a strict artifact management system to prevent file sprawl and ensure consistent output locations. See [ARTIFACTS.md](ARTIFACTS.md) for details on the artifact system.
+
+Key benefits:
+- Consistent output paths with unique identifiers
+- Runtime enforcement of path discipline
+- Automatic manifest generation
+- Centralized cleanup and management
+- Protection against accidental writes to system directories
+- Secure path validation to prevent path traversal vulnerabilities
 
 ## Contributing
 
@@ -330,9 +399,9 @@ Options are the same as the shell wrapper but use full format (e.g., `--metadata
 When adding new capabilities to the File Analyzer system, please follow these conventions:
 
 1. **Modular Design**: Add new analysis types as separate methods in the `FileAnalyzer` class.
-2. **CLI Integration**: Update both `file_analyzer.py` and `analyze.sh` with new options.
+2. **CLI Integration**: Update both `src/analyzer.py` and `tools/analyze.sh` with new options.
 3. **Documentation**: Update the README.md with descriptions and examples of the new feature.
-4. **Tests**: Add appropriate test cases in the test suite.
+4. **Tests**: Add appropriate test cases in the tests directory.
 5. **Configuration**: Add relevant configuration options in config.json.
 
 ### Code Conventions
@@ -352,3 +421,14 @@ When adding new analysis types that produce JSON output:
 3. For ML models, include performance metrics
 4. Implement validation to ensure output is always valid JSON
 5. Use consistent field naming across different analysis types
+
+### Project Structure
+
+Please adhere to the following directory structure when contributing:
+
+- `src/`: Core Python modules and libraries
+- `tools/`: Command-line tools and developer utilities
+- `tests/`: Test scripts and validation harnesses
+- `artifacts/`: Output directory for all generated files
+
+All Bash scripts must source artifact_guard.sh and follow the canonical path discipline.
