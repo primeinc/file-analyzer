@@ -42,8 +42,28 @@ except ImportError:
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Helper function to find the project root directory
+def find_project_root(marker: str = "config.json") -> Path:
+    """
+    Find the project root directory by looking for a marker file.
+    
+    Args:
+        marker: A file that indicates the project root (default: config.json)
+        
+    Returns:
+        Path to the project root directory
+        
+    Raises:
+        FileNotFoundError: If the project root marker isn't found
+    """
+    current_path = Path(__file__).resolve()
+    for parent in current_path.parents:
+        if (parent / marker).exists():
+            return parent
+    raise FileNotFoundError(f"Project root marker '{marker}' not found.")
+
 # Project root directory
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+PROJECT_ROOT = find_project_root()
 
 # Default configuration file
 DEFAULT_CONFIG_FILE = PROJECT_ROOT / "config.json"

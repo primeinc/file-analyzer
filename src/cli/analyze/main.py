@@ -11,18 +11,17 @@ import logging
 from typing import Optional, List
 
 import typer
-from rich.console import Console
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn
 
 # Import CLI common utilities
 from src.cli.common.config import config
+from src.cli.main import console
 
 # Import analyzer core
 from src import analyzer
 
 # Create Typer app for analyze subcommand
 app = typer.Typer(help="Analyze files and directories")
-console = Console()
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
@@ -55,6 +54,54 @@ def callback():
     - AI-powered model analysis
     """
     pass
+    
+# Context object to store shared state
+context = {
+    "ci_mode": False  # Whether we're running in CI mode (disables progress bars)
+}
+
+# Common options dictionary template
+def create_options_dict(analysis_type, **kwargs):
+    """
+    Create a standard options dictionary for analyzer with the specified analysis type enabled.
+    
+    Args:
+        analysis_type: The type of analysis to enable
+        **kwargs: Additional options to include
+        
+    Returns:
+        Dictionary with standard options structure and specified analysis enabled
+    """
+    # Create base options with all analyses disabled
+    options = {
+        'metadata': False,
+        'duplicates': False,
+        'ocr': False,
+        'virus': False,
+        'search': False,
+        'binary': False,
+        'vision': False,
+        'results_dir': kwargs.get('results_dir')
+    }
+    
+    # Enable specified analysis type
+    if analysis_type in options:
+        options[analysis_type] = True
+    
+    # Add optional search text if provided
+    if 'search_text' in kwargs:
+        options['search_text'] = kwargs['search_text']
+    
+    # Add vision model options if provided
+    if analysis_type == 'vision' or kwargs.get('enable_vision', False):
+        options['vision'] = True
+        options['model'] = True
+        options['model_type'] = "vision"
+        options['model_name'] = kwargs.get('model_name', 'fastvlm')
+        options['model_size'] = kwargs.get('model_size', '0.5b')
+        options['model_mode'] = kwargs.get('model_mode', 'describe')
+    
+    return options
 
 @app.command()
 def all(
@@ -101,22 +148,19 @@ def all(
         "default_exclude_patterns": exclude_patterns,
     }
     
-    # Create options dictionary
-    options = {
-        'metadata': True,
-        'duplicates': True,
-        'ocr': True,
-        'virus': True,
-        'search': True,
-        'search_text': '',  # Will be ignored since no specific search text
-        'binary': True,
-        'vision': True,
-        'model': True,
-        'model_type': "vision",
-        'model_name': "fastvlm",
-        'model_mode': "describe",
-        'results_dir': results_dir
-    }
+    # Create options dictionary for all analysis types
+    options = create_options_dict('all', results_dir=results_dir)
+    
+    # Enable all analysis types
+    for key in ['metadata', 'duplicates', 'ocr', 'virus', 'search', 'binary']:
+        options[key] = True
+    
+    # Set model options
+    options['vision'] = True
+    options['model'] = True
+    options['model_type'] = "vision"
+    options['model_name'] = "fastvlm"
+    options['model_mode'] = "describe"
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)
@@ -204,16 +248,7 @@ def metadata(
     }
     
     # Create options dictionary
-    options = {
-        'metadata': True,
-        'duplicates': False,
-        'ocr': False,
-        'virus': False,
-        'search': False,
-        'binary': False,
-        'vision': False,
-        'results_dir': results_dir
-    }
+    options = create_options_dict('metadata', results_dir=results_dir)
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)
@@ -262,16 +297,7 @@ def duplicates(
     analysis_config = {}
     
     # Create options dictionary
-    options = {
-        'metadata': False,
-        'duplicates': True,
-        'ocr': False,
-        'virus': False,
-        'search': False,
-        'binary': False,
-        'vision': False,
-        'results_dir': results_dir
-    }
+    options = create_options_dict('duplicates', results_dir=results_dir)
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)
@@ -330,16 +356,7 @@ def ocr(
     }
     
     # Create options dictionary
-    options = {
-        'metadata': False,
-        'duplicates': False,
-        'ocr': True,
-        'virus': False,
-        'search': False,
-        'binary': False,
-        'vision': False,
-        'results_dir': results_dir
-    }
+    options = create_options_dict('ocr', results_dir=results_dir)
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)
@@ -384,16 +401,7 @@ def virus(
     analysis_config = {}
     
     # Create options dictionary
-    options = {
-        'metadata': False,
-        'duplicates': False,
-        'ocr': False,
-        'virus': True,
-        'search': False,
-        'binary': False,
-        'vision': False,
-        'results_dir': results_dir
-    }
+    options = create_options_dict('virus', results_dir=results_dir)
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)
@@ -459,17 +467,7 @@ def search(
     }
     
     # Create options dictionary
-    options = {
-        'metadata': False,
-        'duplicates': False,
-        'ocr': False,
-        'virus': False,
-        'search': True,
-        'search_text': text,
-        'binary': False,
-        'vision': False,
-        'results_dir': results_dir
-    }
+    options = create_options_dict('search', results_dir=results_dir, search_text=text)
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)
@@ -522,16 +520,7 @@ def binary(
     analysis_config = {}
     
     # Create options dictionary
-    options = {
-        'metadata': False,
-        'duplicates': False,
-        'ocr': False,
-        'virus': False,
-        'search': False,
-        'binary': True,
-        'vision': False,
-        'results_dir': results_dir
-    }
+    options = create_options_dict('binary', results_dir=results_dir)
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)
@@ -605,21 +594,8 @@ def vision(
     }
     
     # Create options dictionary
-    options = {
-        'metadata': False,
-        'duplicates': False,
-        'ocr': False,
-        'virus': False,
-        'search': False,
-        'binary': False,
-        'vision': True,
-        'model': True,
-        'model_type': "vision",
-        'model_name': model,
-        'model_size': size,
-        'model_mode': mode,
-        'results_dir': results_dir
-    }
+    options = create_options_dict('vision', results_dir=results_dir, 
+                                model_name=model, model_size=size, model_mode=mode)
     
     # Initialize analyzer
     file_analyzer = analyzer.FileAnalyzer(analysis_config)

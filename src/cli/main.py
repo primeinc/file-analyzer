@@ -214,10 +214,11 @@ def version():
     """Show version information."""
     # Global console is already initialized at module level
     from importlib.metadata import version as get_version
+    from importlib.metadata import PackageNotFoundError
     try:
         v = get_version("file-analyzer")
         console.print(f"File Analyzer CLI v{v}")
-    except:
+    except PackageNotFoundError:
         console.print("File Analyzer CLI (version unknown)")
     
     # Show Python version
