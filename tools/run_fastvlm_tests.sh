@@ -66,13 +66,13 @@ check_result "Environment check" "continue"
 
 # Check FastVLM model
 print_header "VERIFYING FASTVLM MODEL"
-MODEL_DIR="ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3"
+MODEL_DIR="libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3"
 if [ -d "$MODEL_DIR" ]; then
   echo -e "${GREEN}Found FastVLM model at $MODEL_DIR${NC}"
   ls -la "$MODEL_DIR" | tee "$OUTPUT_DIR/model_files.txt"
 else
   echo -e "${RED}FastVLM model not found at $MODEL_DIR${NC}"
-  echo -e "${YELLOW}You may need to run: cd ml-fastvlm && ./get_models.sh${NC}"
+  echo -e "${YELLOW}You may need to run: cd libs/ml-fastvlm && ./get_models.sh${NC}"
 fi
 
 # Check test image

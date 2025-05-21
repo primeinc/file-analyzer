@@ -57,14 +57,14 @@ VISION_MODELS = {
     "fastvlm": {
         "name": "FastVLM",
         "description": "Apple's native vision model (fastest option)",
-        "install_cmd": "pip install mlx Pillow && git clone https://github.com/apple/ml-fastvlm.git && cd ml-fastvlm && pip install -e .",
+        "install_cmd": "pip install mlx Pillow && git clone https://github.com/apple/ml-fastvlm.git libs/ml-fastvlm && cd libs/ml-fastvlm && pip install -e .",
         "check_cmd": "python -c \"import mlx\"",
-        "bin": "ml-fastvlm/predict.py",
+        "bin": "libs/ml-fastvlm/predict.py",
         "model_options": {
-            "default": "ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
-            "small": "ml-fastvlm/checkpoints/llava-fastvithd_0.5b_stage3",
-            "medium": "ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
-            "large": "ml-fastvlm/checkpoints/llava-fastvithd_7b_stage3"
+            "default": "libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
+            "small": "libs/ml-fastvlm/checkpoints/llava-fastvithd_0.5b_stage3",
+            "medium": "libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
+            "large": "libs/ml-fastvlm/checkpoints/llava-fastvithd_7b_stage3"
         },
         "resolution": {
             "default": "512x512",

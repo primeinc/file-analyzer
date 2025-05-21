@@ -136,7 +136,7 @@ class FastVLMErrorHandler:
         elif "No such file or directory" in error_text and ".safetensors" in error_text:
             return {
                 "message": "Model file not found.",
-                "solution": "Run ml-fastvlm/get_models.sh to download models."
+                "solution": "Run libs/ml-fastvlm/get_models.sh to download models."
             }
         elif "ModuleNotFoundError" in error_text:
             # Extract the missing module

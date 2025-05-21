@@ -1,5 +1,5 @@
 #!/bin/bash
-source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../artifact_guard_py_adapter.sh"
 # Test script for FastVLM integration
 
 echo "FastVLM Integration Test"
@@ -16,27 +16,28 @@ else
 fi
 
 # Check if ml-fastvlm repository exists
-if [ ! -d "ml-fastvlm" ]; then
+if [ ! -d "libs/ml-fastvlm" ]; then
     echo "ml-fastvlm repository not found. Cloning..."
-    git clone https://github.com/apple/ml-fastvlm.git
-    cd ml-fastvlm && pip install -e .
-    cd ..
+    mkdir -p libs
+    git clone https://github.com/apple/ml-fastvlm.git libs/ml-fastvlm
+    cd libs/ml-fastvlm && pip install -e .
+    cd ../..
 else
     echo "ml-fastvlm repository found"
 fi
 
 # Check if the model weights directory exists
-if [ ! -d "ml-fastvlm/checkpoints" ]; then
+if [ ! -d "libs/ml-fastvlm/checkpoints" ]; then
     echo "Creating checkpoints directory..."
-    mkdir -p ml-fastvlm/checkpoints
+    mkdir -p libs/ml-fastvlm/checkpoints
 fi
 
 # Check if we have model files
-ls ml-fastvlm/checkpoints/*fastvlm* 2>/dev/null
+ls libs/ml-fastvlm/checkpoints/*fastvlm* 2>/dev/null
 if [ $? -ne 0 ]; then
     echo "Model files not found."
     echo "Note: You will need to download the model weights later using:"
-    echo "cd ml-fastvlm && bash get_models.sh"
+    echo "cd libs/ml-fastvlm && bash get_models.sh"
     echo ""
     echo "For now, we will test using a placeholder model."
 else
@@ -80,7 +81,7 @@ echo "Testing integration with file_analyzer.py..."
 
 echo ""
 echo "FastVLM testing complete. Next steps:"
-echo "1. Download model weights: cd ml-fastvlm && bash get_models.sh"
-echo "2. Run with actual model: ./fastvlm_test.py --image test_data/images/Layer\ 3\ Merge.png --model ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3"
+echo "1. Download model weights: cd libs/ml-fastvlm && bash get_models.sh"
+echo "2. Run with actual model: ./fastvlm_test.py --image test_data/images/Layer\ 3\ Merge.png --model libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3"
 echo ""
 echo "For detailed instructions, see the FastVLM documentation."

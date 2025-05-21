@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL RULES
+
+1. **DO NOT MODIFY ANY FILES IN THE `libs/` DIRECTORY**: The `libs/` directory contains external libraries and dependencies that should NEVER be modified directly. If changes are needed to library functionality, create wrapper functions instead.
+
+2. **When responding to GitHub PR review threads**:
+   - DO NOT create multiple new reviews
+   - Reply to existing threads using the existing review
+   - For each thread: (1) add your own comment, (2) submit the review, (3) resolve the thread
+   - Use `addPullRequestReviewComment` with `inReplyTo` parameter, NOT `addPullRequestReviewThread`
+
+3. **Todo List Management**:
+   - Organize todos by priority and group related tasks together
+   - Mark tasks as in_progress while working on them and completed immediately when finished
+   - Only have ONE task in_progress at a time
+   - Create specific, actionable items with clear success criteria
+
 ## Project Overview
 
 The File Analysis System is a unified tool for comprehensive file analysis that combines multiple specialized tools:

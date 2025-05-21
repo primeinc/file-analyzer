@@ -38,7 +38,9 @@ Unified tool for comprehensive file analysis combining:
 │   ├── benchmark/              # Performance benchmarks
 │   └── tmp/                    # Temporary files
 │
-└── artifact_guard.sh           # Runtime path enforcement
+├── artifact_guard_py_adapter.sh # Runtime path enforcement
+└── libs/                      # External libraries
+    └── ml-fastvlm/              # FastVLM vision library
 ```
 
 ## Usage
@@ -240,14 +242,15 @@ If you prefer more control over the installation process:
 
 2. Clone the FastVLM repository and install dependencies:
    ```bash
-   git clone https://github.com/apple/ml-fastvlm.git
-   cd ml-fastvlm
+   mkdir -p libs
+   git clone https://github.com/apple/ml-fastvlm.git libs/ml-fastvlm
+   cd libs/ml-fastvlm
    pip install -e .
    ```
 
 3. Download model weights:
    ```bash
-   cd ml-fastvlm
+   cd libs/ml-fastvlm
    chmod +x get_models.sh
    ./get_models.sh
    ```
@@ -431,4 +434,8 @@ Please adhere to the following directory structure when contributing:
 - `tests/`: Test scripts and validation harnesses
 - `artifacts/`: Output directory for all generated files
 
-All Bash scripts must source artifact_guard.sh and follow the canonical path discipline.
+All Bash scripts must source artifact_guard_py_adapter.sh and follow the canonical path discipline.
+
+### External Libraries
+
+External libraries are stored in the `libs/` directory and should NEVER be modified directly. If changes are needed to library functionality, create wrapper functions instead.

@@ -21,7 +21,7 @@ def main():
     """Main function that runs FastVLM on test images."""
     parser = argparse.ArgumentParser(description="FastVLM Demo")
     parser.add_argument("--image", default="test_data/images/Layer 3 Merge.png", help="Path to test image")
-    parser.add_argument("--model", default="ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3", help="Path to model")
+    parser.add_argument("--model", default="libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3", help="Path to model")
     parser.add_argument("--prompt", default="Describe this image in detail.", help="Prompt for analysis")
     args = parser.parse_args()
     

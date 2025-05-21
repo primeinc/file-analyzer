@@ -219,7 +219,7 @@ def main():
     """Main function for the script."""
     parser = argparse.ArgumentParser(description="FastVLM JSON Output Demo")
     parser.add_argument("--image", required=True, help="Path to test image")
-    parser.add_argument("--model", default="ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3", 
+    parser.add_argument("--model", default="libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3", 
                        help="Path to FastVLM model")
     parser.add_argument("--output", help="Output JSON file path (defaults to canonical artifact path)")
     parser.add_argument("--retries", type=int, default=3, 

@@ -26,7 +26,7 @@ python -c "import fastvlm_test; checker = fastvlm_test.FastVLMAnalyzer(); issues
 
 # Find available models
 echo -e "${BLUE}Looking for model files...${NC}"
-python -c "import os, glob; models = glob.glob('ml-fastvlm/checkpoints/llava-fastvithd_*'); print('Available models:'); [print(f'- {os.path.basename(m)}') for m in models]" > "$OUTPUT_DIR/model_files.txt"
+python -c "import os, glob; models = glob.glob('libs/ml-fastvlm/checkpoints/llava-fastvithd_*'); print('Available models:'); [print(f'- {os.path.basename(m)}') for m in models]" > "$OUTPUT_DIR/model_files.txt"
 
 # Create a mock analyzer for testing without the real model
 echo -e "${BLUE}Creating a mock analyzer for testing...${NC}"
@@ -82,7 +82,7 @@ else:
 " > "$OUTPUT_DIR/mock_benchmark_log.txt"
 
 # Run the actual benchmark script (optional if model exists)
-if [ -d "ml-fastvlm/checkpoints" ]; then
+if [ -d "libs/ml-fastvlm/checkpoints" ]; then
     echo -e "${BLUE}Running actual benchmark with FastVLM model...${NC}"
     python benchmark_fastvlm.py --output "$OUTPUT_DIR/benchmark.txt" || {
         echo -e "${YELLOW}Warning: Full benchmark with real model failed, continuing with mock tests${NC}"
