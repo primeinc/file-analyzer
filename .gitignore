@@ -67,3 +67,7 @@ ml-fastvlm/checkpoints/
 
 # System files
 .DS_Store
+
+# Artifacts directory (canonical artifact storage)
+artifacts/
+artifacts.env
