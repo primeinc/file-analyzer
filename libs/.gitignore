@@ -1,0 +1,8 @@
+# Ignore FastVLM model files but keep the directory structure
+ml-fastvlm/*
+!ml-fastvlm/.gitkeep
+!ml-fastvlm/VERSION
+
+# Keep the README for documentation
+!README.md
+!ml-fastvlm/README.md

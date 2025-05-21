@@ -7,18 +7,39 @@ on:
     branches: [ main, master ]
 
 jobs:
+  # Setup dependencies first
+  setup-dependencies:
+    uses: ./.github/workflows/setup-dependencies.yml
+
+  # Main discipline check job - depends on setup
   check-artifact-discipline:
+    needs: setup-dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
       
+      # Restore cached dependencies
+      - name: Restore FastVLM dependencies
+        uses: actions/cache@v3
+        with:
+          path: libs/ml-fastvlm
+          key: fastvlm-v1.0.2-${{ github.sha }}
+          restore-keys: |
+            fastvlm-v1.0.2-
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
       - name: Set up environment
         run: |
           chmod +x ./preflight.sh
           chmod +x ./cleanup.sh
           chmod +x ./artifact_guard_py_adapter.sh
+          pip install -e libs/ml-fastvlm
       
       - name: Run preflight check with strict enforcement
         run: |
@@ -40,6 +61,11 @@ jobs:
           # Run a test script to verify path enforcement works
           chmod +x ./test_path_enforcement.sh
           ./test_path_enforcement.sh
+      
+      - name: Test FastVLM integration
+        run: |
+          # Test that FastVLM is properly installed and accessible
+          python -c "from mlx_fastvlm import FastVLM; print('FastVLM version check passed')"
       
       - name: Verify no new non-canonical artifacts were created
         run: |

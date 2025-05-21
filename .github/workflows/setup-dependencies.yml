@@ -1,0 +1,48 @@
+name: Setup Dependencies
+
+on:
+  workflow_call:  # This allows other workflows to call this one
+
+jobs:
+  setup-fastvlm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Create libs directory structure
+        run: |
+          mkdir -p libs/ml-fastvlm
+          
+      - name: Clone FastVLM repository with pinned version
+        run: |
+          cd libs/ml-fastvlm
+          git clone https://github.com/apple/ml-fastvlm.git .
+          git checkout v1.0.2  # Pin to specific version
+          
+      - name: Install FastVLM dependencies
+        run: |
+          cd libs/ml-fastvlm
+          pip install -e .
+          
+      - name: Download model weights (minimal set for CI)
+        run: |
+          cd libs/ml-fastvlm
+          # Download only the smallest model to save time in CI
+          mkdir -p checkpoints
+          curl -L https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage3.zip -o checkpoints/llava-fastvithd_0.5b_stage3.zip
+          unzip -q checkpoints/llava-fastvithd_0.5b_stage3.zip -d checkpoints/
+          rm checkpoints/llava-fastvithd_0.5b_stage3.zip
+          
+      - name: Cache models for subsequent steps
+        uses: actions/cache@v3
+        with:
+          path: libs/ml-fastvlm
+          key: fastvlm-v1.0.2-${{ github.sha }}
+          restore-keys: |
+            fastvlm-v1.0.2-
