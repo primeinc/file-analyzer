@@ -9,7 +9,7 @@ test cases including nested JSON, malformed JSON, and different formats.
 import os
 import sys
 import json
-from json_utils import JSONValidator
+from src.utils.json_utils import JSONValidator
 
 def run_test(test_name, test_input, expected_result=None):
     """Run a single test case and print results."""

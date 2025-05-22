@@ -7,7 +7,15 @@ This specifically tests the download_test_images and run_benchmark functions.
 import os
 import tempfile
 import json
-from benchmark_fastvlm import download_test_images, run_benchmark
+import sys
+
+# Add project root to system path if needed
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Import from the new module structure
+from src.cli.benchmark.main import download_test_images, run_benchmark
 
 class MockAnalyzer:
     """Mock analyzer for testing without real FastVLM model."""

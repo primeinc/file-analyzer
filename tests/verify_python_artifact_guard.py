@@ -29,7 +29,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import artifact discipline components
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     get_canonical_artifact_path,
     validate_artifact_path,
     PathGuard,
@@ -96,19 +96,19 @@ def test_module_imports():
     print(f"\n{BOLD}Testing module imports...{RESET}")
     
     try:
-        from src.artifact_guard import get_canonical_artifact_path
+        from src.core.artifact_guard import get_canonical_artifact_path
         passed("Import get_canonical_artifact_path")
     except ImportError as e:
         failed("Import get_canonical_artifact_path", str(e))
         
     try:
-        from src.artifact_guard import validate_artifact_path
+        from src.core.artifact_guard import validate_artifact_path
         passed("Import validate_artifact_path")
     except ImportError as e:
         failed("Import validate_artifact_path", str(e))
         
     try:
-        from src.artifact_guard import PathGuard
+        from src.core.artifact_guard import PathGuard
         passed("Import PathGuard")
     except ImportError as e:
         failed("Import PathGuard", str(e))

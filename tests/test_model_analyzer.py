@@ -24,10 +24,10 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import components to test
-from src.model_analyzer import ModelAnalyzer
-from src.model_manager import ModelManager, create_manager
-from src.mock_model_adapter import create_adapter, MockModelAdapter
-from src.artifact_guard import get_canonical_artifact_path, validate_artifact_path
+from src.models.analyzer import ModelAnalyzer
+from src.models.manager import ModelManager, create_manager
+from src.models.mock_adapter import create_adapter, MockModelAdapter
+from src.core.artifact_guard import get_canonical_artifact_path, validate_artifact_path
 
 class TestModelAnalyzer(unittest.TestCase):
     """Test cases for the model analyzer system."""

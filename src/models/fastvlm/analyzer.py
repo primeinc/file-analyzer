@@ -16,7 +16,7 @@ from datetime import datetime
 
 # Import error handler
 try:
-    from src.fastvlm_errors import FastVLMErrorHandler
+    from src.models.fastvlm.errors import FastVLMErrorHandler
     ERROR_HANDLER_AVAILABLE = True
 except ImportError:
     # For backward compatibility, check various import paths
@@ -59,29 +59,38 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Check if we've downloaded the ml-fastvlm repository
+# Get the actual project root by looking for the root directory
+actual_project_root = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+
 # Standardized location in libs directory
-ML_FASTVLM_PATH = Path(project_root) / "libs" / "ml-fastvlm"
+ML_FASTVLM_PATH = Path(actual_project_root) / "libs" / "ml-fastvlm"
 if ML_FASTVLM_PATH.exists():
     sys.path.append(str(ML_FASTVLM_PATH))
 else:
     # Try fallback locations for backward compatibility
     fallback_paths = [
-        Path(project_root) / "ml-fastvlm",  # Old root location
-        Path(__file__).parent / "ml-fastvlm"  # Old tools location
+        Path(actual_project_root) / "ml-fastvlm",  # Old root location
+        Path(project_root) / "ml-fastvlm",  # Old models location
+        Path(__file__).parent / "ml-fastvlm",  # Old tools location
+        Path(os.path.expanduser("~")) / ".local" / "share" / "fastvlm"  # User-level installation
     ]
     
     for path in fallback_paths:
         if path.exists():
             ML_FASTVLM_PATH = path
             sys.path.append(str(ML_FASTVLM_PATH))
-            print(f"Found ml-fastvlm at fallback location: {path}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Found ml-fastvlm at fallback location: {path}")
             break
     else:
-        print(f"Warning: ml-fastvlm directory not found at {project_root}/libs/ml-fastvlm or any fallback locations")
+        # Suppress warning in CLI usage but keep it for debugging
+        if os.environ.get("FA_DEBUG", "").lower() in ("1", "true", "yes"):
+            print(f"Warning: ml-fastvlm directory not found at {actual_project_root}/libs/ml-fastvlm or any fallback locations")
         ML_FASTVLM_PATH = None
 
 # Import from our vision analyzer module
-from src.vision import VisionAnalyzer
+from src.core.vision import VisionAnalyzer
 
 class FastVLMAnalyzer:
     """FastVLM image analyzer for Apple Silicon."""

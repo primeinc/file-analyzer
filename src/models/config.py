@@ -38,7 +38,7 @@ except ImportError:
     logger.warning("Artifact discipline tools not available. Using fallback paths.")
 
 # Constants for model paths and versions
-DEFAULT_MODEL_SIZE = "0.5b"
+DEFAULT_MODEL_SIZE = "1.5b"
 DEFAULT_MODEL_TYPE = "fastvlm"
 MODEL_SIZES = ["0.5b", "1.5b", "7b"]
 
@@ -57,6 +57,16 @@ MODEL_PATHS = [
     os.path.join(PROJECT_ROOT, "libs", "ml-fastvlm", "checkpoints"),
     os.path.join(PROJECT_ROOT, "checkpoints"),
 ]
+
+# Model configurations for the manager
+MODEL_CONFIGS = {
+    "fastvlm": {
+        "type": "vision",
+        "description": "FastVLM vision model",
+        "sizes": MODEL_SIZES,
+        "default_size": DEFAULT_MODEL_SIZE
+    }
+}
 
 # Standard model checkpoints with versions and hashes
 MODEL_CHECKPOINTS = {
@@ -118,7 +128,19 @@ def get_model_path(model_type: str = DEFAULT_MODEL_TYPE,
         # Try with exact path from config
         full_path = os.path.join(base_path, model_path_suffix)
         if os.path.exists(full_path):
-            # Found the model
+            # Check for safetensors in root directory
+            if os.path.exists(os.path.join(full_path, "model.safetensors")):
+                # Found the model with safetensors in root
+                return full_path
+                
+            # Check for nested structure (model.safetensors in a nested folder)
+            nested_path = os.path.join(full_path, model_path_suffix)
+            if os.path.exists(nested_path) and os.path.exists(os.path.join(nested_path, "model.safetensors")):
+                # Found the model with safetensors in nested structure
+                return nested_path
+                
+            # Found the path but not the safetensors file - still return as it's the closest match
+            logger.warning(f"Found model directory {full_path} but missing model.safetensors file")
             return full_path
             
         # Try with model size as directory name instead of full path
@@ -378,8 +400,10 @@ def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> Optional[st
         
     # Standard location in project structure
     paths_to_check = [
-        os.path.join(PROJECT_ROOT, "libs", "ml-fastvlm", "predict.py"),
-        os.path.join(PROJECT_ROOT, "ml-fastvlm", "predict.py"),
+        os.path.join(PROJECT_ROOT, "libs", "ml-fastvlm", "predict.py"),  # Main project repo location
+        os.path.join(PROJECT_ROOT, "ml-fastvlm", "predict.py"),  # Alt project location
+        os.path.join(USER_MODEL_DIR, "predict.py"),  # User model directory
+        "/Users/will/Dev/file-analyzer/libs/ml-fastvlm/predict.py",  # Direct paths (hardcoded for urgent fixes)
     ]
     
     # Check if model is installed as a package
@@ -393,7 +417,17 @@ def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> Optional[st
     # Check standard locations
     for path in paths_to_check:
         if os.path.exists(path):
+            logger.debug(f"Found predict script at: {path}")
             return path
+        else:
+            logger.debug(f"No predict script at: {path}")
+    
+    # Rather than failing, if the user has the known project location, let's use that
+    # This prevents unnecessary failure on Mac systems with standard folder layouts
+    hardcoded_path = "/Users/will/Dev/file-analyzer/libs/ml-fastvlm/predict.py"
+    if os.path.exists(hardcoded_path):
+        logger.debug(f"Using hardcoded fallback predict script at: {hardcoded_path}")
+        return hardcoded_path
             
     logger.warning(f"Predict script for {model_type} not found in standard locations")
     return None

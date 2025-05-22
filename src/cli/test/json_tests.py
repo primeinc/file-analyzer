@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 # Import model-related modules
-from src import fastvlm_json
-from src import vision
+from src.models.fastvlm import json as fastvlm_json
+from src.core import vision
 
 def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -243,7 +243,7 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
         # Run vision.py with JSON format
         try:
             # Import arguments from vision module
-            from src.vision import parse_args
+            from src.core.vision import parse_args
             
             # Create command-line args
             cli_args = [

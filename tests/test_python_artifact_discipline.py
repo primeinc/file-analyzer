@@ -20,7 +20,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import artifact discipline components
-from src.artifact_guard import (
+from src.core.artifact_guard import (
     get_canonical_artifact_path, 
     PathGuard, 
     validate_artifact_path,

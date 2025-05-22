@@ -9,7 +9,17 @@ import os
 import sys
 import json
 import tempfile
-from fastvlm_json import run_fastvlm_json_analysis, JSONParsingError
+
+# Try to import from the new structure
+try:
+    from src.models.fastvlm.json import run_fastvlm_json_analysis, JSONParsingError
+except ImportError:
+    # Fallback to old import path
+    try:
+        from fastvlm_json import run_fastvlm_json_analysis, JSONParsingError
+    except ImportError:
+        print("Error: Could not import run_fastvlm_json_analysis. This test requires the FastVLM JSON module.")
+        sys.exit(1)
 
 def create_test_environment():
     """Create a test environment with mock files."""
@@ -38,6 +48,17 @@ def run_test(test_name, mock_func, expected_error_type=None):
     # Set up test environment
     env = create_test_environment()
     
+    # Get a canonical artifact output path if possible
+    try:
+        from src.core.artifact_guard import get_canonical_artifact_path
+        output_path = os.path.join(
+            get_canonical_artifact_path("test", f"json_error_{test_name.lower().replace(' ', '_')}"),
+            "test_output.json"
+        )
+    except ImportError:
+        # Fallback to temp dir
+        output_path = os.path.join(env["temp_dir"], "test_output.json")
+    
     try:
         # Run the test with mocked dependencies
         with mock_func():
@@ -47,7 +68,8 @@ def run_test(test_name, mock_func, expected_error_type=None):
                 env["image_path"],
                 env["model_path"],
                 prompt="Describe this image in JSON format",
-                max_retries=1  # Only one retry to speed up testing
+                max_retries=1,  # Only one retry to speed up testing
+                output_path=output_path  # Add output path parameter
             )
             print(f"Result: {result}")
     except Exception as e:
@@ -61,7 +83,8 @@ def run_test(test_name, mock_func, expected_error_type=None):
             if isinstance(e, JSONParsingError):
                 print(f"Text content available: {bool(e.text)}")
                 print(f"Metadata available: {bool(e.metadata)}")
-                print(f"Metadata keys: {list(e.metadata.keys())}")
+                if hasattr(e, 'metadata') and e.metadata:
+                    print(f"Metadata keys: {list(e.metadata.keys())}")
                 
             return True
         else:
@@ -81,8 +104,15 @@ class MockJSONFailure:
     def __enter__(self):
         # Store original imports and functions
         import subprocess
-        import fastvlm_json
+        try:
+            # Try the new module structure
+            import src.models.fastvlm.json as json_module
+        except ImportError:
+            # Fallback to old module
+            import fastvlm_json as json_module
+        
         self.original_subprocess_run = subprocess.run
+        self.json_module = json_module
         
         # Mock subprocess.run to return invalid JSON
         def mock_run(*args, **kwargs):

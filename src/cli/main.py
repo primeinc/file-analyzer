@@ -119,6 +119,22 @@ def load_commands():
         'benchmark': ('src.cli.benchmark.main', 'app', False),
     }
     
+    # Always directly import the critical commands first to ensure they work
+    try:
+        # Pre-load analyze command
+        logger.debug("Pre-loading analyze command")
+        from src.cli.analyze.main import app as analyze_app
+        app.add_typer(analyze_app, name="analyze")
+        logger.debug("Successfully pre-loaded analyze command")
+        
+        # Pre-load model command
+        logger.debug("Pre-loading model command")
+        from src.cli.model.main import app as model_app
+        app.add_typer(model_app, name="model")
+        logger.debug("Successfully pre-loaded model command")
+    except Exception as e:
+        logger.error(f"Failed to pre-load critical commands: {e}")
+    
     try:
         # Discover entry points
         discovered_commands = entry_points(group='fa.commands')
@@ -129,9 +145,9 @@ def load_commands():
         # Create a map of entry names
         entry_map = {entry.name: entry for entry in discovered_commands}
         
-        # Register commands that are in the entry points
+        # Register commands that are in the entry points, skip analyze and model as they're already loaded
         for cmd_name, config in command_mapping.items():
-            if cmd_name in entry_map:
+            if cmd_name in entry_map and cmd_name not in ['analyze', 'model']:
                 if len(config) == 2:
                     register_command(cmd_name, config[0], config[1])
                 else:
@@ -193,9 +209,8 @@ def _import_builtin_commands():
     logger = logging.getLogger("file-analyzer")
     logger.warning("Using fallback command loader - entry points discovery failed")
     
-    # Define all commands to load
+    # Define all commands to load - skip analyze as it's already loaded at this point
     commands = [
-        ("analyze", "src.cli.analyze.main", "app"),
         ("test", "src.cli.test.hook", "app"),
         ("validate", "src.cli.validate.main", "app"),
         ("artifact", "src.cli.artifact.main", "app"),
@@ -205,6 +220,22 @@ def _import_builtin_commands():
         ("model", "src.cli.model.main", "app"),
         ("benchmark", "src.cli.benchmark.main", "app"),
     ]
+    
+    # Double-check critical commands are loaded
+    try:
+        registered_commands = [t.name for t in app.registered_typer_instances]
+        
+        if "analyze" not in registered_commands:
+            logger.debug("Analyze command not loaded yet, loading manually")
+            from src.cli.analyze.main import app as analyze_app
+            app.add_typer(analyze_app, name="analyze")
+            
+        if "model" not in registered_commands:
+            logger.debug("Model command not loaded yet, loading manually")
+            from src.cli.model.main import app as model_app
+            app.add_typer(model_app, name="model")
+    except Exception as e:
+        logger.error(f"Failed to load critical commands in fallback loader: {e}")
     
     # Register each command
     for cmd in commands:
@@ -223,6 +254,33 @@ def capture_environment():
         "pwd": os.getcwd(),
     }
 
+
+@app.command()
+def quick(
+    file_path: str = typer.Argument(..., help="Path to file to analyze"),
+    output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, md"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    markdown_output: bool = typer.Option(False, "--md", help="Output in Markdown format"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logging"),
+):
+    """Quick analysis of a single file with vision AI."""
+    # Handle format flags
+    if json_output:
+        output_format = "json"
+    elif markdown_output:
+        output_format = "md"
+    
+    # Import analyze function
+    from src.cli.analyze.main import analyze_single_file
+    
+    # Run the analysis
+    result = analyze_single_file(file_path, output_format, verbose=verbose)
+    
+    if result:
+        typer.echo(result)
+    else:
+        typer.echo("Analysis failed", err=True)
+        raise typer.Exit(1)
 
 @app.callback()
 def main(
@@ -285,6 +343,22 @@ def main(
 
 # We're removing the version command and only using the --version flag option
 # to avoid confusing users with two different ways to get version information.
+
+# Force loading of critical commands before we start
+try:
+    # Import analyze command
+    from src.cli.analyze.main import app as analyze_app
+    app.add_typer(analyze_app, name="analyze")
+    
+    # Import model command
+    from src.cli.model.main import app as model_app
+    app.add_typer(model_app, name="model")
+    
+    logger = logging.getLogger("file-analyzer")
+    logger.debug("Successfully pre-loaded analyze and model commands")
+except Exception as e:
+    logger = logging.getLogger("file-analyzer")
+    logger.warning(f"Failed to load critical commands at startup: {e}")
 
 if __name__ == "__main__":
     app()

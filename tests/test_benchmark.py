@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """
-Test script for the benchmark_fastvlm.py run_benchmark function
+Test script for the benchmark functionality
 """
 
 import time
 import tempfile
 import os
-from benchmark_fastvlm import run_benchmark
+import sys
+import unittest
+
+# Add project root to system path if needed
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Import from the new module structure
+from src.cli.benchmark.main import run_benchmark
 
 class MockAnalyzer:
     """Mock analyzer for testing without real FastVLM model."""

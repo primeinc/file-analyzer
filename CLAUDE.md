@@ -2,6 +2,78 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Commands
+
+### Testing
+```bash
+# Install project in development mode
+pip install -e ".[dev]"
+
+# Run all tests
+pytest
+
+# Run tests with coverage
+pytest --cov=src
+
+# Run specific test file
+pytest tests/test_analyzer.py
+
+# Run tests matching pattern
+pytest -k test_fastvlm
+
+# Run with verbose output
+pytest -v
+```
+
+### Code Quality
+```bash
+# Format code
+black src/ tests/
+
+# Sort imports
+isort src/ tests/
+
+# Check formatting (without changes)
+black --check src/ tests/
+isort --check-only src/ tests/
+```
+
+### CLI Testing
+```bash
+# Main CLI entry point
+fa --help
+
+# Run built-in test suite
+fa test
+
+# Analyze files
+fa analyze path/to/files
+
+# Validate configurations
+fa validate
+
+# Run benchmarks
+fa benchmark
+
+# Quick single-file analysis
+fa quick path/to/file.jpg
+```
+
+### Project-Specific Scripts
+```bash
+# Check artifact discipline in all scripts
+./check_all_scripts.sh
+
+# Run preflight checks
+./preflight.sh
+
+# Check script conformity
+./check_script_conformity.sh
+
+# Test path enforcement
+./tests/test_path_enforcement.sh
+```
+
 ## PR Review Workflow with GraphQL
 
 ### Reviewing PR Comments and Resolving Them
@@ -189,27 +261,20 @@ python src/analyzer.py --all <path_to_analyze>
 
 ## Architecture
 
-The system consists of several main components:
+**Plugin-based CLI**: Main entry point at `src/cli/main.py` using Typer with subcommands registered via entry points:
+- `fa analyze` - File analysis with multiple tools (ExifTool, OCR, duplicates, etc.)  
+- `fa test` - Built-in test suite
+- `fa validate` - Configuration validation
+- `fa model` - AI model management
+- `fa benchmark` - Performance testing
 
-1. **analyzer.py**: The core Python implementation that:
-   - Defines a `FileAnalyzer` class to manage different analysis operations
-   - Uses ThreadPoolExecutor for parallel processing
-   - Executes external tools via subprocess
-   - Generates JSON and text report files
-   - Handles error cases and provides appropriate status messages
+**Core Components**:
+- `src/core/analyzer.py` - Main `FileAnalyzer` class with parallel processing
+- `src/core/vision.py` - AI vision model integration (FastVLM, BakLLaVA, Qwen2-VL)
+- `src/models/` - Model adapters and management system
+- `src/utils/json_utils.py` - Robust JSON extraction and validation for AI outputs
 
-2. **model_manager.py**: Centralized model management system:
-   - Manages model discovery and initialization
-   - Provides unified adapter interface
-   - Handles model downloads and validation
-   - Supports both single file and batch processing
-
-3. **model_analyzer.py**: Unified model analysis interface:
-   - Integrates with the core analyzer
-   - Provides standardized parameters and output
-   - Implements parallel processing for batch operations
-
-The system follows a modular design where each analysis type is encapsulated in its own method within the `FileAnalyzer` class, making it easy to add new analysis capabilities.
+**Artifact System**: Strict path discipline with canonical artifact paths in `artifacts/` directory to prevent file sprawl. All scripts must source `artifact_guard_py_adapter.sh`.
 
 ### Output Files
 
@@ -244,47 +309,13 @@ For vision analysis, the following dependencies might be required based on selec
 
 If any of these tools are missing, the corresponding analysis will fail with an error status.
 
-## Common Development Tasks
+## Extension Points
 
-### Adding a New Analysis Type
+**Adding Analysis Types**: Add methods to `FileAnalyzer` class in `src/core/analyzer.py` and register CLI options.
 
-To add a new analysis type:
+**Adding Model Adapters**: Implement adapter interface in `src/models/` and register with model manager.
 
-1. Add a new method to the `FileAnalyzer` class that:
-   - Takes necessary parameters
-   - Executes the required tool via `run_command`
-   - Saves results to a file
-   - Updates the `self.results` dictionary
-   - Returns the output or None on error
-
-2. Add a new command-line argument in `main()`
-
-3. Update the analyze.sh wrapper script to pass the new argument
-
-### Adding a New Model Adapter
-
-To add a new model adapter:
-
-1. Create a new adapter file (e.g., `my_model_adapter.py`) that implements:
-   - `MyModelAdapter` class with `__init__`, `predict`, and `get_info` methods
-   - `create_adapter` function that returns an adapter instance
-
-2. Register the adapter with the model manager:
-   ```python
-   from src.my_model_adapter import create_adapter
-   manager = create_manager()
-   manager.adapters["my_model"] = create_adapter
-   ```
-
-3. Update the model analyzer configuration if needed
-
-### Error Handling
-
-The system uses a consistent error handling pattern:
-- Commands are executed with `check=True` in subprocess
-- Exceptions are caught and reported
-- Analysis methods return None on error
-- The results dictionary tracks status as "success", "error", or "skipped"
+**Adding CLI Commands**: Create new modules in `src/cli/` and register via entry points in `pyproject.toml`.
 
 ## JSON Validation System
 
@@ -317,30 +348,28 @@ The system employs a multi-stage approach to extract JSON from potentially malfo
 
 The extraction can handle nested objects, arrays, and quoted strings properly.
 
-## Model Management System
+## Model Management
 
-The file analyzer includes a centralized model management system:
+**Storage Locations** (in precedence order):
+- `~/.local/share/fastvlm/` - User-level storage (preferred)
+- `libs/ml-fastvlm/checkpoints/` - Project-level (development)
 
-1. **Model Storage**:
-   - User-level storage: `~/.local/share/fastvlm/`
-   - Project-level storage: `libs/ml-fastvlm/checkpoints/`
+**Setup and Usage**:
+```bash
+# Setup environment and download 0.5B model
+./tools/setup_fastvlm.sh
 
-2. **Model Discovery**:
-   - Automatic path resolution across locations
-   - Model version and size management
-   - Download capability for missing models
+# List/download models via CLI
+fa model list
+fa model download --size 0.5b
 
-3. **Unified Adapter Interface**:
-   - Common API for all model types
-   - Standard prediction interface
-   - Consistent output format
+# Use in Python
+from src.models.fastvlm.adapter import create_adapter
+adapter = create_adapter(model_size="0.5b")
+result = adapter.predict(image_path, prompt, mode="describe")
+```
 
-4. **Model Analyzer**:
-   - High-level analysis capabilities
-   - Batch processing with parallelism
-   - Result tracking and summarization
-
-For more details, see the MODEL_ANALYSIS.md and MODELS.md documentation files.
+See MODELS.md for complete details.
 
 ## Complete GitHub PR Review Workflow
 

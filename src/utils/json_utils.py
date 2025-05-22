@@ -122,11 +122,18 @@ class JSONValidator:
             return max(potential_jsons, key=lambda x: len(json.dumps(x)) if isinstance(x, dict) else 0)
         
         # Strategy 3: More aggressive extraction for strings with escaped characters
-        # Find sequences that look like JSON by using regex
+        # Find sequences that look like JSON by using regex (with safety limits)
         import re
+        # Limit text size to prevent regex catastrophic backtracking
+        if len(text) > 10000:
+            text = text[:10000]  # Truncate very long text
+        
         # Look for more complex JSON-like patterns that might have nested structure
         json_pattern = r'(\{(?:[^{}]|\"(?:\\.|[^\"])*\")*\})'
-        matches = re.findall(json_pattern, text)
+        try:
+            matches = re.findall(json_pattern, text, re.DOTALL)
+        except re.error:
+            matches = []  # Skip regex if it fails
         
         # Try each potential match
         for match in matches:

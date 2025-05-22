@@ -29,9 +29,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 # Import model-related modules
-from src.benchmark_fastvlm import download_test_images, find_test_images, run_benchmark
-import src.fastvlm_analyzer
-import src.fastvlm_errors
+from src.models.fastvlm.benchmark import download_test_images, find_test_images, run_benchmark
+import src.models.fastvlm.analyzer
+import src.models.fastvlm.errors
 
 # Define a mock analyzer for testing without creating files
 class MockAnalyzer:
@@ -160,7 +160,7 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
                     analyzer = MockAnalyzer()
                 else:
                     # Use real analyzer
-                    analyzer = src.fastvlm_analyzer.FastVLMAnalyzer(model_size=model_size)
+                    analyzer = src.models.fastvlm.analyzer.FastVLMAnalyzer(model_size=model_size)
                     
                 # Test different modes
                 modes = ["describe", "detect", "document"]
@@ -284,7 +284,7 @@ def run_benchmarks(test_env: Dict[str, Any]) -> Dict[str, Any]:
             
         try:
             # Run the benchmark directly
-            from src.benchmark_fastvlm import main as benchmark_main
+            from src.models.fastvlm.benchmark import main as benchmark_main
             
             # Redirect stdout/stderr temporarily to capture output
             original_stdout = sys.stdout
@@ -479,11 +479,11 @@ def check_environment(test_env: Dict[str, Any]) -> Dict[str, Any]:
         
     try:
         # Check environment using FastVLM error handler
-        checker = src.fastvlm_analyzer.FastVLMAnalyzer()
+        checker = src.models.fastvlm.analyzer.FastVLMAnalyzer()
         issues = []
         
-        if src.fastvlm_errors.ERROR_HANDLER_AVAILABLE:
-            issues = src.fastvlm_errors.FastVLMErrorHandler.check_environment()
+        if src.models.fastvlm.errors.ERROR_HANDLER_AVAILABLE:
+            issues = src.models.fastvlm.errors.FastVLMErrorHandler.check_environment()
             
         # Save environment check results
         env_check_file = os.path.join(output_dir, "environment_check.txt")

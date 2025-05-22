@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test the vision_analyzer.py image processing to ensure it always processes
+Test the image processing to ensure it always processes
 images regardless of current size.
 """
 
@@ -11,10 +11,13 @@ import shutil
 from pathlib import Path
 from PIL import Image
 
-# Make sure our modules are in the path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root to system path if needed
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from vision_analyzer import VisionAnalyzer
+# Import from the new module structure
+from src.core.vision import VisionAnalyzer
 
 def create_test_image(width, height, color=(255, 0, 0)):
     """Create a test image with specified dimensions and color."""
