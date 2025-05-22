@@ -282,8 +282,13 @@ def quick(
         typer.echo("Analysis failed", err=True)
         raise typer.Exit(1)
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
+    file_path: Optional[str] = typer.Argument(None, help="Path to file to analyze (default: quick analysis)"),
+    output_format: str = typer.Option("pretty", "--format", "-f", help="Output format: pretty, json, md"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    markdown_output: bool = typer.Option(False, "--md", help="Output in Markdown format"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output except errors"),
     ci: bool = typer.Option(False, "--ci", help="Run in non-interactive CI mode"),
@@ -339,7 +344,33 @@ def main(
     # Show available commands (only in debug mode)
     if verbose:
         logger.debug(f"Registered subcommands: {[typer_instance.name for typer_instance in app.registered_typer_instances]}")
-    # The prior debug log statement is sufficient, we don't need to print to stdout
+    
+    # If a file path is provided without a subcommand, use quick analysis
+    if ctx.invoked_subcommand is None and file_path:
+        # Handle format flags
+        if json_output:
+            output_format = "json"
+        elif markdown_output:
+            output_format = "md"
+        
+        # Import analyze function
+        from src.cli.analyze.main import analyze_single_file
+        
+        # Run the analysis
+        result = analyze_single_file(file_path, output_format, verbose=verbose)
+        
+        if result:
+            typer.echo(result)
+        else:
+            typer.echo("Analysis failed", err=True)
+            raise typer.Exit(1)
+        
+        return
+    
+    # If no subcommand and no file path, show help
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        return
 
 # We're removing the version command and only using the --version flag option
 # to avoid confusing users with two different ways to get version information.
