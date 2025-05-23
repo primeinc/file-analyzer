@@ -1,14 +1,66 @@
 # File Analysis System
 
-Unified tool for comprehensive file analysis combining:
+AI-powered file analysis tool with intelligent filename generation and comprehensive analysis capabilities.
 
-- ExifTool: Metadata extraction
-- rdfind: Duplicate detection
-- Tesseract OCR: Text from images
-- ClamAV: Malware scanning
-- ripgrep: Content searching
-- binwalk: Binary analysis
-- Vision Models: AI-powered image analysis (FastVLM, BakLLaVA, Qwen2-VL)
+## Quick Start
+
+```bash
+# Install the project
+pip install -e ".[dev]"
+
+# Analyze an image (primary use case)
+fa path/to/image.jpg
+
+# Get JSON output
+fa --json path/to/image.jpg
+
+# Get markdown output  
+fa --md path/to/image.jpg
+```
+
+## Core Features
+
+- **AI Vision Analysis**: Smart image analysis with FastVLM, BakLLaVA, and Qwen2-VL models
+- **Intelligent Filename Generation**: AI-powered suggestions based on image content
+- **Multiple Output Formats**: Text (default), JSON, and Markdown output
+- **Comprehensive Analysis**: Metadata extraction, duplicate detection, OCR, malware scanning
+- **Advanced Tools**: ripgrep content searching, binary analysis with binwalk
+
+## Intelligent Filename Generation
+
+The File Analyzer includes advanced AI-powered filename generation that suggests meaningful names based on image content:
+
+### Example Output
+
+```bash
+$ fa test_data/images/test.jpg
+
+Recommended Filename: number-5.jpg
+
+Description:
+The image displays a stylized, minimalist design of the number '5'. It is composed 
+of two overlapping rectangles, with the top rectangle forming the upper part of the 
+number and the bottom rectangle forming the lower part. The rectangles are filled 
+with a solid, light beige color...
+
+Tags: beige, design, flat design, minimalism, number, solid color
+
+Analysis Time: 17.34 seconds
+```
+
+### Smart Filename Features
+
+- **Content Recognition**: Detects specific content types (letters, numbers, icons, objects)
+  - `letter-t.jpg` for text characters
+  - `number-5.jpg` for numeric digits  
+  - `icon-star.png` for symbolic content
+  - `duck-wizard.jpg` for descriptive content
+
+- **Tag Cleaning**: Removes generic terms like "image", "photo", "shooting" while preserving meaningful tags
+
+- **Semantic Analysis**: Uses AI models to generate descriptive filenames from complex image content
+
+- **Fallback Logic**: Graceful degradation when AI analysis fails or produces unclear results
 
 ## Project Structure
 
@@ -50,39 +102,49 @@ Unified tool for comprehensive file analysis combining:
 Model files are stored in ~/.local/share/fastvlm/ (see MODELS.md)
 ```
 
-## Usage
+## CLI Usage
+
+### Primary Commands
 
 ```bash
-./tools/analyze.sh [options] path_to_analyze
+# Direct file analysis (main use case)
+fa path/to/image.jpg                 # Smart analysis with filename suggestion
+fa --json path/to/image.jpg          # JSON output format
+fa --md path/to/image.jpg            # Markdown output format
+fa --verbose path/to/image.jpg       # Verbose debugging output
+
+# Path handling
+fa ./relative/path/image.jpg         # Relative paths
+fa /absolute/path/image.jpg          # Absolute paths  
+fa ~/home/path/image.jpg             # Tilde expansion
 ```
 
-### Options
+### Advanced Commands
 
-- `-a, --all`: Run all analyses
-- `-m, --metadata`: Extract metadata
-- `-d, --duplicates`: Find duplicates
-- `-o, --ocr`: Perform OCR on images
-- `-v, --virus`: Scan for malware
-- `-s, --search TEXT`: Search content
-- `-b, --binary`: Analyze binary files
-- `-V, --vision`: Analyze images using AI vision models (outputs JSON by default)
-- `--vision-model MODEL`: Select vision model (fastvlm, bakllava, qwen2vl)
-- `--vision-mode MODE`: Vision analysis mode (describe, detect, document)
-- `--vision-format FMT`: Vision output format (json, text, markdown) - json recommended
-- `-r, --results DIR`: Output directory
-- `-i, --include PATTERN`: Include only files matching pattern
-- `-x, --exclude PATTERN`: Exclude files matching pattern
-- `-c, --config FILE`: Path to custom configuration file
-- `--skip-checks`: Skip dependency checks
-- `-q, --quiet`: Quiet mode with minimal output
+```bash
+# Model management
+fa model list                        # List available AI models
+fa model download --size 0.5b        # Download specific model
 
-### Examples
+# Testing and validation
+fa test                              # Run comprehensive test suite
+fa validate                          # Validate configuration
+fa benchmark                         # Performance benchmarks
+
+# Legacy subcommands (still supported)
+fa quick path/to/image.jpg           # Alias for direct analysis
+fa analyze vision path/to/image.jpg  # Comprehensive analysis mode
+```
+
+### Comprehensive Analysis (Legacy)
+
+For comprehensive file analysis with multiple tools:
 
 ```bash
 # Run all analyses on a directory
 ./tools/analyze.sh -a ~/Documents
 
-# Extract metadata and scan for duplicates
+# Extract metadata and scan for duplicates  
 ./tools/analyze.sh -m -d ~/Pictures
 
 # Search for specific content
@@ -94,26 +156,69 @@ Model files are stored in ~/.local/share/fastvlm/ (see MODELS.md)
 # Include only specific file types
 ./tools/analyze.sh -a -i "*.jpg" -i "*.png" ~/Pictures
 
-# Exclude specific patterns
-./tools/analyze.sh -a -x "*.log" -x "*.tmp" ~/Documents
-
-# Use a custom config file
-./tools/analyze.sh -a -c ~/my_config.json ~/Documents
-
 # Analyze images with AI vision models
 ./tools/analyze.sh -V ~/Pictures
-
-# Use a specific vision model
-./tools/analyze.sh -V --vision-model fastvlm ~/Pictures
-
-# Use document analysis mode for extracting text
-./tools/analyze.sh -V --vision-mode document ~/Documents
-
-# Use custom format (JSON is default and recommended)
-./tools/analyze.sh -V --vision-format json ~/Pictures
 ```
 
-## Output
+## Output Formats
+
+The File Analyzer supports multiple output formats for different use cases:
+
+### Text Output (Default)
+
+Human-readable format with intelligent filename suggestions:
+
+```
+Recommended Filename: letter-t.jpg
+
+Description:
+The image displays a simple, stylized icon of a letter 'T' in a bold, sans-serif font. 
+The icon is rendered in a solid, mustard yellow color with a slight shadow effect...
+
+Tags: branding, icon, letter, minimalist, typography
+
+Analysis Time: 17.18 seconds
+```
+
+### JSON Output (`--json`)
+
+Structured data format for programmatic use:
+
+```json
+{
+  "recommended_filename": "letter-t.jpg", 
+  "description": "The image displays a simple, stylized icon...",
+  "tags": ["branding", "icon", "letter", "minimalist", "typography"],
+  "metadata": {
+    "model": "fastvlm_1.5b",
+    "execution_time": 17.180412,
+    "timestamp": "2025-05-22T15:38:16.012597"
+  },
+  "original_file": "test_data/images/test.jpg"
+}
+```
+
+### Markdown Output (`--md`)
+
+Formatted output for documentation and reports:
+
+```markdown
+# File Analysis: test.jpg
+
+**Recommended Filename:** `letter-t.jpg`
+
+## Description
+The image displays a simple, stylized icon of a letter 'T' in a bold, sans-serif font...
+
+## Tags
+branding, icon, letter, minimalist, typography
+
+## Metadata
+- Model: fastvlm_1.5b
+- Execution Time: 17.180412 seconds
+```
+
+## Legacy Analysis Output
 
 Results are saved to the canonical artifacts directory structure:
 
@@ -357,30 +462,50 @@ git clone https://github.com/Fuzzy-Search/realtime-bakllava
 cd realtime-bakllava && make
 ```
 
-## Running Tests
+## Testing
 
-The project includes a comprehensive test suite:
+The project includes a comprehensive test suite designed to prevent regressions:
+
+### Running Tests
 
 ```bash
-# Run the automated test suite
-./tests/test_fastvlm.sh
+# Run all tests
+pytest
 
-# Test vision analysis capabilities with JSON validation
-./tests/test_vision_integrations.py
+# Run with coverage reporting
+pytest --cov=src
 
-# Test JSON output formatting and validation (secure path handling)
-./tools/json_test.sh
+# Run specific test categories
+pytest tests/test_cli_integration.py -v     # CLI integration tests
+pytest tests/test_fastvlm_json.py -v       # Model output validation
+pytest tests/test_vision_core.py -v        # Vision model integration
+
+# Run regression prevention tests
+pytest tests/test_cli_integration.py::TestRegressionPrevention -v
 ```
 
-The test suite verifies:
-- Metadata extraction functionality
-- Duplicate file detection
-- Content searching capabilities  
-- File filtering with include/exclude patterns
+### Test Categories
+
+**CLI Integration Tests** (`tests/test_cli_integration.py`):
+- Complete user experience testing for all command patterns
+- Output format validation (JSON, Markdown, text)
+- Path handling (relative, absolute, tilde expansion)
+- Error scenarios and edge cases
+- Filename generation and tag cleaning validation
+- **Regression prevention** for CLI argument parsing issues
+
+**Model Output Tests** (`tests/test_fastvlm_json_parsing.py`):
+- Real captured model outputs for validation
+- Token limit optimization testing (prevents JSON repetition)
+- JSON repair functionality validation
+- Malformed JSON handling and extraction
+
+**Core Functionality Tests**:
 - Vision model integration with JSON validation
+- Metadata extraction and duplicate detection
+- Content searching and file filtering
+- Path validation and artifact discipline enforcement
 - Performance metrics collection
-- Path validation and enforcement
-- Secure file operations with PathGuard
 
 ### Security Features in Tests
 

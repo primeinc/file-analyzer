@@ -43,20 +43,29 @@ isort --check-only src/ tests/
 # Main CLI entry point
 fa --help
 
+# Direct file analysis (primary use case)
+fa path/to/image.jpg
+
+# Output formats
+fa --json path/to/image.jpg          # JSON output
+fa --md path/to/image.jpg            # Markdown output
+fa --format json path/to/image.jpg   # Alternative JSON syntax
+
+# Verbose output for debugging
+fa --verbose path/to/image.jpg
+
 # Run built-in test suite
 fa test
 
-# Analyze files
-fa analyze path/to/files
-
-# Validate configurations
-fa validate
-
-# Run benchmarks
-fa benchmark
-
-# Quick single-file analysis
+# Legacy subcommands (still supported)
 fa quick path/to/file.jpg
+fa analyze vision path/to/file.jpg
+
+# Other CLI commands
+fa validate        # Validate configurations
+fa benchmark       # Run benchmarks
+fa model list      # List available models
+fa model download  # Download models
 ```
 
 ### Project-Specific Scripts
@@ -262,11 +271,13 @@ python src/analyzer.py --all <path_to_analyze>
 ## Architecture
 
 **Plugin-based CLI**: Main entry point at `src/cli/main.py` using Typer with subcommands registered via entry points:
-- `fa analyze` - File analysis with multiple tools (ExifTool, OCR, duplicates, etc.)  
+- `fa <filepath>` - Direct file analysis with AI vision models (primary use case)
+- `fa analyze` - Comprehensive file analysis with multiple tools (ExifTool, OCR, duplicates, etc.)  
 - `fa test` - Built-in test suite
 - `fa validate` - Configuration validation
 - `fa model` - AI model management
 - `fa benchmark` - Performance testing
+- `fa quick` - Legacy alias for direct file analysis
 
 **Core Components**:
 - `src/core/analyzer.py` - Main `FileAnalyzer` class with parallel processing
@@ -348,6 +359,33 @@ The system employs a multi-stage approach to extract JSON from potentially malfo
 
 The extraction can handle nested objects, arrays, and quoted strings properly.
 
+## Intelligent Filename Generation
+
+The system includes smart filename generation that suggests meaningful names based on image content:
+
+### Features
+- **Content-specific patterns**: Recognizes letters (letter-t.jpg), numbers (number-5.jpg), icons (icon-star.png)
+- **Semantic analysis**: Uses AI models to generate descriptive filenames from image content
+- **Tag cleaning**: Removes generic terms like "image", "photo", "shooting" while preserving meaningful tags
+- **Fallback logic**: Graceful degradation when AI analysis fails or produces unclear results
+
+### Implementation
+- `src/cli/utils/render.py` - Main filename generation logic
+- Model-based filename suggestions using targeted prompts
+- Tag deduplication and frequency-based sorting
+- Length limits and filesystem-safe character handling
+
+### Usage
+```python
+from src.cli.utils.render import generate_intelligent_filename, clean_and_dedupe_tags
+
+# Generate filename from description
+filename = generate_intelligent_filename(description, original_path, file_extension)
+
+# Clean and deduplicate tags
+clean_tags = clean_and_dedupe_tags(raw_tags)
+```
+
 ## Model Management
 
 **Storage Locations** (in precedence order):
@@ -370,6 +408,83 @@ result = adapter.predict(image_path, prompt, mode="describe")
 ```
 
 See MODELS.md for complete details.
+
+## Comprehensive Testing Strategy
+
+The project includes multiple layers of testing to prevent regressions and ensure reliability:
+
+### Test Categories
+
+**Unit Tests**: Individual component testing
+```bash
+pytest tests/test_analyzer.py              # Core analyzer functionality
+pytest tests/test_vision_core.py           # Vision model integration
+pytest tests/test_fastvlm_json.py         # JSON parsing and model outputs
+pytest tests/test_json_utils.py           # JSON extraction utilities
+```
+
+**Integration Tests**: End-to-end workflow testing
+```bash
+pytest tests/test_cli_integration.py       # Complete CLI user experience
+pytest tests/test_end_to_end.py           # Full analysis workflows
+pytest tests/test_vision_integrations.py  # Model adapter integration
+```
+
+**Regression Prevention**: Specific tests for known issues
+```bash
+# CLI argument parsing regression (fa filepath not working)
+pytest tests/test_cli_integration.py::TestRegressionPrevention::test_cli_argument_parsing_regression
+
+# Model token limit optimization (prevents JSON repetition)
+pytest tests/test_fastvlm_json_parsing.py::test_token_limit_optimization
+```
+
+### Key Test Features
+
+**CLI Integration Tests** (`tests/test_cli_integration.py`):
+- Tests all user-facing command patterns (`fa filepath`, `fa --json filepath`, etc.)
+- Path handling (relative, absolute, tilde expansion)
+- Output format validation (JSON, Markdown, text)
+- Error scenarios and edge cases
+- Filename generation and tag cleaning
+- Regression prevention for CLI argument parsing
+
+**Model Output Tests** (`tests/test_fastvlm_json_parsing.py`):
+- Real captured model outputs for validation
+- Token limit optimization testing (256 vs 512 tokens)
+- JSON repair functionality validation
+- Malformed JSON handling
+
+**Artifact Discipline Tests**:
+- Path validation and artifact sprawl prevention
+- Precommit hook validation
+- Safe function testing
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage reporting
+pytest --cov=src
+
+# Run specific test categories
+pytest tests/test_cli_integration.py -v     # CLI integration
+pytest tests/test_*regression* -v           # Regression tests
+pytest -k "fastvlm" -v                     # FastVLM-related tests
+
+# Run tests that would catch specific regressions
+pytest tests/test_cli_integration.py::TestRegressionPrevention -v
+```
+
+### Test Strategy Notes
+
+1. **Mock Strategy**: Tests use `unittest.mock.patch` to mock model calls for fast, reliable testing
+2. **Real Data**: Some tests use actual captured model outputs to validate JSON parsing
+3. **Subprocess Testing**: CLI integration tests use `subprocess.run` to test actual user experience
+4. **Regression Focus**: Specific tests designed to catch known regression patterns
+5. **Performance**: Fast unit tests (< 1s) with longer integration tests (< 30s) for comprehensive coverage
 
 ## Complete GitHub PR Review Workflow
 
