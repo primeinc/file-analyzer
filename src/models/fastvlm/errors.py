@@ -18,6 +18,9 @@ import platform
 import subprocess
 from pathlib import Path
 
+# Availability flag for other modules to check
+ERROR_HANDLER_AVAILABLE = True
+
 class FastVLMErrorHandler:
     """Handles FastVLM errors and environment validation."""
     

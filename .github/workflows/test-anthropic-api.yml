@@ -1,0 +1,55 @@
+name: Test Anthropic API Key
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/test-anthropic-api.yml'
+
+jobs:
+  test-api-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Test Anthropic API
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Test that the API key is set
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "❌ ERROR: ANTHROPIC_API_KEY is not set"
+            exit 1
+          else
+            echo "✅ API key is set (length: ${#ANTHROPIC_API_KEY})"
+          fi
+          
+          # Test API call
+          echo "Testing API connection..."
+          response=$(curl -s -w "\n%{http_code}" https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d '{
+              "model": "claude-3-haiku-20240307",
+              "max_tokens": 100,
+              "messages": [
+                {"role": "user", "content": "Say hello in exactly 3 words"}
+              ]
+            }')
+          
+          # Extract status code (last line)
+          http_code=$(echo "$response" | tail -n 1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "HTTP Status Code: $http_code"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ API call successful!"
+            echo "Response: $body"
+          else
+            echo "❌ API call failed"
+            echo "Response: $body"
+            exit 1
+          fi

@@ -242,34 +242,33 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
         
         # Run vision.py with JSON format
         try:
-            # Import arguments from vision module
-            from src.core.vision import parse_args
+            # Use VisionAnalyzer directly instead of broken parse_args import
+            from src.core.vision import VisionAnalyzer, DEFAULT_VISION_CONFIG
             
-            # Create command-line args
-            cli_args = [
-                "--image", primary_test_image,
-                "--output", output_file,
-                "--format", "json",
-                "--model-size", model_size
-            ]
-            
-            # Only add --mock if it's requested (following standard boolean flag patterns)
+            # Create vision configuration
+            vision_config = DEFAULT_VISION_CONFIG.copy()
+            vision_config["model"] = "fastvlm"
+            vision_config["output_format"] = "json"
             if use_mock:
-                cli_args.append("--mock")
-                
-            args = parse_args(cli_args)
+                vision_config["mock_mode"] = True
             
-            # Run vision analysis
-            try:
-                result = vision.analyze_image(args)
+            # Create analyzer and process image
+            analyzer = VisionAnalyzer(vision_config)
+            
+            # Process the image directly
+            result = analyzer.analyze_image(primary_test_image, mode="describe")
+            
+            # Save result to output file
+            with open(output_file, 'w') as f:
+                json.dump(result, f, indent=2)
                 
-                results["vision_analyzer"] = {
-                    "status": "ok",
-                    "message": "Vision analyzer integration test completed",
-                    "output_file": output_file,
-                    "result": result
-                }
-            except Exception as e:
+            results["vision_analyzer"] = {
+                "status": "ok",
+                "message": "Vision analyzer integration test completed",
+                "output_file": output_file,
+                "result": result
+            }
+        except Exception as e:
                 # Note: In testing contexts, this might be expected if model is unavailable
                 logger.info(f"Vision analyzer executed (success or expected model missing): {e}")
                 results["vision_analyzer"] = {

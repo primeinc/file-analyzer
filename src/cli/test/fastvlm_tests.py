@@ -176,7 +176,7 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
                     analyzer = MockAnalyzer()
                 else:
                     # Use real analyzer
-                    analyzer = src.models.fastvlm.analyzer.FastVLMAnalyzer(model_size=model_size)
+                    analyzer = src.models.fastvlm.analyzer.FastVLMAnalyzer()
                     
                 # Test different modes
                 modes = ["describe", "detect", "document"]
@@ -693,7 +693,7 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
     results_path = os.path.join(output_dir, "test_results.json")
     with open(results_path, "w") as f:
         json.dump({
-            "name": name,
+            "name": test_env["name"],
             "timestamp": time.time(),
             "success": len(errors) == 0,
             "errors": errors,
