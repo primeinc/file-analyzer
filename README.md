@@ -9,13 +9,28 @@ AI-powered file analysis tool with intelligent filename generation and comprehen
 pip install -e ".[dev]"
 
 # Analyze an image (primary use case)
-fa path/to/image.jpg
+fa quick path/to/image.jpg
 
 # Get JSON output
-fa --json path/to/image.jpg
+fa quick --json path/to/image.jpg
 
 # Get markdown output  
-fa --md path/to/image.jpg
+fa quick --md path/to/image.jpg
+```
+
+## CLI Quality Standards
+
+🚨 **CRITICAL**: This CLI is maintained with zero-tolerance for error spam.
+
+- ✅ **Clean execution**: All commands run without warnings or error output
+- ✅ **Proper error handling**: Real errors go to stderr with exit code 1  
+- ✅ **Working help system**: Every command has functional `--help`
+- ✅ **Entry point architecture**: Commands load via proper pyproject.toml entry points
+
+Before any commit, verify CLI cleanliness:
+```bash
+fa --help     # Must produce zero error output
+fa --version  # Must produce zero error output
 ```
 
 ## Core Features

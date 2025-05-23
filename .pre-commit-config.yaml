@@ -1,0 +1,172 @@
+# Pre-commit hooks configuration for File Analyzer
+# Ensures code quality and functionality before commits
+
+repos:
+  # Standard code formatting and linting
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: mixed-line-ending
+      - id: requirements-txt-fixer
+
+  # Python code formatting with Black
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: ["--line-length=88"]
+
+  # Import sorting with isort
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ["--profile", "black", "--line-length=88"]
+
+  # Type checking with mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-all]
+        args: ["--ignore-missing-imports", "--no-strict-optional"]
+
+  # Security check with bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ["-r", "src/", "-f", "json"]
+        exclude: tests/
+
+  # Local hooks for project-specific checks
+  - repo: local
+    hooks:
+      # CLI cleanliness enforcement - ZERO TOLERANCE for error spam
+      - id: cli-cleanliness-test
+        name: CLI Cleanliness Test (ZERO ERROR SPAM)
+        entry: python
+        language: system
+        args: ["-c", "
+import subprocess; 
+import sys; 
+def check_clean(cmd, desc):
+  result = subprocess.run(cmd, capture_output=True, text=True, timeout=10);
+  if result.returncode != 0:
+    print(f'ERROR: {desc} failed (exit {result.returncode})');
+    print('STDERR:', result.stderr);
+    sys.exit(1);
+  if result.stderr:
+    print(f'ERROR: {desc} produced error spam:');
+    print('STDERR:', result.stderr);
+    sys.exit(1);
+  print(f'✅ {desc} clean');
+
+try:
+  check_clean(['fa', '--help'], 'fa --help');
+  check_clean(['fa', '--version'], 'fa --version');
+  check_clean(['fa'], 'fa (no args)');
+  print('✅ CLI cleanliness: ALL COMMANDS CLEAN');
+except subprocess.TimeoutExpired:
+  print('ERROR: CLI command timed out');
+  sys.exit(1);
+except Exception as e:
+  print(f'ERROR: CLI cleanliness test failed: {e}');
+  sys.exit(1);
+        "]
+        files: ^src/cli/
+        pass_filenames: false
+
+      # Test that all CLI commands have help
+      - id: cli-help-test
+        name: CLI Help System Test
+        entry: python
+        language: system
+        args: ["-c", "
+import subprocess;
+import sys;
+commands = ['quick', 'analyze', 'model', 'test', 'validate', 'artifact', 'benchmark', 'install'];
+failed = [];
+for cmd in commands:
+  try:
+    result = subprocess.run(['fa', cmd, '--help'], capture_output=True, text=True, timeout=10);
+    if result.returncode != 0:
+      failed.append(f'{cmd}: {result.stderr}');
+  except Exception as e:
+    failed.append(f'{cmd}: {e}');
+if failed:
+  print('ERROR: CLI help tests failed:');
+  for f in failed: print(f'  {f}');
+  sys.exit(1);
+print('✅ CLI help system tests passed');
+        "]
+        files: ^src/cli/
+        pass_filenames: false
+
+      # Run core unit tests
+      - id: pytest-core
+        name: Core Unit Tests
+        entry: python
+        language: system
+        args: ["-m", "pytest", "tests/test_cli_essential.py", "tests/test_core_functionality.py", "-v", "--tb=short"]
+        files: ^(src/|tests/)
+        pass_filenames: false
+
+      # Enforce no manual imports
+      - id: no-manual-imports
+        name: No Manual Import Fallbacks
+        entry: python
+        language: system
+        args: ["-m", "pytest", "tests/test_no_manual_imports.py", "-v", "--tb=short"]
+        files: ^src/cli/
+        pass_filenames: false
+
+      # Artifact discipline check
+      - id: artifact-discipline
+        name: Artifact Discipline Check
+        entry: bash
+        language: system
+        args: ["-c", "
+if ! ./preflight.sh 2>&1 | grep -q 'Preflight check completed successfully'; then
+  echo 'ERROR: Artifact discipline check failed';
+  ./preflight.sh;
+  exit 1;
+fi;
+echo '✅ Artifact discipline check passed';
+        "]
+        files: ^(src/|.*\.sh)
+        pass_filenames: false
+
+      # Check pyproject.toml entry points match actual commands
+      - id: entry-points-check
+        name: Entry Points Validation
+        entry: python
+        language: system
+        args: ["-c", "
+import toml;
+import os;
+with open('pyproject.toml', 'r') as f:
+  config = toml.load(f);
+entry_points = config.get('project', {}).get('entry-points', {}).get('fa.commands', {});
+print(f'Found {len(entry_points)} entry points in pyproject.toml');
+missing = [];
+for name, module in entry_points.items():
+  module_path = module.replace(':', '/').replace('.', '/') + '.py';
+  if not os.path.exists(module_path):
+    missing.append(f'{name}: {module_path}');
+if missing:
+  print('ERROR: Missing modules for entry points:');
+  for m in missing: print(f'  {m}');
+  exit(1);
+print('✅ Entry points validation passed');
+        "]
+        files: ^(pyproject\.toml|src/cli/)
+        pass_filenames: false

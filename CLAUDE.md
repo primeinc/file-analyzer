@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL CLI RULES
+
+**🚨 CLI MUST BE CLEAN - NO ERROR SPAM 🚨**
+
+The CLI must NEVER produce error output on normal operations. Every CLI command must run cleanly without warnings, errors, or spam.
+
+### Before ANY commit:
+1. **Test CLI is clean**: `fa --help` and `fa --version` must produce ZERO error output
+2. **No broken imports**: All imports must resolve or be handled with proper try/catch
+3. **No manual loading**: Use proper entry points, never manual command loading hacks
+4. **All commands work**: Every command in `fa --help` must have working `--help`
+
+### CLI Quality Standards:
+- ✅ Clean output: Commands produce only intended output
+- ✅ Proper error handling: Real errors go to stderr with exit code 1
+- ✅ Entry points work: Commands load via pyproject.toml entry points
+- ✅ Help system works: All commands and subcommands have working --help
+- ❌ NEVER: Error spam, broken imports, manual loading, silent failures
+
 ## Development Commands
 
 ### Testing

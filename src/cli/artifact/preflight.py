@@ -65,8 +65,8 @@ def get_project_root() -> Path:
     # Assuming this file is in src/cli/artifact/preflight.py
     return Path(__file__).parent.parent.parent.parent.absolute()
 
-# Import shared utility function
-from src.cli.artifact.utils import check_artifact_sprawl
+# Import shared utility functions
+from src.cli.artifact.utils import check_artifact_sprawl, clean_tmp_artifacts, generate_env_file
 
 def check_scripts_conformity() -> Tuple[bool, List[str]]:
     """
@@ -106,39 +106,6 @@ def check_scripts_conformity() -> Tuple[bool, List[str]]:
     
     return len(failures) == 0, failures
 
-# Import functions from main module
-from src.cli.artifact.main import clean_tmp_artifacts as main_clean_tmp_artifacts
-
-def clean_tmp_artifacts():
-    """
-    Clean only the tmp directory.
-    
-    Returns:
-        Tuple[bool, str]: (success, message)
-    """
-    try:
-        # Directly call the function from main module
-        success, message = main_clean_tmp_artifacts()
-        return success, message
-    except Exception as e:
-        return False, f"Failed to clean temporary artifacts: {str(e)}"
-
-# Also import generate_env_file
-from src.cli.artifact.main import generate_env_file as main_generate_env_file
-
-def generate_env_file():
-    """
-    Generate an artifacts.env file for sourcing in shell scripts.
-    
-    Returns:
-        Tuple[bool, str]: (success, message)
-    """
-    try:
-        # Directly call the function from main module
-        success, file_path, message = main_generate_env_file()
-        return success, message
-    except Exception as e:
-        return False, f"Failed to generate artifacts.env file: {str(e)}"
 
 @app.callback()
 def callback():
@@ -239,7 +206,7 @@ def run(
     # Check presence of artifact.env and make sure all required scripts update it
     if not os.path.isfile(os.path.join(get_project_root(), "artifacts.env")):
         console.print("[yellow]Generating artifacts.env file...[/yellow]")
-        success, message = generate_env_file()
+        success, file_path, message = generate_env_file()
         if not success:
             console.print(f"[red]Error:[/red] {message}")
     else:
