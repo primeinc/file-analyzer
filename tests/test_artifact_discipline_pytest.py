@@ -93,19 +93,15 @@ class TestPathValidation:
                 f.write(f"Valid {artifact_type} content")
             assert validate_artifact_path(file_path)
             
-        # NOTE: Project structure paths validation rules have changed
-        # Now only artifact paths are considered valid, not project structure paths
-        # This test is adapted to reflect the current behavior
+        # Project structure paths should be valid
         for structure_dir in ["src", "tools", "tests"]:
             path = os.path.join(project_root, structure_dir)
-            # We're now asserting these are NOT valid as per current implementation
-            assert not validate_artifact_path(path), "Project structure paths should now be invalid per current implementation"
+            assert validate_artifact_path(path), f"Project structure path {structure_dir} should be valid"
             
-        # Root directory files are no longer considered valid
-        # This test is adapted to reflect the current behavior
+        # Root directory files should be valid
         for root_file in ["README.md", "setup.py", "requirements.txt"]:
             file_path = os.path.join(project_root, root_file)
-            assert not validate_artifact_path(file_path), "Project root files should now be invalid per current implementation"
+            assert validate_artifact_path(file_path), f"Project root file {root_file} should be valid"
     
     def test_invalid_paths(self):
         """Test validation of invalid paths."""

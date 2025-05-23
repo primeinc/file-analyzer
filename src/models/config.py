@@ -403,7 +403,6 @@ def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> Optional[st
         os.path.join(PROJECT_ROOT, "libs", "ml-fastvlm", "predict.py"),  # Main project repo location
         os.path.join(PROJECT_ROOT, "ml-fastvlm", "predict.py"),  # Alt project location
         os.path.join(USER_MODEL_DIR, "predict.py"),  # User model directory
-        "/Users/will/Dev/file-analyzer/libs/ml-fastvlm/predict.py",  # Direct paths (hardcoded for urgent fixes)
     ]
     
     # Check if model is installed as a package
@@ -421,13 +420,6 @@ def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> Optional[st
             return path
         else:
             logger.debug(f"No predict script at: {path}")
-    
-    # Rather than failing, if the user has the known project location, let's use that
-    # This prevents unnecessary failure on Mac systems with standard folder layouts
-    hardcoded_path = "/Users/will/Dev/file-analyzer/libs/ml-fastvlm/predict.py"
-    if os.path.exists(hardcoded_path):
-        logger.debug(f"Using hardcoded fallback predict script at: {hardcoded_path}")
-        return hardcoded_path
             
     logger.warning(f"Predict script for {model_type} not found in standard locations")
     return None

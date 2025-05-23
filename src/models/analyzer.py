@@ -94,7 +94,7 @@ class ModelAnalyzer:
         Returns:
             Dictionary with analysis results
         """
-        logger.debug(f"Analyzing {file_path} with {model_name} ({model_size or 'default'}) in {mode} mode")
+        logger.info(f"Analyzing {file_path} with {model_name} ({model_size or 'default'}) in {mode} mode")
         
         # Use default output path if not specified
         if not output_path:
@@ -102,7 +102,7 @@ class ModelAnalyzer:
             file_name = os.path.basename(file_path)
             file_base = os.path.splitext(file_name)[0]
             output_path = os.path.join(artifact_dir, f"{file_base}_result.json")
-            logger.debug(f"Using canonical artifact path: {output_path}")
+            logger.info(f"Using canonical artifact path: {output_path}")
         
         # Run analysis through model manager
         result = self.model_manager.analyze_file(
@@ -152,12 +152,12 @@ class ModelAnalyzer:
         Returns:
             Dictionary mapping file paths to analysis results
         """
-        logger.debug(f"Batch analyzing {directory} with {model_name} ({model_size or 'default'}) in {mode} mode")
+        logger.info(f"Batch analyzing {directory} with {model_name} ({model_size or 'default'}) in {mode} mode")
         
         # Use default output directory if not specified
         if not output_dir:
             output_dir = get_canonical_artifact_path(model_type, f"batch_{model_name}_{mode}")
-            logger.debug(f"Using canonical artifact path: {output_dir}")
+            logger.info(f"Using canonical artifact path: {output_dir}")
         
         # Use model manager to get files and create model instance
         if not file_extensions:

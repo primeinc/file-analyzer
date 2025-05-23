@@ -40,7 +40,7 @@ def clean_tags(tags: list) -> list:
 
 def generate_intelligent_filename(description: str, image_path: str, file_ext: str) -> str:
     """
-    Generate an intelligent filename by asking the model directly.
+    Generate an intelligent filename using the FastVLM adapter.
     
     Args:
         description: The image description from the initial analysis
@@ -71,39 +71,27 @@ Examples:
 - "letter-t-icon"
 - "pizza-slice-table"
 
-What would you name this file?"""
+Respond with ONLY the filename (no extension), nothing else."""
         
-        # Create adapter and get filename suggestion
+        # Create adapter and use proper predict method
         adapter = create_adapter("fastvlm", "1.5b", auto_download=False)
         
-        # Call the predict script directly to get plain text response
-        import subprocess
-        import sys
-        import os
+        # Use the adapter's predict method which includes all the robust error handling,
+        # JSON repair, timeout handling, and output processing
+        result = adapter.predict(
+            image_path=image_path,
+            prompt=filename_prompt,
+            mode="describe",
+            max_new_tokens=50  # Short response for filename
+        )
         
-        predict_script = adapter.predict_script
-        model_path = adapter.model_path
-        
-        cmd = [
-            sys.executable, predict_script,
-            "--model-path", model_path,
-            "--image-file", image_path,
-            "--prompt", filename_prompt,
-            "--max_new_tokens", "50"  # Short response for filename
-        ]
-        
-        working_dir = os.path.dirname(predict_script)
-        result = subprocess.run(cmd, cwd=working_dir, stdout=subprocess.PIPE, 
-                              stderr=subprocess.PIPE, text=True, timeout=30)
-        
-        if result.returncode != 0:
-            raise Exception(f"Subprocess failed: {result.stderr}")
-            
-        suggested_name = result.stdout.strip()
-        
-        # Extract filename from result - expect plain text response
+        # Extract the suggested filename from the adapter result
         if isinstance(result, dict):
+            # Try to get from description field first
             suggested_name = result.get("description", "").strip()
+            # If empty, try other fields that might contain the response
+            if not suggested_name:
+                suggested_name = result.get("text", result.get("response", "")).strip()
         else:
             suggested_name = str(result).strip()
             
@@ -114,7 +102,7 @@ What would you name this file?"""
         suggested_name = suggested_name.strip('-')
         
         # Validate the suggestion
-        if suggested_name and 3 <= len(suggested_name) <= 50 and '-' in suggested_name:
+        if suggested_name and 3 <= len(suggested_name) <= 50:
             logger.debug(f"Model suggested filename: {suggested_name}")
             return f"{suggested_name}{file_ext}"
             
@@ -132,8 +120,8 @@ def _extract_filename_from_description(description: str, file_ext: str) -> str:
     content_patterns = [
         r'\bletter\s+[\'"]?([A-Z])[\'"]?',  # "letter T" -> "letter-t"
         r'\bnumber\s+[\'"]?(\d+)[\'"]?',    # "number 5" -> "number-5"
-        r'\bicon\s+of\s+(\w+)',            # "icon of star" -> "icon-star"
-        r'\bsymbol\s+(\w+)',               # "symbol T" -> "symbol-t"
+        r'\bicon\s+of\s+a?\s*(\w+)',       # "icon of a star" -> "icon-star"
+        r'\bsymbol\s+([A-Z])\b',           # "symbol T" -> "symbol-t"
     ]
     
     for pattern in content_patterns:
@@ -162,13 +150,17 @@ def _extract_filename_from_description(description: str, file_ext: str) -> str:
         filename = '-'.join(key_objects[:2])
         return f"{filename}{file_ext}"
     
-    # Extract any capitalized words (proper nouns)
+    # Extract any capitalized words (proper nouns) 
     proper_nouns = re.findall(r'\b[A-Z][a-z]+\b', description)
     if proper_nouns:
-        filename = '-'.join(proper_nouns[:2]).lower()
-        filename = re.sub(r'[^\w-]', '', filename)
-        if len(filename) > 3:
-            return f"{filename}{file_ext}"
+        # Filter out common words like "The", "Of", "In"
+        significant_nouns = [noun for noun in proper_nouns 
+                           if noun.lower() not in ['the', 'of', 'in', 'at', 'on', 'a', 'an']]
+        if significant_nouns:
+            filename = '-'.join(significant_nouns[:3]).lower()  # Take up to 3 words
+            filename = re.sub(r'[^\w-]', '', filename)
+            if len(filename) > 3:
+                return f"{filename}{file_ext}"
     
     # Final fallback
     return f"unknown-content{file_ext}"

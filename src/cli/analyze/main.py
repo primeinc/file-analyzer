@@ -733,36 +733,25 @@ def verify(
     
     return 0
 
-def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: bool = False) -> str:
-    """
-    Hardened single-file analysis function.
-    Performs robust analysis with timeout, logging, subprocess validation,
-    file I/O safety, and schema checking.
-    """
-
-    import os
-    import json
-    import time
+def _setup_logging(verbose: bool):
+    """Setup logging configuration for analysis."""
     import logging
-    import signal
-    from pathlib import Path
-    from src.core.analyzer import FileAnalyzer
-    from src.cli.utils.render import render_output
-
-    # -------------------------
-    # Logging setup (early)
     log_level = logging.INFO if verbose else logging.WARNING
     logging.basicConfig(level=log_level)
-    logger = logging.getLogger("file-analyzer")
+    return logging.getLogger("file-analyzer")
 
-    # -------------------------
-    # Validate file path
+
+def _validate_file_path(file_path: str) -> str:
+    """Validate and expand file path. Returns error message if invalid, empty string if valid."""
+    import os
     file_path = os.path.expanduser(file_path)
     if not os.path.exists(file_path):
         return f"Error: File does not exist: {file_path}"
+    return ""
 
-    # -------------------------
-    # Construct options
+
+def _create_analyzer_config():
+    """Create analyzer configuration and options."""
     options = create_options_dict('vision',
                                   model_name='fastvlm',
                                   model_size='1.5b',
@@ -772,35 +761,53 @@ def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: 
             'model_size': '1.5b'
         }
     }
-    analyzer = FileAnalyzer(config)
+    return options, config
 
-    # -------------------------
-    # Timeout wrapper for entire analysis
-    def timeout_handler(signum, frame):
-        raise TimeoutError("Analysis timed out")
 
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(45)
+def _run_analysis_with_timeout(analyzer, file_path: str, options: dict, logger):
+    """Run analysis with cross-platform timeout handling."""
+    import threading
+    
+    class AnalysisTimeoutError(Exception):
+        pass
 
-    try:
-        results = analyzer.analyze(file_path, options)
-        signal.alarm(0)
-    except TimeoutError:
-        signal.alarm(0)
-        return "Analysis failed - operation timed out after 45 seconds"
-    except Exception as e:
-        signal.alarm(0)
-        logger.error(f"Analysis failed with exception: {e}")
-        if verbose:
-            import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-        return f"Analysis failed - unexpected error: {e}"
+    result = {"success": False, "data": None, "error": None}
+    
+    def analysis_worker():
+        try:
+            result["data"] = analyzer.analyze(file_path, options)
+            result["success"] = True
+        except Exception as e:
+            result["error"] = e
+            
+    # Start analysis in a separate thread
+    analysis_thread = threading.Thread(target=analysis_worker)
+    analysis_thread.daemon = True
+    analysis_thread.start()
+    
+    # Wait for completion with timeout
+    analysis_thread.join(timeout=45)  # 45 second timeout
+    
+    if analysis_thread.is_alive():
+        # Thread is still running, analysis timed out
+        logger.warning("Analysis timed out after 45 seconds")
+        raise AnalysisTimeoutError("Analysis timed out after 45 seconds")
+        
+    if not result["success"]:
+        # Analysis completed but with error
+        if result["error"]:
+            raise result["error"]
+        else:
+            raise Exception("Analysis failed for unknown reason")
+            
+    return result["data"]
 
-    # -------------------------
-    # Step 1: Validate top-level structure
+
+def _validate_analysis_results(results: dict, verbose: bool, logger) -> tuple:
+    """Validate analysis results and extract vision data. Returns (success, error_message, output_path)."""
     vision_result = results.get("vision")
     if not vision_result:
-        return "Analysis failed - no vision results"
+        return False, "Analysis failed - no vision results", None
         
     # Extract actual error message if analysis failed
     if vision_result.get("status") != "success":
@@ -812,44 +819,51 @@ def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: 
         if verbose and 'traceback' in vision_result:
             logger.error(f"Full traceback: {vision_result['traceback']}")
             
-        return f"Model analysis failed ({error_type}): {actual_error}"
+        return False, f"Model analysis failed ({error_type}): {actual_error}", None
 
     output_path = vision_result.get("output_path")
     if not output_path:
-        return "Analysis failed - output path missing from result"
+        return False, "Analysis failed - output path missing from result", None
+        
+    return True, "", output_path
 
-    # -------------------------
-    # Step 2: Robust file read with mtime stabilization
-    def wait_for_mtime_stabilization(path: str, stable_duration=0.3, timeout=5.0):
-        """
-        Waits until the file at 'path' has a stable mtime for at least `stable_duration` seconds.
-        """
-        start = time.time()
-        last_mtime = None
-        stable_since = None
 
-        while True:
-            if not os.path.exists(path):
-                time.sleep(0.05)
-                continue
+def _wait_for_mtime_stabilization(path: str, stable_duration=0.3, timeout=5.0):
+    """Wait until the file at 'path' has a stable mtime for at least `stable_duration` seconds."""
+    import time
+    import os
+    
+    start = time.time()
+    last_mtime = None
+    stable_since = None
 
-            current_mtime = os.stat(path).st_mtime
-            now = time.time()
-
-            if last_mtime != current_mtime:
-                last_mtime = current_mtime
-                stable_since = now
-            elif now - stable_since >= stable_duration:
-                return  # mtime has stabilized
-
-            if now - start > timeout:
-                raise TimeoutError(f"File mtime did not stabilize for: {path}")
-
+    while True:
+        if not os.path.exists(path):
             time.sleep(0.05)
+            continue
 
+        current_mtime = os.stat(path).st_mtime
+        now = time.time()
+
+        if last_mtime != current_mtime:
+            last_mtime = current_mtime
+            stable_since = now
+        elif now - stable_since >= stable_duration:
+            return  # mtime has stabilized
+
+        if now - start > timeout:
+            raise TimeoutError(f"File mtime did not stabilize for: {path}")
+
+        time.sleep(0.05)
+
+
+def _read_and_parse_analysis_output(output_path: str) -> tuple:
+    """Read and parse analysis output JSON. Returns (success, error_message, data)."""
+    import json
+    
     try:
         # Wait for file to be completely written
-        wait_for_mtime_stabilization(output_path)
+        _wait_for_mtime_stabilization(output_path)
         
         # Read and validate JSON
         with open(output_path, "r") as f:
@@ -861,18 +875,71 @@ def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: 
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON in output: {e}")
                 
+        return True, "", analysis_data
+                
     except Exception as e:
-        return f"Analysis failed - could not parse model output: {e}"
+        return False, f"Analysis failed - could not parse model output: {e}", None
 
-    # -------------------------
-    # Step 3: Schema check
+
+def _validate_analysis_schema(analysis_data) -> str:
+    """Validate analysis data schema. Returns error message if invalid, empty string if valid."""
     if not isinstance(analysis_data, dict):
         return "Analysis failed - output is not a valid object"
     if "description" not in analysis_data or "tags" not in analysis_data:
         return "Analysis failed - output missing required fields"
+    return ""
 
-    # -------------------------
-    # Step 4: Format output
+
+def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: bool = False) -> str:
+    """
+    Hardened single-file analysis function.
+    Performs robust analysis with timeout, logging, subprocess validation,
+    file I/O safety, and schema checking.
+    """
+    import os
+    import time
+    from src.core.analyzer import FileAnalyzer
+    from src.cli.utils.render import render_output
+
+    # Setup logging
+    logger = _setup_logging(verbose)
+
+    # Validate file path
+    file_path = os.path.expanduser(file_path)
+    if error := _validate_file_path(file_path):
+        return error
+
+    # Create analyzer configuration
+    options, config = _create_analyzer_config()
+    analyzer = FileAnalyzer(config)
+
+    # Run analysis with timeout
+    try:
+        results = _run_analysis_with_timeout(analyzer, file_path, options, logger)
+    except Exception as e:
+        if "timed out" in str(e):
+            return "Analysis failed - operation timed out after 45 seconds"
+        logger.error(f"Analysis failed with exception: {e}")
+        if verbose:
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+        return f"Analysis failed - unexpected error: {e}"
+
+    # Validate analysis results
+    success, error_msg, output_path = _validate_analysis_results(results, verbose, logger)
+    if not success:
+        return error_msg
+
+    # Read and parse analysis output
+    success, error_msg, analysis_data = _read_and_parse_analysis_output(output_path)
+    if not success:
+        return error_msg
+
+    # Validate schema
+    if error := _validate_analysis_schema(analysis_data):
+        return error
+
+    # Format and return output
     return render_output(analysis_data, output_format, file_path)
 
 if __name__ == "__main__":
