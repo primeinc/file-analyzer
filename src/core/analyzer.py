@@ -65,11 +65,11 @@ class FileAnalyzer:
         
     def analyze(self, path, options):
         """Main analysis method that coordinates all analysis types."""
-        logging.info(f"Analyzing {path} with options: {options}")
+        logging.debug(f"Analyzing {path} with options: {options}")
         
         # Create canonical artifact path for this analysis run
         artifact_dir = get_canonical_artifact_path("analysis", "file_analysis")
-        logging.info(f"Using artifact directory: {artifact_dir}")
+        logging.debug(f"Using artifact directory: {artifact_dir}")
         
         # Validate path exists
         if not os.path.exists(path):
@@ -80,6 +80,7 @@ class FileAnalyzer:
         self.results["path"] = str(path)
         self.results["time"] = datetime.now().isoformat()
         self.results["analyses"] = {}
+        self.results["errors"] = []  # Track all errors encountered
         
         # Update include/exclude patterns if provided in options
         if options.get('include_patterns'):
@@ -732,7 +733,7 @@ class FileAnalyzer:
             model_mode: Analysis mode (describe, detect, document, etc.)
             artifact_dir: Directory for output artifacts
         """
-        logging.info(f"Analyzing with {model_name} model in {model_mode} mode")
+        logging.debug(f"Analyzing with {model_name} model in {model_mode} mode")
         
         # Determine if this is a single file or directory
         is_directory = os.path.isdir(path)
@@ -789,22 +790,52 @@ class FileAnalyzer:
                     'status': 'success' if 'error' not in result else 'error',
                     'model': model_name,
                     'mode': model_mode,
-                    'output_path': output_path
+                    'output_path': output_path,
+                    'results': [{"json_result": result}] if 'error' not in result else None
                 }
+                
+                # If there was an error in the result, capture it
+                if 'error' in result:
+                    self.results[model_type]['error'] = result['error']
+                    
         except Exception as e:
-            logging.error(f"Error in model analysis: {e}")
-            self.results[model_type] = {
+            import traceback
+            logger = logging.getLogger("src.core.analyzer")
+            logger.exception("Model analysis failed")
+            
+            # Capture full error details including traceback
+            error_details = {
                 'status': 'error',
+                'error': str(e),
+                'error_type': type(e).__name__,
                 'model': model_name,
                 'mode': model_mode,
-                'error': str(e)
+                'output_path': output_path if output_path and os.path.exists(output_path) else None,
+                'traceback': traceback.format_exc()
             }
+            
+            # Store error details in results
+            self.results[model_type] = error_details
+            
+            # Log diagnostic information
+            logger.error(f"Model analysis error details: {error_details}")
         
     def _write_summary(self, artifact_dir):
-        """Write a summary of all analyses."""
+        """Write a summary of all analyses with full error details."""
         summary_file = os.path.join(artifact_dir, "analysis_summary.json")
-        safe_write(summary_file, json.dumps(self.results, indent=2))
-        logging.info(f"Summary written to {summary_file}")
+        
+        # Ensure error information is preserved in the summary
+        summary_data = self.results.copy()
+        
+        # Add timestamp and analysis metadata
+        summary_data['_metadata'] = {
+            'analysis_time': datetime.now().isoformat(),
+            'artifact_dir': artifact_dir,
+            'total_analyses': len([k for k in self.results.keys() if k != '_metadata'])
+        }
+        
+        safe_write(summary_file, json.dumps(summary_data, indent=2))
+        logging.debug(f"Summary written to {summary_file}")
 
 def parse_args():
     """Parse command-line arguments."""

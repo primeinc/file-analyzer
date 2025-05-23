@@ -13,7 +13,7 @@ It provides:
 5. Path utilities for creating, moving, and managing artifacts
 
 Usage:
-    from src.artifact_guard import get_canonical_artifact_path, PathGuard
+    from src.core.artifact_guard import get_canonical_artifact_path, PathGuard
     
     # Create canonical artifact directory
     artifact_dir = get_canonical_artifact_path("test", "my_test_context")
@@ -44,7 +44,7 @@ from typing import Dict, List, Optional, Union, Tuple, Any, Callable
 ARTIFACT_TYPES = ["analysis", "vision", "test", "benchmark", "json", "tmp"]
 
 # Determine project root and artifacts root
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 ARTIFACTS_ROOT = os.path.join(PROJECT_ROOT, "artifacts")
 
 # Cache for canonical paths
@@ -94,6 +94,9 @@ def get_canonical_artifact_path(type_name: str, context: str) -> str:
     # Validate artifact type
     if type_name not in ARTIFACT_TYPES:
         raise ValueError(f"Invalid artifact type: {type_name}. Valid types: {', '.join(ARTIFACT_TYPES)}")
+    
+    # Ensure the artifacts root directory exists
+    setup_artifact_structure()
     
     # Clean context string (remove special chars, convert to lowercase, preserve underscores)
     clean_context = re.sub(r'[^a-z0-9_]', '_', context.lower())
@@ -195,13 +198,14 @@ def validate_artifact_path(path: str) -> bool:
     # Convert to absolute path if needed
     abs_path = os.path.abspath(path)
     
-    # Check if path is within artifacts root
-    if abs_path.startswith(ARTIFACTS_ROOT):
+    # Check if path is within artifacts root - use os.sep to ensure correct path validation
+    if abs_path.startswith(ARTIFACTS_ROOT + os.sep) or abs_path == ARTIFACTS_ROOT:
         return True
     
     # Check if path is within project structure (src, tools, tests)
     for valid_dir in ['src', 'tools', 'tests', '.git', '.github', '.githooks']:
-        if abs_path.startswith(os.path.join(PROJECT_ROOT, valid_dir)):
+        valid_path = os.path.join(PROJECT_ROOT, valid_dir)
+        if abs_path.startswith(valid_path + os.sep) or abs_path == valid_path:
             return True
     
     # Check if path is a file directly in project root
@@ -399,7 +403,7 @@ def print_warning():
     print("Ensure all file operations respect the canonical artifact paths.")
     print("Always use get_canonical_artifact_path for artifact directories:")
     print("")
-    print("    from src.artifact_guard import get_canonical_artifact_path")
+    print("    from src.core.artifact_guard import get_canonical_artifact_path")
     print("    artifact_dir = get_canonical_artifact_path('test', 'my_test')")
     print("    output_file = os.path.join(artifact_dir, 'output.txt')")
     print("")
@@ -476,7 +480,6 @@ def safe_mkdir(directory: str, mode: int = 0o777) -> str:
     os.makedirs(directory, mode=mode, exist_ok=True)
     return directory
 
-@enforce_path_discipline
 def safe_write(file_path: str, content: str, mode: str = 'w') -> str:
     """
     Write content to a file with path discipline enforcement.
@@ -492,6 +495,23 @@ def safe_write(file_path: str, content: str, mode: str = 'w') -> str:
     Raises:
         ValueError: If the file path violates artifact discipline
     """
+    # Validate the parent directory rather than the file itself
+    parent_dir = os.path.dirname(file_path)
+    if not validate_artifact_path(parent_dir):
+        caller_frame = sys._getframe(1)
+        caller_info = f"{caller_frame.f_code.co_filename}:{caller_frame.f_lineno}"
+        
+        raise ValueError(
+            f"ERROR: Non-canonical artifact path detected: {file_path}\n"
+            f"All artifact files must be created in {ARTIFACTS_ROOT}\n"
+            f"Called from: {caller_info}\n"
+            f"Hint: Use get_canonical_artifact_path() to generate valid artifact paths"
+        )
+        
+    # Create parent directory if it doesn't exist
+    os.makedirs(parent_dir, exist_ok=True)
+    
+    # Write the file
     with open(file_path, mode) as f:
         f.write(content)
     return file_path
@@ -575,6 +595,12 @@ def setup_artifact_structure() -> None:
     # Create subdirectories for each artifact type
     for artifact_type in ARTIFACT_TYPES:
         os.makedirs(os.path.join(ARTIFACTS_ROOT, artifact_type), exist_ok=True)
+    
+    # Print a diagnostic message to help debug paths
+    if os.environ.get("FA_DEBUG", "").lower() in ("1", "true", "yes"):
+        print(f"Artifact structure set up at: {ARTIFACTS_ROOT}")
+        for artifact_type in ARTIFACT_TYPES:
+            print(f"  - {artifact_type}: {os.path.join(ARTIFACTS_ROOT, artifact_type)}")
         
     # Create artifacts.env file if it doesn't exist
     env_file = os.path.join(PROJECT_ROOT, "artifacts.env")

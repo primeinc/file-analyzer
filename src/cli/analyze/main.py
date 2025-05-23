@@ -15,7 +15,8 @@ from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn
 
 # Import CLI common utilities
 from src.cli.common.config import config
-from src.cli.main import console
+
+# We'll import console from main when needed to avoid circular imports
 
 # Import analyzer core
 from src.core.analyzer import FileAnalyzer, verify_installation
@@ -31,6 +32,12 @@ class AnalyzeState:
 
 # Initialize state
 state = AnalyzeState()
+
+# Helper function to get console - avoids circular imports
+def get_console():
+    """Get console for output - import here to avoid circular imports."""
+    from src.cli.main import console
+    return console
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
@@ -109,7 +116,7 @@ def create_options_dict(analysis_type, **kwargs):
         options['model'] = True
         options['model_type'] = "vision"
         options['model_name'] = kwargs.get('model_name', 'fastvlm')
-        options['model_size'] = kwargs.get('model_size', '0.5b')
+        options['model_size'] = kwargs.get('model_size', '1.5b')
         options['model_mode'] = kwargs.get('model_mode', 'describe')
     
     return options
@@ -146,6 +153,7 @@ def all(
     
     # Check if path exists
     if not os.path.exists(path):
+        console = get_console()
         console.print(f"[red]Error:[/red] Path does not exist: {path}")
         raise typer.Exit(code=1)
     
@@ -171,6 +179,7 @@ def all(
     options['model'] = True
     options['model_type'] = "vision"
     options['model_name'] = "fastvlm"
+    options['model_size'] = "1.5b"
     options['model_mode'] = "describe"
     
     # Initialize analyzer
@@ -188,6 +197,9 @@ def all(
         # Run analysis
         results = file_analyzer.analyze(path, options)
         progress.update(task, completed=7)
+    
+    # Get console for output
+    console = get_console()
     
     # Print summary
     console.print("\n[bold]Analysis Complete[/bold]")
@@ -267,6 +279,9 @@ def metadata(
     # Run analysis
     results = file_analyzer.analyze(path, options)
     
+    # Get console for output
+    console = get_console()
+    
     # Print summary
     if results.get('metadata', {}).get('status') == 'success':
         console.print(f"[green]Metadata extraction complete[/green]")
@@ -301,6 +316,7 @@ def duplicates(
     
     # Check if path is a directory
     if not os.path.isdir(path):
+        console = get_console()
         console.print(f"[red]Error:[/red] Path must be a directory: {path}")
         raise typer.Exit(code=1)
     
@@ -315,6 +331,9 @@ def duplicates(
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
+    
+    # Get console for output
+    console = get_console()
     
     # Print summary
     if results.get('duplicates', {}).get('status') == 'success':
@@ -375,6 +394,9 @@ def ocr(
     # Run analysis
     results = file_analyzer.analyze(path, options)
     
+    # Get console for output
+    console = get_console()
+    
     # Print summary
     if results.get('ocr', {}).get('status') == 'success':
         console.print(f"[green]OCR processing complete[/green]")
@@ -419,6 +441,9 @@ def virus(
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
+    
+    # Get console for output
+    console = get_console()
     
     # Print summary
     status = results.get('virus', {}).get('status')
@@ -486,6 +511,9 @@ def search(
     # Run analysis
     results = file_analyzer.analyze(path, options)
     
+    # Get console for output
+    console = get_console()
+    
     # Print summary
     if results.get('search', {}).get('status') == 'success':
         matches = results['search'].get('matches', 0)
@@ -524,6 +552,7 @@ def binary(
     
     # Check if path is a file
     if not os.path.isfile(path):
+        console = get_console()
         console.print(f"[red]Error:[/red] Path must be a file: {path}")
         raise typer.Exit(code=1)
     
@@ -538,6 +567,9 @@ def binary(
     
     # Run analysis
     results = file_analyzer.analyze(path, options)
+    
+    # Get console for output
+    console = get_console()
     
     # Print summary
     if results.get('binary', {}).get('status') == 'success':
@@ -563,7 +595,7 @@ def vision(
         "fastvlm", "--model", "-m", help="Vision model to use (fastvlm, bakllava, qwen2vl)"
     ),
     size: str = typer.Option(
-        "0.5b", "--size", "-s", help="Model size (0.5b, 1.5b, 7b)"
+        "1.5b", "--size", "-s", help="Model size (0.5b, 1.5b, 7b)"
     ),
     mode: str = typer.Option(
         "describe", "--mode", "-M", help="Analysis mode (describe, detect, document)"
@@ -614,6 +646,9 @@ def vision(
     # Run analysis
     results = file_analyzer.analyze(path, options)
     
+    # Get console for output
+    console = get_console()
+    
     # Print summary
     if results.get('vision', {}).get('status') == 'success':
         console.print(f"[green]Vision analysis complete[/green]")
@@ -646,6 +681,9 @@ def verify(
     """
     # Get configured logger
     logger = get_logger(verbose, quiet)
+    
+    # Get console for output
+    console = get_console()
     
     console.print("[bold]Verifying file-analyzer installation...[/bold]")
     
@@ -694,6 +732,218 @@ def verify(
         console.print("\nSome analyzer functionality may be limited.")
     
     return 0
+
+def _setup_logging(verbose: bool):
+    """Setup logging configuration for analysis."""
+    import logging
+    log_level = logging.INFO if verbose else logging.WARNING
+    logging.basicConfig(level=log_level)
+    return logging.getLogger("file-analyzer")
+
+
+def _validate_file_path(file_path: str) -> str:
+    """Validate and expand file path. Returns error message if invalid, empty string if valid."""
+    import os
+    file_path = os.path.expanduser(file_path)
+    if not os.path.exists(file_path):
+        return f"Error: File does not exist: {file_path}"
+    return ""
+
+
+def _create_analyzer_config():
+    """Create analyzer configuration and options."""
+    options = create_options_dict('vision',
+                                  model_name='fastvlm',
+                                  model_size='1.5b',
+                                  model_mode='describe')
+    config = {
+        'vision': {
+            'model_size': '1.5b'
+        }
+    }
+    return options, config
+
+
+# Define timeout error class at module level for proper exception handling
+class AnalysisTimeoutError(Exception):
+    """Raised when analysis operation times out."""
+    pass
+
+
+def _run_analysis_with_timeout(analyzer, file_path: str, options: dict, logger):
+    """Run analysis with cross-platform timeout handling."""
+    import threading
+
+    result = {"success": False, "data": None, "error": None}
+    
+    def analysis_worker():
+        try:
+            result["data"] = analyzer.analyze(file_path, options)
+            result["success"] = True
+        except Exception as e:
+            result["error"] = e
+            
+    # Start analysis in a separate thread
+    analysis_thread = threading.Thread(target=analysis_worker)
+    analysis_thread.daemon = True
+    analysis_thread.start()
+    
+    # Wait for completion with timeout
+    analysis_thread.join(timeout=45)  # 45 second timeout
+    
+    if analysis_thread.is_alive():
+        # Thread is still running, analysis timed out
+        logger.warning("Analysis timed out after 45 seconds")
+        raise AnalysisTimeoutError("Analysis timed out after 45 seconds")
+        
+    if not result["success"]:
+        # Analysis completed but with error
+        if result["error"]:
+            raise result["error"]
+        else:
+            raise Exception("Analysis failed for unknown reason")
+            
+    return result["data"]
+
+
+def _validate_analysis_results(results: dict, verbose: bool, logger) -> tuple:
+    """Validate analysis results and extract vision data. Returns (success, error_message, output_path)."""
+    vision_result = results.get("vision")
+    if not vision_result:
+        return False, "Analysis failed - no vision results", None
+        
+    # Extract actual error message if analysis failed
+    if vision_result.get("status") != "success":
+        # Get the actual error message from the result
+        actual_error = vision_result.get('error', 'unknown failure')
+        error_type = vision_result.get('error_type', 'Unknown')
+        
+        # If we have traceback information, include it in verbose mode
+        if verbose and 'traceback' in vision_result:
+            logger.error(f"Full traceback: {vision_result['traceback']}")
+            
+        return False, f"Model analysis failed ({error_type}): {actual_error}", None
+
+    output_path = vision_result.get("output_path")
+    if not output_path:
+        return False, "Analysis failed - output path missing from result", None
+        
+    return True, "", output_path
+
+
+def _wait_for_mtime_stabilization(path: str, stable_duration=0.3, timeout=5.0):
+    """Wait until the file at 'path' has a stable mtime for at least `stable_duration` seconds."""
+    import time
+    import os
+    
+    start = time.time()
+    last_mtime = None
+    stable_since = None
+
+    while True:
+        if not os.path.exists(path):
+            time.sleep(0.05)
+            continue
+
+        current_mtime = os.stat(path).st_mtime
+        now = time.time()
+
+        if last_mtime != current_mtime:
+            last_mtime = current_mtime
+            stable_since = now
+        elif now - stable_since >= stable_duration:
+            return  # mtime has stabilized
+
+        if now - start > timeout:
+            raise TimeoutError(f"File mtime did not stabilize for: {path}")
+
+        time.sleep(0.05)
+
+
+def _read_and_parse_analysis_output(output_path: str) -> tuple:
+    """Read and parse analysis output JSON. Returns (success, error_message, data)."""
+    import json
+    
+    try:
+        # Wait for file to be completely written
+        _wait_for_mtime_stabilization(output_path)
+        
+        # Read and validate JSON
+        with open(output_path, "r") as f:
+            content = f.read()
+            if not content.strip():
+                raise ValueError("Empty JSON output file")
+            try:
+                analysis_data = json.loads(content)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in output: {e}")
+                
+        return True, "", analysis_data
+                
+    except Exception as e:
+        return False, f"Analysis failed - could not parse model output: {e}", None
+
+
+def _validate_analysis_schema(analysis_data) -> str:
+    """Validate analysis data schema. Returns error message if invalid, empty string if valid."""
+    if not isinstance(analysis_data, dict):
+        return "Analysis failed - output is not a valid object"
+    if "description" not in analysis_data or "tags" not in analysis_data:
+        return "Analysis failed - output missing required fields"
+    return ""
+
+
+def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: bool = False) -> str:
+    """
+    Hardened single-file analysis function.
+    Performs robust analysis with timeout, logging, subprocess validation,
+    file I/O safety, and schema checking.
+    """
+    import os
+    import time
+    from src.core.analyzer import FileAnalyzer
+    from src.cli.utils.render import render_output
+
+    # Setup logging
+    logger = _setup_logging(verbose)
+
+    # Validate file path
+    file_path = os.path.expanduser(file_path)
+    if error := _validate_file_path(file_path):
+        return error
+
+    # Create analyzer configuration
+    options, config = _create_analyzer_config()
+    analyzer = FileAnalyzer(config)
+
+    # Run analysis with timeout
+    try:
+        results = _run_analysis_with_timeout(analyzer, file_path, options, logger)
+    except AnalysisTimeoutError:
+        return "Analysis failed - operation timed out after 45 seconds"
+    except Exception as e:
+        logger.error(f"Analysis failed with exception: {e}")
+        if verbose:
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+        return f"Analysis failed - unexpected error: {e}"
+
+    # Validate analysis results
+    success, error_msg, output_path = _validate_analysis_results(results, verbose, logger)
+    if not success:
+        return error_msg
+
+    # Read and parse analysis output
+    success, error_msg, analysis_data = _read_and_parse_analysis_output(output_path)
+    if not success:
+        return error_msg
+
+    # Validate schema
+    if error := _validate_analysis_schema(analysis_data):
+        return error
+
+    # Format and return output
+    return render_output(analysis_data, output_format, file_path)
 
 if __name__ == "__main__":
     app()

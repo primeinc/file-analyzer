@@ -2,6 +2,87 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Commands
+
+### Testing
+```bash
+# Install project in development mode
+pip install -e ".[dev]"
+
+# Run all tests
+pytest
+
+# Run tests with coverage
+pytest --cov=src
+
+# Run specific test file
+pytest tests/test_analyzer.py
+
+# Run tests matching pattern
+pytest -k test_fastvlm
+
+# Run with verbose output
+pytest -v
+```
+
+### Code Quality
+```bash
+# Format code
+black src/ tests/
+
+# Sort imports
+isort src/ tests/
+
+# Check formatting (without changes)
+black --check src/ tests/
+isort --check-only src/ tests/
+```
+
+### CLI Testing
+```bash
+# Main CLI entry point
+fa --help
+
+# Direct file analysis (primary use case)
+fa path/to/image.jpg
+
+# Output formats
+fa --json path/to/image.jpg          # JSON output
+fa --md path/to/image.jpg            # Markdown output
+fa --format json path/to/image.jpg   # Alternative JSON syntax
+
+# Verbose output for debugging
+fa --verbose path/to/image.jpg
+
+# Run built-in test suite
+fa test
+
+# Legacy subcommands (still supported)
+fa quick path/to/file.jpg
+fa analyze vision path/to/file.jpg
+
+# Other CLI commands
+fa validate        # Validate configurations
+fa benchmark       # Run benchmarks
+fa model list      # List available models
+fa model download  # Download models
+```
+
+### Project-Specific Scripts
+```bash
+# Check artifact discipline in all scripts
+./check_all_scripts.sh
+
+# Run preflight checks
+./preflight.sh
+
+# Check script conformity
+./check_script_conformity.sh
+
+# Test path enforcement
+./tests/test_path_enforcement.sh
+```
+
 ## PR Review Workflow with GraphQL
 
 ### Reviewing PR Comments and Resolving Them
@@ -189,27 +270,22 @@ python src/analyzer.py --all <path_to_analyze>
 
 ## Architecture
 
-The system consists of several main components:
+**Plugin-based CLI**: Main entry point at `src/cli/main.py` using Typer with subcommands registered via entry points:
+- `fa <filepath>` - Direct file analysis with AI vision models (primary use case)
+- `fa analyze` - Comprehensive file analysis with multiple tools (ExifTool, OCR, duplicates, etc.)  
+- `fa test` - Built-in test suite
+- `fa validate` - Configuration validation
+- `fa model` - AI model management
+- `fa benchmark` - Performance testing
+- `fa quick` - Legacy alias for direct file analysis
 
-1. **analyzer.py**: The core Python implementation that:
-   - Defines a `FileAnalyzer` class to manage different analysis operations
-   - Uses ThreadPoolExecutor for parallel processing
-   - Executes external tools via subprocess
-   - Generates JSON and text report files
-   - Handles error cases and provides appropriate status messages
+**Core Components**:
+- `src/core/analyzer.py` - Main `FileAnalyzer` class with parallel processing
+- `src/core/vision.py` - AI vision model integration (FastVLM, BakLLaVA, Qwen2-VL)
+- `src/models/` - Model adapters and management system
+- `src/utils/json_utils.py` - Robust JSON extraction and validation for AI outputs
 
-2. **model_manager.py**: Centralized model management system:
-   - Manages model discovery and initialization
-   - Provides unified adapter interface
-   - Handles model downloads and validation
-   - Supports both single file and batch processing
-
-3. **model_analyzer.py**: Unified model analysis interface:
-   - Integrates with the core analyzer
-   - Provides standardized parameters and output
-   - Implements parallel processing for batch operations
-
-The system follows a modular design where each analysis type is encapsulated in its own method within the `FileAnalyzer` class, making it easy to add new analysis capabilities.
+**Artifact System**: Strict path discipline with canonical artifact paths in `artifacts/` directory to prevent file sprawl. All scripts must source `artifact_guard_py_adapter.sh`.
 
 ### Output Files
 
@@ -244,47 +320,13 @@ For vision analysis, the following dependencies might be required based on selec
 
 If any of these tools are missing, the corresponding analysis will fail with an error status.
 
-## Common Development Tasks
+## Extension Points
 
-### Adding a New Analysis Type
+**Adding Analysis Types**: Add methods to `FileAnalyzer` class in `src/core/analyzer.py` and register CLI options.
 
-To add a new analysis type:
+**Adding Model Adapters**: Implement adapter interface in `src/models/` and register with model manager.
 
-1. Add a new method to the `FileAnalyzer` class that:
-   - Takes necessary parameters
-   - Executes the required tool via `run_command`
-   - Saves results to a file
-   - Updates the `self.results` dictionary
-   - Returns the output or None on error
-
-2. Add a new command-line argument in `main()`
-
-3. Update the analyze.sh wrapper script to pass the new argument
-
-### Adding a New Model Adapter
-
-To add a new model adapter:
-
-1. Create a new adapter file (e.g., `my_model_adapter.py`) that implements:
-   - `MyModelAdapter` class with `__init__`, `predict`, and `get_info` methods
-   - `create_adapter` function that returns an adapter instance
-
-2. Register the adapter with the model manager:
-   ```python
-   from src.my_model_adapter import create_adapter
-   manager = create_manager()
-   manager.adapters["my_model"] = create_adapter
-   ```
-
-3. Update the model analyzer configuration if needed
-
-### Error Handling
-
-The system uses a consistent error handling pattern:
-- Commands are executed with `check=True` in subprocess
-- Exceptions are caught and reported
-- Analysis methods return None on error
-- The results dictionary tracks status as "success", "error", or "skipped"
+**Adding CLI Commands**: Create new modules in `src/cli/` and register via entry points in `pyproject.toml`.
 
 ## JSON Validation System
 
@@ -317,30 +359,132 @@ The system employs a multi-stage approach to extract JSON from potentially malfo
 
 The extraction can handle nested objects, arrays, and quoted strings properly.
 
-## Model Management System
+## Intelligent Filename Generation
 
-The file analyzer includes a centralized model management system:
+The system includes smart filename generation that suggests meaningful names based on image content:
 
-1. **Model Storage**:
-   - User-level storage: `~/.local/share/fastvlm/`
-   - Project-level storage: `libs/ml-fastvlm/checkpoints/`
+### Features
+- **Content-specific patterns**: Recognizes letters (letter-t.jpg), numbers (number-5.jpg), icons (icon-star.png)
+- **Semantic analysis**: Uses AI models to generate descriptive filenames from image content
+- **Tag cleaning**: Removes generic terms like "image", "photo", "shooting" while preserving meaningful tags
+- **Fallback logic**: Graceful degradation when AI analysis fails or produces unclear results
 
-2. **Model Discovery**:
-   - Automatic path resolution across locations
-   - Model version and size management
-   - Download capability for missing models
+### Implementation
+- `src/cli/utils/render.py` - Main filename generation logic
+- Model-based filename suggestions using targeted prompts
+- Tag deduplication and frequency-based sorting
+- Length limits and filesystem-safe character handling
 
-3. **Unified Adapter Interface**:
-   - Common API for all model types
-   - Standard prediction interface
-   - Consistent output format
+### Usage
+```python
+from src.cli.utils.render import generate_intelligent_filename, clean_and_dedupe_tags
 
-4. **Model Analyzer**:
-   - High-level analysis capabilities
-   - Batch processing with parallelism
-   - Result tracking and summarization
+# Generate filename from description
+filename = generate_intelligent_filename(description, original_path, file_extension)
 
-For more details, see the MODEL_ANALYSIS.md and MODELS.md documentation files.
+# Clean and deduplicate tags
+clean_tags = clean_and_dedupe_tags(raw_tags)
+```
+
+## Model Management
+
+**Storage Locations** (in precedence order):
+- `~/.local/share/fastvlm/` - User-level storage (preferred)
+- `libs/ml-fastvlm/checkpoints/` - Project-level (development)
+
+**Setup and Usage**:
+```bash
+# Setup environment and download 0.5B model
+./tools/setup_fastvlm.sh
+
+# List/download models via CLI
+fa model list
+fa model download --size 0.5b
+
+# Use in Python
+from src.models.fastvlm.adapter import create_adapter
+adapter = create_adapter(model_size="0.5b")
+result = adapter.predict(image_path, prompt, mode="describe")
+```
+
+See MODELS.md for complete details.
+
+## Comprehensive Testing Strategy
+
+The project includes multiple layers of testing to prevent regressions and ensure reliability:
+
+### Test Categories
+
+**Unit Tests**: Individual component testing
+```bash
+pytest tests/test_analyzer.py              # Core analyzer functionality
+pytest tests/test_vision_core.py           # Vision model integration
+pytest tests/test_fastvlm_json_parsing.py  # JSON parsing and model outputs
+pytest tests/test_json_utils.py           # JSON extraction utilities
+```
+
+**Integration Tests**: End-to-end workflow testing
+```bash
+pytest tests/test_cli_integration.py       # Complete CLI user experience
+pytest tests/test_end_to_end.py           # Full analysis workflows
+pytest tests/test_vision_integrations.py  # Model adapter integration
+```
+
+**Regression Prevention**: Specific tests for known issues
+```bash
+# CLI argument parsing regression (fa filepath not working)
+pytest tests/test_cli_integration.py::TestRegressionPrevention::test_cli_argument_parsing_regression
+
+# Model token limit optimization (prevents JSON repetition)
+pytest tests/test_fastvlm_json_parsing.py::test_token_limit_optimization
+```
+
+### Key Test Features
+
+**CLI Integration Tests** (`tests/test_cli_integration.py`):
+- Tests all user-facing command patterns (`fa filepath`, `fa --json filepath`, etc.)
+- Path handling (relative, absolute, tilde expansion)
+- Output format validation (JSON, Markdown, text)
+- Error scenarios and edge cases
+- Filename generation and tag cleaning
+- Regression prevention for CLI argument parsing
+
+**Model Output Tests** (`tests/test_fastvlm_json_parsing.py`):
+- Real captured model outputs for validation
+- Token limit optimization testing (256 vs 512 tokens)
+- JSON repair functionality validation
+- Malformed JSON handling
+
+**Artifact Discipline Tests**:
+- Path validation and artifact sprawl prevention
+- Precommit hook validation
+- Safe function testing
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage reporting
+pytest --cov=src
+
+# Run specific test categories
+pytest tests/test_cli_integration.py -v     # CLI integration
+pytest tests/test_*regression* -v           # Regression tests
+pytest -k "fastvlm" -v                     # FastVLM-related tests
+
+# Run tests that would catch specific regressions
+pytest tests/test_cli_integration.py::TestRegressionPrevention -v
+```
+
+### Test Strategy Notes
+
+1. **Mock Strategy**: Tests use `unittest.mock.patch` to mock model calls for fast, reliable testing
+2. **Real Data**: Some tests use actual captured model outputs to validate JSON parsing
+3. **Subprocess Testing**: CLI integration tests use `subprocess.run` to test actual user experience
+4. **Regression Focus**: Specific tests designed to catch known regression patterns
+5. **Performance**: Fast unit tests (< 1s) with longer integration tests (< 30s) for comprehensive coverage
 
 ## Complete GitHub PR Review Workflow
 

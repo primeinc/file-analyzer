@@ -103,7 +103,7 @@ class ModelManager:
             # Try importing FastVLM adapter
             from src.models.fastvlm.adapter import create_adapter, FastVLMAdapter
             self.adapters["fastvlm"] = FastVLMAdapter
-            logger.info("Registered FastVLM adapter")
+            logger.debug("Registered FastVLM adapter")
         except ImportError:
             logger.info("FastVLM adapter not available")
         

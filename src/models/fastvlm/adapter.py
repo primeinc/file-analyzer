@@ -22,6 +22,46 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple
 from datetime import datetime
 
+
+def run_model_command(cmd: list[str], cwd: str = None, timeout: int = 120):
+    """
+    Execute model command with robust subprocess validation.
+    
+    Args:
+        cmd: Command and arguments to execute
+        cwd: Working directory for execution
+        timeout: Timeout in seconds
+        
+    Returns:
+        stdout from the subprocess
+        
+    Raises:
+        RuntimeError: If subprocess fails or exits with non-zero code
+    """
+    logger = logging.getLogger("src.models.fastvlm.adapter")
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout,
+            check=False  # don't raise yet, we handle manually
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"Model execution timed out after {timeout}s: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Subprocess execution failed: {e}")
+
+    if result.returncode != 0:
+        logger.error(f"Model subprocess failed with exit code {result.returncode}")
+        logger.error(f"STDERR:\n{result.stderr.strip()}")
+        raise RuntimeError(f"Model execution failed: {result.stderr.strip()}")
+
+    logger.debug(f"Model STDOUT:\n{result.stdout.strip()}")
+    return result.stdout
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -44,7 +84,7 @@ from src.models.config import (
 
 # Import JSON utility if available
 try:
-    from src.json_utils import JSONValidator, process_model_output, get_json_prompt
+    from src.utils.json_utils import JSONValidator, process_model_output, get_json_prompt
     JSON_UTILS_AVAILABLE = True
 except ImportError:
     JSON_UTILS_AVAILABLE = False
@@ -128,8 +168,8 @@ class FastVLMAdapter:
             logger.error(f"Predict script for {self.model_type} not found")
             return False
             
-        logger.info(f"Initialized {self.model_type} {self.model_size} at {self.model_path}")
-        logger.info(f"Using predict script: {'mlx-fastvlm package' if self.predict_script == 'package' else self.predict_script}")
+        logger.debug(f"Initialized {self.model_type} {self.model_size} at {self.model_path}")
+        logger.debug(f"Using predict script: {'mlx-fastvlm package' if self.predict_script == 'package' else self.predict_script}")
         
         self.initialized = True
         return True
@@ -150,10 +190,13 @@ class FastVLMAdapter:
             
         Returns:
             Dictionary containing the prediction result
+            
+        Raises:
+            RuntimeError: For all failure cases with explicit diagnostic messages
         """
         if not self.initialized:
             if not self._initialize_model():
-                return {"error": "Model initialization failed"}
+                raise RuntimeError(f"Model initialization failed for {self.model_type} {self.model_size}")
                 
         # Use mock mode for testing when requested
         if mock:
@@ -172,22 +215,26 @@ class FastVLMAdapter:
             
             # Save result to output path if provided
             if output_path:
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                
-                # Use PathGuard if available
-                if ARTIFACT_DISCIPLINE:
-                    with PathGuard(os.path.dirname(output_path)):
+                try:
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    
+                    # Use PathGuard if available
+                    if ARTIFACT_DISCIPLINE:
+                        with PathGuard(os.path.dirname(output_path)):
+                            with open(output_path, "w") as f:
+                                json.dump(mock_result, f, indent=2)
+                    else:
                         with open(output_path, "w") as f:
                             json.dump(mock_result, f, indent=2)
-                else:
-                    with open(output_path, "w") as f:
-                        json.dump(mock_result, f, indent=2)
+                except Exception as e:
+                    raise RuntimeError(f"Failed to write mock output to {output_path}: {e}")
                         
             return mock_result
                 
-        # Validate image path
+        # Convert to absolute path and validate image path
+        image_path = os.path.abspath(os.path.expanduser(image_path))
         if not os.path.exists(image_path):
-            return {"error": f"Image not found: {image_path}"}
+            raise RuntimeError(f"Image file not found: {image_path}")
             
         # Use JSON prompt if available and no custom prompt provided
         if prompt is None and JSON_UTILS_AVAILABLE:
@@ -219,31 +266,39 @@ class FastVLMAdapter:
                 os.makedirs(artifact_dir, exist_ok=True)
                 output_path = os.path.join(artifact_dir, f"{image_name}_result.json")
                 
-        # Run prediction
+        # Run prediction with explicit error handling
+        start_time = datetime.now()
+        
         try:
-            start_time = datetime.now()
-            
             # Check if we're using the package or the script
             if self.predict_script == "package":
                 result = self._predict_with_package(image_path, prompt, mode, timeout_seconds)
             else:
-                result = self._predict_with_script(image_path, prompt, timeout_seconds)
+                result = self._predict_with_script(image_path, prompt, timeout_seconds, output_path)
                 
-            end_time = datetime.now()
-            execution_time = (end_time - start_time).total_seconds()
+        except Exception as e:
+            # Log the full error details
+            logger.error(f"Model prediction failed for {image_path}: {e}")
+            logger.error(f"Model: {self.model_type}_{self.model_size}, Mode: {mode}")
+            # Re-raise with explicit error message
+            raise RuntimeError(f"Model prediction failed: {e}")
             
-            # Process the result
-            if isinstance(result, dict):
-                # Add metadata
-                if "metadata" not in result:
-                    result["metadata"] = {}
-                    
-                result["metadata"]["model"] = f"{self.model_type}_{self.model_size}"
-                result["metadata"]["execution_time"] = execution_time
-                result["metadata"]["timestamp"] = datetime.now().isoformat()
+        end_time = datetime.now()
+        execution_time = (end_time - start_time).total_seconds()
+        
+        # Process the result
+        if isinstance(result, dict):
+            # Add metadata
+            if "metadata" not in result:
+                result["metadata"] = {}
                 
-                # Save result to output path if provided
-                if output_path:
+            result["metadata"]["model"] = f"{self.model_type}_{self.model_size}"
+            result["metadata"]["execution_time"] = execution_time
+            result["metadata"]["timestamp"] = datetime.now().isoformat()
+            
+            # Save result to output path if provided (only if not already saved by _predict_with_script)
+            if output_path and self.predict_script == "package":
+                try:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
                     
                     # Use PathGuard if available
@@ -254,20 +309,28 @@ class FastVLMAdapter:
                     else:
                         with open(output_path, "w") as f:
                             json.dump(result, f, indent=2)
-                            
-                return result
-            elif JSON_UTILS_AVAILABLE:
-                # Try to extract JSON from text result
-                metadata = {
-                    "model": f"{self.model_type}_{self.model_size}",
-                    "execution_time": execution_time,
-                    "timestamp": datetime.now().isoformat(),
-                }
-                
+                    logger.debug(f"Successfully wrote model output to: {output_path}")
+                except Exception as e:
+                    raise RuntimeError(f"Failed to write model output to {output_path}: {e}")
+                        
+            return result
+            
+        elif JSON_UTILS_AVAILABLE:
+            # Try to extract JSON from text result
+            metadata = {
+                "model": f"{self.model_type}_{self.model_size}",
+                "execution_time": execution_time,
+                "timestamp": datetime.now().isoformat(),
+            }
+            
+            try:
                 json_result = process_model_output(result, metadata, mode)
-                
-                # Save result to output path if provided
-                if output_path:
+            except Exception as e:
+                raise RuntimeError(f"Failed to process model output: {e}")
+            
+            # Save result to output path if provided
+            if output_path:
+                try:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
                     
                     # Use PathGuard if available
@@ -278,21 +341,26 @@ class FastVLMAdapter:
                     else:
                         with open(output_path, "w") as f:
                             json.dump(json_result, f, indent=2)
-                            
-                return json_result
-            else:
-                # Return raw text result with metadata
-                result_dict = {
-                    "raw_output": result,
-                    "metadata": {
-                        "model": f"{self.model_type}_{self.model_size}",
-                        "execution_time": execution_time,
-                        "timestamp": datetime.now().isoformat(),
-                    }
+                    logger.debug(f"Successfully wrote processed output to: {output_path}")
+                except Exception as e:
+                    raise RuntimeError(f"Failed to write processed output to {output_path}: {e}")
+                        
+            return json_result
+            
+        else:
+            # Return raw text result with metadata
+            result_dict = {
+                "raw_output": result,
+                "metadata": {
+                    "model": f"{self.model_type}_{self.model_size}",
+                    "execution_time": execution_time,
+                    "timestamp": datetime.now().isoformat(),
                 }
-                
-                # Save result to output path if provided
-                if output_path:
+            }
+            
+            # Save result to output path if provided
+            if output_path:
+                try:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
                     
                     # Use PathGuard if available
@@ -303,32 +371,11 @@ class FastVLMAdapter:
                     else:
                         with open(output_path, "w") as f:
                             json.dump(result_dict, f, indent=2)
-                            
-                return result_dict
-                
-        except Exception as e:
-            error_result = {
-                "error": f"Prediction failed: {str(e)}",
-                "metadata": {
-                    "model": f"{self.model_type}_{self.model_size}",
-                    "timestamp": datetime.now().isoformat(),
-                }
-            }
-            
-            # Save error to output path if provided
-            if output_path:
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                
-                # Use PathGuard if available
-                if ARTIFACT_DISCIPLINE:
-                    with PathGuard(os.path.dirname(output_path)):
-                        with open(output_path, "w") as f:
-                            json.dump(error_result, f, indent=2)
-                else:
-                    with open(output_path, "w") as f:
-                        json.dump(error_result, f, indent=2)
+                    logger.debug(f"Successfully wrote raw output to: {output_path}")
+                except Exception as e:
+                    raise RuntimeError(f"Failed to write raw output to {output_path}: {e}")
                         
-            return error_result
+            return result_dict
             
     def _predict_with_package(self, image_path: str, prompt: str, 
                              mode: str, timeout_seconds: int) -> Union[Dict[str, Any], str]:
@@ -348,8 +395,37 @@ class FastVLMAdapter:
             # Import the package
             from mlx_fastvlm import FastVLM
             
-            # Initialize the model
-            model = FastVLM(self.model_path)
+            # Check for double-nested structure and handle it
+            model_path = self.model_path
+            nested_path = os.path.join(self.model_path, os.path.basename(self.model_path))
+            
+            # Check if we have a double-nested directory structure (common with downloads)
+            if os.path.isdir(nested_path):
+                # Check for required model files in the nested path, including sharded model files
+                required_files = ["tokenizer_config.json", "config.json"]
+                model_files = ["model.safetensors", "model.safetensors.index.json", "model-00001-of-00004.safetensors"]
+                
+                # First check for config files
+                has_config = False
+                for req_file in required_files:
+                    if os.path.exists(os.path.join(nested_path, req_file)):
+                        has_config = True
+                        break
+                        
+                # Then check for model files (regular or sharded format)
+                has_model = False
+                for model_file in model_files:
+                    if os.path.exists(os.path.join(nested_path, model_file)):
+                        has_model = True
+                        break
+                        
+                if has_config and has_model:
+                    # Found required files in the nested structure
+                    logger.info(f"Detected double-nested model structure. Using {nested_path} instead of {model_path}")
+                    model_path = nested_path
+            
+            # Initialize the model with the potentially updated path
+            model = FastVLM(model_path)
             
             # Run prediction
             result = model.predict(image_path, prompt)
@@ -363,7 +439,7 @@ class FastVLMAdapter:
             raise ImportError("mlx-fastvlm package not installed")
             
     def _predict_with_script(self, image_path: str, prompt: str, 
-                           timeout_seconds: int) -> Union[Dict[str, Any], str]:
+                           timeout_seconds: int, output_path: str = None) -> Union[Dict[str, Any], str]:
         """
         Run prediction using the predict.py script.
         
@@ -371,42 +447,103 @@ class FastVLMAdapter:
             image_path: Path to the image to analyze
             prompt: Prompt for the model
             timeout_seconds: Timeout in seconds
+            output_path: Path to save output JSON (optional)
             
         Returns:
             Prediction result (dict or string)
+            
+        Raises:
+            RuntimeError: For all failure cases with explicit diagnostic messages
         """
         import platform
         
-        # Build command
+        # Check for double-nested structure and handle it
+        model_path = self.model_path
+        nested_path = os.path.join(self.model_path, os.path.basename(self.model_path))
+        
+        # Check if we have a double-nested directory structure (common with downloads)
+        # where model files are actually inside model_path/model_name/ rather than directly in model_path
+        if os.path.isdir(nested_path):
+            # Check for required model files in the nested path, including sharded model files
+            required_files = ["tokenizer_config.json", "config.json"]
+            model_files = ["model.safetensors", "model.safetensors.index.json", "model-00001-of-00004.safetensors"]
+            
+            # First check for config files
+            has_config = False
+            for req_file in required_files:
+                if os.path.exists(os.path.join(nested_path, req_file)):
+                    has_config = True
+                    break
+                    
+            # Then check for model files (regular or sharded format)
+            has_model = False
+            for model_file in model_files:
+                if os.path.exists(os.path.join(nested_path, model_file)):
+                    has_model = True
+                    break
+                    
+            if has_config and has_model:
+                # Found required files in the nested structure
+                logger.info(f"Detected double-nested model structure. Using {nested_path} instead of {model_path}")
+                model_path = nested_path
+        
+        # Build command with the possibly updated model_path
         cmd = [
             sys.executable, self.predict_script,
-            "--model-path", self.model_path,
+            "--model-path", model_path,
             "--image-file", image_path,
-            "--prompt", prompt
+            "--prompt", prompt,
+            "--max_new_tokens", "256"  # Reduced to prevent repetition issues
         ]
         
-        # Run the command with timeout (platform-specific)
+        working_dir = os.path.dirname(self.predict_script)
+        logger.debug(f"Running command: {' '.join(cmd)}")
+        logger.debug(f"Working directory: {working_dir}")
+
+        # Run subprocess with validation - this will raise RuntimeError with diagnostics
         try:
-            if platform.system() != "Windows":
-                # Use timeout command on Unix-like systems
-                full_cmd = ["timeout", str(timeout_seconds)] + cmd
-                result = subprocess.run(full_cmd, capture_output=True, text=True, check=True)
-                output = result.stdout.strip()
-            else:
-                # Use Python's timeout on Windows
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds, check=True)
-                output = result.stdout.strip()
-                
-            # Try to parse as JSON
+            output = run_model_command(cmd, cwd=working_dir, timeout=timeout_seconds)
+        except RuntimeError as e:
+            # Re-raise with additional context
+            raise RuntimeError(f"Model subprocess failed: {e}")
+            
+        output = output.strip()
+        if not output:
+            raise RuntimeError(f"Model returned empty output. Command: {' '.join(cmd)}")
+
+        # Validate JSON parsing with repair capability
+        try:
+            parsed = json.loads(output)
+        except json.JSONDecodeError as e:
+            # Try to repair the JSON using json-repair
             try:
-                return json.loads(output)
-            except json.JSONDecodeError:
-                return output
-                
-        except subprocess.TimeoutExpired:
-            raise TimeoutError(f"Prediction timed out after {timeout_seconds} seconds")
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Prediction script failed: {e.stderr}")
+                from json_repair import repair_json
+                logger.debug(f"JSON parsing failed, attempting to repair: {str(e)[:100]}")
+                repaired_json = repair_json(output)
+                parsed = json.loads(repaired_json)
+                logger.debug("Successfully repaired malformed JSON")
+            except Exception as repair_error:
+                raise RuntimeError(f"Failed to parse model output as JSON: {e}. JSON repair also failed: {repair_error}. Raw output: {output[:200]}...")
+
+        # Validate required fields
+        if not isinstance(parsed, dict):
+            raise RuntimeError(f"Model output is not a valid JSON object. Got: {type(parsed)}")
+        
+        if "description" not in parsed or "tags" not in parsed:
+            available_keys = list(parsed.keys()) if isinstance(parsed, dict) else "N/A"
+            raise RuntimeError(f"Model output missing required fields (description, tags). Available keys: {available_keys}")
+
+        # Write structured output to file only after successful validation
+        if output_path:
+            try:
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                with open(output_path, "w") as f:
+                    json.dump(parsed, f, indent=2)
+                logger.debug(f"Successfully wrote model output to: {output_path}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to write model output to disk at {output_path}: {e}")
+
+        return parsed
             
     def get_model_info(self) -> Dict[str, Any]:
         """

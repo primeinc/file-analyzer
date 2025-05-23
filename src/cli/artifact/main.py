@@ -832,7 +832,7 @@ def info(
         
         console.print(f"\n[bold]Example:[/bold]")
         console.print("  # Get a canonical artifact path")
-        console.print("  from src.artifact_guard import get_canonical_artifact_path, PathGuard")
+        console.print("  from src.core.artifact_guard import get_canonical_artifact_path, PathGuard")
         console.print("  ")
         console.print("  # Create canonical path")
         console.print("  artifact_dir = get_canonical_artifact_path(\"test\", \"my_test_context\")")

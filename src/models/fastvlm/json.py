@@ -28,10 +28,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 # Import centralized JSON utilities
-from src.json_utils import JSONValidator, process_model_output, get_json_prompt
+from src.utils.json_utils import JSONValidator, process_model_output, get_json_prompt
 
 # Import artifact path management
-from src.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
+from src.core.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

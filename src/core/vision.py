@@ -39,7 +39,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import artifact path management
-from src.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
+from src.core.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -357,7 +357,7 @@ class VisionAnalyzer:
             if output_format == "json":
                 try:
                     # Import the improved JSON module from src directory
-                    from src.fastvlm_json import run_fastvlm_json_analysis
+                    from src.models.fastvlm.json import run_fastvlm_json_analysis
                     
                     # Determine appropriate JSON prompt based on mode
                     if mode == "describe":
@@ -457,7 +457,7 @@ class VisionAnalyzer:
                     except (json.JSONDecodeError, TypeError):
                         # Import the centralized JSON utilities for consistent handling
                         try:
-                            from src.json_utils import JSONValidator, process_model_output
+                            from src.utils.json_utils import JSONValidator, process_model_output
                             
                             # Use the centralized method for JSON processing
                             metadata = {
@@ -683,7 +683,7 @@ class VisionAnalyzer:
             # Validate the provided output directory
             if not validate_artifact_path(output_dir):
                 print(f"Warning: Output directory {output_dir} is not a canonical artifact path")
-                print(f"Consider using get_canonical_artifact_path() from src.artifact_guard")
+                print(f"Consider using get_canonical_artifact_path() from src.core.artifact_guard")
             
             # Create output directory if it doesn't exist
             Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -809,7 +809,7 @@ class VisionAnalyzer:
             # Validate the provided output file
             if not validate_artifact_path(output_file):
                 print(f"Warning: Output file {output_file} is not in a canonical artifact path")
-                print(f"Consider using get_canonical_artifact_path() from src.artifact_guard")
+                print(f"Consider using get_canonical_artifact_path() from src.core.artifact_guard")
             
             # Convert to Path object for easier extension handling
             output_file = Path(output_file)

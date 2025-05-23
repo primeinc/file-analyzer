@@ -69,8 +69,13 @@ ml-fastvlm/checkpoints/
 .DS_Store
 
 # Artifacts directory (canonical artifact storage)
-artifacts/
+/artifacts/
 artifacts.env
+
+# Allow canonical artifact directory
+!src/artifacts/
+!src/artifacts/.artifact-config.json
+!src/artifacts/README.md
 
 # Log files
 cleanup.log
