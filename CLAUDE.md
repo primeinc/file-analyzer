@@ -419,7 +419,7 @@ The project includes multiple layers of testing to prevent regressions and ensur
 ```bash
 pytest tests/test_analyzer.py              # Core analyzer functionality
 pytest tests/test_vision_core.py           # Vision model integration
-pytest tests/test_fastvlm_json.py         # JSON parsing and model outputs
+pytest tests/test_fastvlm_json_parsing.py  # JSON parsing and model outputs
 pytest tests/test_json_utils.py           # JSON extraction utilities
 ```
 

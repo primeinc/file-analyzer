@@ -764,12 +764,15 @@ def _create_analyzer_config():
     return options, config
 
 
+# Define timeout error class at module level for proper exception handling
+class AnalysisTimeoutError(Exception):
+    """Raised when analysis operation times out."""
+    pass
+
+
 def _run_analysis_with_timeout(analyzer, file_path: str, options: dict, logger):
     """Run analysis with cross-platform timeout handling."""
     import threading
-    
-    class AnalysisTimeoutError(Exception):
-        pass
 
     result = {"success": False, "data": None, "error": None}
     
@@ -916,9 +919,9 @@ def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: 
     # Run analysis with timeout
     try:
         results = _run_analysis_with_timeout(analyzer, file_path, options, logger)
+    except AnalysisTimeoutError:
+        return "Analysis failed - operation timed out after 45 seconds"
     except Exception as e:
-        if "timed out" in str(e):
-            return "Analysis failed - operation timed out after 45 seconds"
         logger.error(f"Analysis failed with exception: {e}")
         if verbose:
             import traceback
