@@ -66,27 +66,34 @@ Analysis Time: 17.34 seconds
 
 ```
 ├── src/                        # Core source code (Python modules)
-│   ├── analyzer.py             # Main analyzer module
-│   ├── vision.py               # Vision analysis module
-│   ├── json_utils.py           # JSON processing utilities
-│   ├── model_config.py         # Model management configuration
-│   ├── fastvlm_adapter.py      # FastVLM model adapter
-│   └── artifact_guard.py       # Artifact path discipline
+│   ├── cli/                    # Command-line interface modules
+│   │   ├── analyze/            # Analysis commands
+│   │   ├── model/              # Model management commands
+│   │   ├── test/               # Testing commands
+│   │   ├── validate/           # Validation commands
+│   │   ├── artifact/           # Artifact management commands
+│   │   ├── benchmark/          # Benchmarking commands
+│   │   └── install/            # Installation commands
+│   ├── core/                   # Core analysis modules
+│   │   ├── analyzer.py         # Main analyzer module
+│   │   ├── vision.py           # Vision analysis module
+│   │   └── artifact_guard.py   # Artifact path discipline
+│   ├── models/                 # Model adapters and management
+│   │   └── fastvlm/            # FastVLM model adapter
+│   ├── config/                 # Configuration management
+│   └── utils/                  # Utility modules
+│       ├── json_utils.py       # JSON processing utilities
+│       └── path_utils.py       # Path handling utilities
 │
-├── tools/                      # Command-line tools and utilities
-│   ├── analyze.sh              # Main CLI wrapper
-│   ├── vision_test.sh          # Vision model testing
-│   ├── json_test.sh            # JSON output testing
-│   ├── download_models.py      # Model download utility
-│   ├── setup_fastvlm.sh        # FastVLM environment setup
-│   ├── benchmark_fastvlm.py    # Model benchmarking tools
-│   └── ...                     # Other utility scripts
+├── scripts/                    # Utility scripts (non-CLI)
+│   ├── install.sh              # Installation script
+│   ├── preflight.sh            # Pre-commit checks
+│   └── artifact_guard_py_adapter.sh # Runtime path enforcement
 │
 ├── tests/                      # Test scripts and validation
-│   ├── test_path_enforcement.sh
-│   ├── strict_example.sh       
-│   ├── test_fastvlm.sh
-│   └── ...                     # Test harnesses
+│   ├── test_cli_essential.py   # CLI integration tests
+│   ├── test_core_functionality.py # Core analysis tests
+│   └── ...                     # Other test modules
 │
 ├── artifacts/                  # Canonical storage for outputs
 │   ├── analysis/               # Analysis results
@@ -95,7 +102,6 @@ Analysis Time: 17.34 seconds
 │   ├── benchmark/              # Performance benchmarks
 │   └── tmp/                    # Temporary files
 │
-├── artifact_guard_py_adapter.sh # Runtime path enforcement
 └── libs/                      # External libraries
     └── ml-fastvlm/              # FastVLM vision library (CODE ONLY)
     
@@ -124,40 +130,29 @@ fa ~/home/path/image.jpg             # Tilde expansion
 ```bash
 # Model management
 fa model list                        # List available AI models
-fa model download --size 0.5b        # Download specific model
+fa model download --size 1.5b        # Download specific model
+fa model status                      # Check model installation status
+
+# Analysis commands
+fa analyze verify                    # Verify dependencies
+fa analyze metadata path/            # Extract file metadata
+fa analyze vision path/              # AI vision analysis
+fa analyze all path/                 # Comprehensive analysis
 
 # Testing and validation
 fa test                              # Run comprehensive test suite
-fa validate                          # Validate configuration
+fa test fastvlm                      # Test FastVLM model
+fa test json                         # Test JSON parsing
+
+fa validate path/to/file.json        # Validate JSON files
+fa validate images path/             # Validate image comparisons
+fa validate manifest path/           # Validate manifest files
+
+# Performance and utilities
 fa benchmark                         # Performance benchmarks
-
-# Legacy subcommands (still supported)
-fa quick path/to/image.jpg           # Alias for direct analysis
-fa analyze vision path/to/image.jpg  # Comprehensive analysis mode
-```
-
-### Comprehensive Analysis (Legacy)
-
-For comprehensive file analysis with multiple tools:
-
-```bash
-# Run all analyses on a directory
-./tools/analyze.sh -a ~/Documents
-
-# Extract metadata and scan for duplicates  
-./tools/analyze.sh -m -d ~/Pictures
-
-# Search for specific content
-./tools/analyze.sh -s "password" ~/Downloads
-
-# OCR images in a directory
-./tools/analyze.sh -o ~/Screenshots
-
-# Include only specific file types
-./tools/analyze.sh -a -i "*.jpg" -i "*.png" ~/Pictures
-
-# Analyze images with AI vision models
-./tools/analyze.sh -V ~/Pictures
+fa artifact status                   # Check artifact discipline
+fa artifact clean                    # Clean temporary artifacts
+fa install                           # Install system dependencies
 ```
 
 ## Output Formats
@@ -345,17 +340,17 @@ For complete details, see [docs/MODELS.md](docs/MODELS.md).
 ### Setup and Usage
 
 ```bash
-# Set up the environment
-./tools/setup_fastvlm.sh
+# Check model status
+fa model status
 
 # List available models
-python tools/download_models.py list
+fa model list
 
 # Download a specific model
-python tools/download_models.py download --size 0.5b
+fa model download --size 1.5b
 
-# Get model information
-python tools/download_models.py info --size 0.5b
+# Install system dependencies
+fa install
 ```
 
 ### Model Adapter
@@ -363,10 +358,10 @@ python tools/download_models.py info --size 0.5b
 The system includes a unified adapter interface for model access:
 
 ```python
-from src.fastvlm_adapter import create_adapter
+from src.models.fastvlm.adapter import FastVLMAdapter
 
 # Create adapter
-adapter = create_adapter(model_size="0.5b")
+adapter = FastVLMAdapter(model_size="1.5b")
 
 # Run prediction
 result = adapter.predict(image_path="path/to/image.jpg", 
@@ -380,16 +375,17 @@ FastVLM is Apple's efficient vision language model designed specifically for App
 
 ### Installation
 
-The simplest way to set up FastVLM is to use our setup script:
+The simplest way to set up FastVLM:
 
 ```bash
-# Run the setup script
-./tools/setup_fastvlm.sh
+# Install dependencies and models
+fa install
 
-# This will:
-# 1. Install MLX if needed
-# 2. Clone the FastVLM repository
-# 3. Download the 0.5B model by default
+# Check status
+fa model status
+
+# Download specific model if needed
+fa model download --size 1.5b
 ```
 
 For more advanced options, see [docs/MODELS.md](docs/MODELS.md).
