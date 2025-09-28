@@ -18,8 +18,17 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import Any, Union
 
+
+class PathAwareJSONEncoder(json.JSONEncoder):
+    """JSON encoder that can handle pathlib.Path objects by converting them to strings."""
+    
+    def default(self, obj):
+        if isinstance(obj, Path):
+            return str(obj)
+        return super().default(obj)
 
 def run_model_command(cmd: list[str], cwd: str = None, timeout: int = 120):
     """
@@ -229,10 +238,10 @@ class FastVLMAdapter:
                     if ARTIFACT_DISCIPLINE:
                         with PathGuard(os.path.dirname(output_path)):
                             with open(output_path, "w") as f:
-                                json.dump(mock_result, f, indent=2)
+                                json.dump(mock_result, f, indent=2, cls=PathAwareJSONEncoder)
                     else:
                         with open(output_path, "w") as f:
-                            json.dump(mock_result, f, indent=2)
+                            json.dump(mock_result, f, indent=2, cls=PathAwareJSONEncoder)
                 except Exception as e:
                     raise RuntimeError(f"Failed to write mock output to {output_path}: {e}")
 
@@ -374,10 +383,10 @@ class FastVLMAdapter:
                     if ARTIFACT_DISCIPLINE:
                         with PathGuard(os.path.dirname(output_path)):
                             with open(output_path, "w") as f:
-                                json.dump(result_dict, f, indent=2)
+                                json.dump(result_dict, f, indent=2, cls=PathAwareJSONEncoder)
                     else:
                         with open(output_path, "w") as f:
-                            json.dump(result_dict, f, indent=2)
+                            json.dump(result_dict, f, indent=2, cls=PathAwareJSONEncoder)
                     logger.debug(f"Successfully wrote raw output to: {output_path}")
                 except Exception as e:
                     raise RuntimeError(f"Failed to write raw output to {output_path}: {e}")
@@ -544,7 +553,7 @@ class FastVLMAdapter:
             try:
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 with open(output_path, "w") as f:
-                    json.dump(parsed, f, indent=2)
+                    json.dump(parsed, f, indent=2, cls=PathAwareJSONEncoder)
                 logger.debug(f"Successfully wrote model output to: {output_path}")
             except Exception as e:
                 raise RuntimeError(f"Failed to write model output to disk at {output_path}: {e}")
@@ -671,4 +680,4 @@ if __name__ == "__main__":
     result = adapter.predict(args.image, args.prompt, args.output, args.mode, args.timeout)
 
     # Print result
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2, cls=PathAwareJSONEncoder))

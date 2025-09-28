@@ -10,6 +10,15 @@ from collections import Counter
 from pathlib import Path
 
 
+class PathAwareJSONEncoder(json.JSONEncoder):
+    """JSON encoder that can handle pathlib.Path objects by converting them to strings."""
+    
+    def default(self, obj):
+        if isinstance(obj, Path):
+            return str(obj)
+        return super().default(obj)
+
+
 def clean_tags(tags: list) -> list:
     """
     Clean and deduplicate tags, keeping only the most relevant ones.
@@ -197,7 +206,7 @@ def render_output(analysis_data: dict, output_format: str, file_path: str) -> st
             "metadata": analysis_data.get('metadata', {}),
             "original_file": file_path
         }
-        return json.dumps(output_data, indent=2)
+        return json.dumps(output_data, indent=2, cls=PathAwareJSONEncoder)
 
     elif output_format == "md":
         tags_str = ", ".join(clean_tag_list)

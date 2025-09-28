@@ -62,15 +62,18 @@ class TestCanonicalPathCreation:
     def test_canonical_path_format(self):
         """Test that canonical paths follow the expected format."""
         path = get_canonical_artifact_path("test", "pytest_format")
+        
+        # Convert Path object to string for testing
+        path_str = str(path)
 
         # Path should be in artifacts/test/
-        assert path.startswith(os.path.join(ARTIFACTS_ROOT, "test")), "Path should be in artifacts/test/"
+        assert path_str.startswith(os.path.join(ARTIFACTS_ROOT, "test")), "Path should be in artifacts/test/"
 
         # Path should contain the context
-        assert "pytest_format" in path, "Path should contain the context"
+        assert "pytest_format" in path_str, "Path should contain the context"
 
         # Path should contain git commit and other identifiers
-        parts = os.path.basename(path).split("_")
+        parts = os.path.basename(path_str).split("_")
         assert len(parts) >= 5, "Path should have at least 5 parts separated by underscores"
 
         # Last part should be a timestamp (format has changed in new version)
