@@ -333,7 +333,7 @@ The system implements robust JSON validation for reliable output:
 
 The File Analyzer uses a centralized model management system for handling AI model files. This system keeps large model files outside the git repository while providing a consistent interface for model access.
 
-For complete details, see [MODELS.md](MODELS.md).
+For complete details, see [docs/MODELS.md](docs/MODELS.md).
 
 ### Key Features
 
@@ -392,7 +392,7 @@ The simplest way to set up FastVLM is to use our setup script:
 # 3. Download the 0.5B model by default
 ```
 
-For more advanced options, see [MODELS.md](MODELS.md).
+For more advanced options, see [docs/MODELS.md](docs/MODELS.md).
 
 ### Optimization
 
@@ -430,10 +430,10 @@ You can install the File Analysis System to your PATH using the provided install
 
 ```bash
 # Install to ~/bin (default)
-./install.sh
+./scripts/install.sh
 
 # Or specify a custom installation directory
-./install.sh /usr/local/bin
+./scripts/install.sh /usr/local/bin
 ```
 
 This creates symbolic links to the tool in the specified directory. After installation, you can run the tool using:
@@ -443,7 +443,7 @@ This creates symbolic links to the tool in the specified directory. After instal
 
 ### Dependencies Installation
 
-See [INSTALL.md](INSTALL.md) for detailed instructions on installing all required dependencies.
+See [docs/INSTALL.md](docs/INSTALL.md) for detailed instructions on installing all required dependencies.
 
 #### Vision Model Dependencies
 

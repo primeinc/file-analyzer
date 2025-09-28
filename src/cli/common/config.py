@@ -3,8 +3,11 @@
 Centralized configuration for the File Analyzer CLI.
 
 This module provides a unified configuration interface for the CLI,
-leveraging the existing model_config.py for model management and extending
-it with CLI-specific settings.
+now powered by the new Pydantic-based configuration system for
+robust, type-safe configuration management.
+
+MIGRATION NOTE: This module now uses src.config as its backend while
+maintaining full backwards compatibility with existing CLI usage.
 """
 
 import json
@@ -14,18 +17,43 @@ import platform
 from pathlib import Path
 from typing import Any
 
-# Import model configuration
-from src.models.config import (
-    DEFAULT_MODEL_SIZE,
-    DEFAULT_MODEL_TYPE,
-    download_model,
-    get_model_info,
-    get_model_path,
-    list_available_models,
-)
+# Import the new configuration system
+try:
+    from src.config import settings, paths
+    NEW_CONFIG_AVAILABLE = True
+except ImportError:
+    NEW_CONFIG_AVAILABLE = False
+    logging.warning("New configuration system not available, using legacy fallback")
+
+# Import model configuration (fallback for legacy compatibility)
+try:
+    from src.models.config import (
+        DEFAULT_MODEL_SIZE,
+        DEFAULT_MODEL_TYPE,
+        download_model,
+        get_model_info,
+        get_model_path as legacy_get_model_path,
+        list_available_models,
+    )
+except ImportError:
+    # Fallback defaults if model config is not available
+    DEFAULT_MODEL_SIZE = "1.5b"
+    DEFAULT_MODEL_TYPE = "fastvlm"
+    
+    def download_model(*args, **kwargs):
+        return False, "Model download not available"
+    
+    def get_model_info(*args, **kwargs):
+        return {}
+    
+    def legacy_get_model_path(*args, **kwargs):
+        return None
+    
+    def list_available_models():
+        return {}
 
 
-# Import artifact discipline if available
+# Import artifact discipline if available (handled by new config system)
 try:
     from src.core.artifact_guard import (
         PathGuard,
@@ -101,47 +129,80 @@ class Config:
     Centralized configuration for the File Analyzer CLI.
     
     This class provides a unified interface for accessing configuration
-    settings from various sources (config files, environment variables,
-    command-line arguments) in a prioritized manner.
+    settings from various sources, now powered by the new Pydantic-based
+    configuration system for robust, type-safe configuration management.
     
-    The Config class is designed to be resilient to missing config files
-    or project root directories, allowing basic CLI functionality to work
-    even without a properly configured environment.
+    MIGRATION NOTE: This class now uses src.config as its backend while
+    maintaining full backwards compatibility with existing CLI usage.
     """
 
     def __init__(self, config_file: str | None = None):
         """
-        Initialize configuration.
+        Initialize configuration using the new configuration system.
         
         Args:
-            config_file: Path to configuration file (defaults to config.json in project root,
-                         or the value of FA_CONFIG_FILE environment variable if set)
-                         Can be None if no config file is available
+            config_file: Legacy parameter for backwards compatibility
+                         (the new system uses environment variables instead)
         """
-        # Check for environment variable first
+        # Store legacy config file parameter for compatibility
+        self.config_file = Path(config_file) if config_file else None
+        
+        if NEW_CONFIG_AVAILABLE:
+            # Use the new configuration system as backend
+            self._use_new_config_system()
+        else:
+            # Fallback to legacy configuration loading
+            self._use_legacy_config_system()
+    
+    def _use_new_config_system(self):
+        """
+        Initialize using the new Pydantic-based configuration system.
+        """
+        logger.debug("Using new Pydantic-based configuration system")
+        
+        # The new system handles all configuration automatically
+        # We just need to provide the legacy interface
+        self.config = {}  # Legacy config dict (not used with new system)
+        
+        # Runtime information from new system
+        self.runtime = {
+            "project_root": str(settings.path.project_root),
+            "python_version": platform.python_version(),
+            "system": platform.system(),
+            "platform": platform.platform(),
+            "artifact_discipline": True,  # Always available in new system
+            "schemas_dir": str(settings.path.schemas_dir),
+        }
+        
+        logger.info(f"Configuration initialized with project root: {self.runtime['project_root']}")
+    
+    def _use_legacy_config_system(self):
+        """
+        Fallback to legacy configuration system if new system not available.
+        """
+        logger.warning("Using legacy configuration system fallback")
+        
+        # Legacy config loading logic (preserved for compatibility)
         env_config_file = os.getenv('FA_CONFIG_FILE')
-
+        
         # Priority: 1. Explicit config_file parameter, 2. FA_CONFIG_FILE env var, 3. Default config file
-        if config_file:
-            self.config_file = Path(config_file)
+        if self.config_file:
+            pass  # Already set
         elif env_config_file and Path(env_config_file).exists():
             logger.debug(f"Using config file from FA_CONFIG_FILE: {env_config_file}")
             self.config_file = Path(env_config_file)
-        # Handle case where DEFAULT_CONFIG_FILE might point to a missing file
         elif DEFAULT_CONFIG_FILE and Path(DEFAULT_CONFIG_FILE).exists():
             self.config_file = DEFAULT_CONFIG_FILE
-        # Fallback to None if no valid config file
         else:
             logger.warning("No valid configuration file found, using environment variables and defaults only")
             self.config_file = None
-
-        # Load config with graceful fallback to empty dict
+        
+        # Load config with graceful fallback
         self.config = self._load_config()
-
-        # Determine schemas_dir with fallback
+        
+        # Legacy schema directory detection
         schemas_dir = SCHEMA_DIR if SCHEMA_DIR and SCHEMA_DIR.exists() else None
         if not schemas_dir and PROJECT_ROOT:
-            # Try alternate schema locations if SCHEMA_DIR doesn't exist
             candidates = [
                 PROJECT_ROOT / "schemas",
                 PROJECT_ROOT / "src" / "schemas",
@@ -151,8 +212,8 @@ class Config:
                 if candidate.exists():
                     schemas_dir = candidate
                     break
-
-        # Add runtime information with safe defaults and fallbacks
+        
+        # Legacy runtime information
         self.runtime = {
             "project_root": str(PROJECT_ROOT) if PROJECT_ROOT else str(Path.cwd()),
             "python_version": platform.python_version(),
@@ -199,7 +260,7 @@ class Config:
 
     def get(self, key: str, default: Any = None) -> Any:
         """
-        Get configuration value.
+        Get configuration value using the new configuration system.
         
         Args:
             key: Configuration key
@@ -208,22 +269,24 @@ class Config:
         Returns:
             Configuration value or default
         """
-        # Check environment variables first
-        env_key = f"FA_{key.upper()}"
-        if env_key in os.environ:
-            return os.environ[env_key]
-
-        # Check configuration file
-        if key in self.config:
-            return self.config[key]
-
-        # Use default value
-        return default
+        if NEW_CONFIG_AVAILABLE:
+            # Use the new configuration system
+            return settings.get(key, default)
+        else:
+            # Legacy fallback
+            env_key = f"FA_{key.upper()}"
+            if env_key in os.environ:
+                return os.environ[env_key]
+            
+            if key in self.config:
+                return self.config[key]
+            
+            return default
 
     def get_model_path(self, model_type: str = DEFAULT_MODEL_TYPE,
                       model_size: str = DEFAULT_MODEL_SIZE) -> str | None:
         """
-        Get path to model (wrapper for model_config.py).
+        Get path to model using the new configuration system.
         
         Args:
             model_type: Model type (e.g., "fastvlm")
@@ -232,16 +295,27 @@ class Config:
         Returns:
             Path to model or None if not found
         """
-        return get_model_path(model_type, model_size)
+        if NEW_CONFIG_AVAILABLE:
+            # Use the new PathManager for model discovery
+            model_path = paths.get_model_path(model_type, model_size)
+            return str(model_path) if model_path else None
+        else:
+            # Legacy fallback
+            return legacy_get_model_path(model_type, model_size)
 
     def list_available_models(self) -> dict[str, list[str]]:
         """
-        List available models (wrapper for model_config.py).
+        List available models using the new configuration system.
         
         Returns:
             Dictionary mapping model types to available sizes
         """
-        return list_available_models()
+        if NEW_CONFIG_AVAILABLE:
+            # Use the new PathManager for model discovery
+            return paths.list_models()
+        else:
+            # Legacy fallback
+            return list_available_models()
 
     def get_model_info(self, model_type: str = DEFAULT_MODEL_TYPE,
                       model_size: str = DEFAULT_MODEL_SIZE) -> dict[str, Any]:
@@ -275,7 +349,7 @@ class Config:
 
     def get_schema_path(self, schema_type: str, version: str = "v1.0") -> Path | None:
         """
-        Get path to JSON schema file.
+        Get path to JSON schema file using the new configuration system.
         
         Args:
             schema_type: Schema type (e.g., "fastvlm", "analyzer", "validate")
@@ -284,52 +358,55 @@ class Config:
         Returns:
             Path to schema file or None if not found
         """
-        # Try using schema directory from runtime settings
-        schemas_dir_str = self.runtime.get("schemas_dir")
-        if not schemas_dir_str:
-            logger.warning("No schemas directory configured")
-            return None
-
-        # Convert string path to Path object
-        try:
-            schemas_dir = Path(schemas_dir_str)
-        except Exception as e:
-            logger.error(f"Invalid schemas directory path: {e}")
-            return None
-
-        # Check multiple possible schema locations
-        schema_locations = [
-            schemas_dir / schema_type / version,  # Standard: schemas/type/version/
-            schemas_dir / version / schema_type,  # Alternative: schemas/version/type/
-            schemas_dir / schema_type,            # Simplified: schemas/type/
-            schemas_dir                           # Direct: schemas/
-        ]
-
-        # Try each location
-        for schema_path in schema_locations:
-            if not schema_path.exists():
-                continue
-
-            # Try different file naming patterns
-            schema_files = [
-                schema_path / "schema.json",                # Standard: schema.json
-                schema_path / f"{schema_type}.json",        # Type-specific: type.json
-                schema_path / f"{schema_type}_{version}.json", # Versioned: type_version.json
-                schema_path / "schema" / "schema.json"      # Nested: schema/schema.json
+        if NEW_CONFIG_AVAILABLE:
+            # Use the new PathManager for schema discovery
+            return paths.get_schema_path(schema_type, version)
+        else:
+            # Legacy schema discovery logic
+            schemas_dir_str = self.runtime.get("schemas_dir")
+            if not schemas_dir_str:
+                logger.warning("No schemas directory configured")
+                return None
+            
+            try:
+                schemas_dir = Path(schemas_dir_str)
+            except Exception as e:
+                logger.error(f"Invalid schemas directory path: {e}")
+                return None
+            
+            # Check multiple possible schema locations
+            schema_locations = [
+                schemas_dir / schema_type / version,  # Standard: schemas/type/version/
+                schemas_dir / version / schema_type,  # Alternative: schemas/version/type/
+                schemas_dir / schema_type,            # Simplified: schemas/type/
+                schemas_dir                           # Direct: schemas/
             ]
-
-            # Return first matching file
-            for schema_file in schema_files:
-                if schema_file.exists():
-                    return schema_file
-
-        # No schema file found after trying all locations
-        logger.warning(f"No schema file found for {schema_type} version {version}")
-        return None
+            
+            # Try each location
+            for schema_path in schema_locations:
+                if not schema_path.exists():
+                    continue
+                
+                # Try different file naming patterns
+                schema_files = [
+                    schema_path / "schema.json",                # Standard: schema.json
+                    schema_path / f"{schema_type}.json",        # Type-specific: type.json
+                    schema_path / f"{schema_type}_{version}.json", # Versioned: type_version.json
+                    schema_path / "schema" / "schema.json"      # Nested: schema/schema.json
+                ]
+                
+                # Return first matching file
+                for schema_file in schema_files:
+                    if schema_file.exists():
+                        return schema_file
+            
+            # No schema file found
+            logger.warning(f"No schema file found for {schema_type} version {version}")
+            return None
 
     def get_artifact_path(self, artifact_type: str, context: str) -> str:
         """
-        Get canonical artifact path.
+        Get canonical artifact path using the new configuration system.
         
         Args:
             artifact_type: Artifact type (e.g., "analysis", "vision", "test")
@@ -338,39 +415,44 @@ class Config:
         Returns:
             Canonical artifact path
         """
-        try:
-            # Try to use artifact discipline if available
-            if ARTIFACT_DISCIPLINE:
-                return get_canonical_artifact_path(artifact_type, context)
-
-            # Fallback without artifact discipline
-            from datetime import datetime
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-            # Use PROJECT_ROOT if available, otherwise fall back to current directory
-            base_dir = PROJECT_ROOT if PROJECT_ROOT else Path.cwd()
-
-            # Create artifacts directory path
-            output_dir = os.path.join(base_dir, "artifacts", artifact_type,
-                               f"{context}_{timestamp}")
-
-            # Ensure directory exists
-            os.makedirs(output_dir, exist_ok=True)
-            return output_dir
-
-        except (OSError, PermissionError, FileNotFoundError) as e:
-            # Ultimate fallback: temporary directory - capture filesystem-related errors
-            logger.error(f"Error creating artifact path: {e}")
-            logger.warning("Using fallback temporary directory for artifacts")
-
-            import tempfile
-            temp_dir = tempfile.mkdtemp(prefix=f"file_analyzer_{artifact_type}_")
-            return temp_dir
-        except Exception as e:
-            # Unexpected errors should be re-raised after logging
-            logger.critical(f"Unexpected error creating artifact path: {e}")
-            # No fallback for unexpected errors - just re-raise them
-            raise
+        if NEW_CONFIG_AVAILABLE:
+            # Use the new PathManager for artifact path creation
+            artifact_path = paths.get_artifact_path(artifact_type, context)
+            return str(artifact_path)
+        else:
+            # Legacy artifact path creation
+            try:
+                # Try to use artifact discipline if available
+                if ARTIFACT_DISCIPLINE:
+                    return get_canonical_artifact_path(artifact_type, context)
+                
+                # Fallback without artifact discipline
+                from datetime import datetime
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                
+                # Use PROJECT_ROOT if available, otherwise fall back to current directory
+                base_dir = PROJECT_ROOT if PROJECT_ROOT else Path.cwd()
+                
+                # Create artifacts directory path
+                output_dir = os.path.join(base_dir, "artifacts", artifact_type,
+                                   f"{context}_{timestamp}")
+                
+                # Ensure directory exists
+                os.makedirs(output_dir, exist_ok=True)
+                return output_dir
+                
+            except (OSError, PermissionError, FileNotFoundError) as e:
+                # Ultimate fallback: temporary directory
+                logger.error(f"Error creating artifact path: {e}")
+                logger.warning("Using fallback temporary directory for artifacts")
+                
+                import tempfile
+                temp_dir = tempfile.mkdtemp(prefix=f"file_analyzer_{artifact_type}_")
+                return temp_dir
+            except Exception as e:
+                # Unexpected errors should be re-raised after logging
+                logger.critical(f"Unexpected error creating artifact path: {e}")
+                raise
 
 # Create a global configuration instance
 config = Config()

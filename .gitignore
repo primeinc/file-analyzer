@@ -59,6 +59,7 @@ venv.bak/
 analysis_results/
 test_results/
 test_data/test_results/
+tests/outputs/
 vision_test_*/
 json_test_*/
 
@@ -84,6 +85,13 @@ cleanup.log
 # Local documentation
 github_api_guide.md
 pr_review_responses.md
+
+# Repository analysis files
+repomix-output.xml
+
+# Temporary files
+test.jpg
+*.egg-info/
 
 # User-level model storage (local cache)
 # Note: Users should add the following path to their global gitignore

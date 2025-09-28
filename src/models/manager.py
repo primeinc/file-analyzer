@@ -28,8 +28,9 @@ from src.core.artifact_guard import (
     validate_artifact_path,
 )
 
-
-# Import JSON utilities
+# Import configuration system
+from src.config.manager import ConfigManager
+from src.config.paths import PathManager
 
 
 # Configure logging
@@ -67,29 +68,42 @@ class ModelManager:
         """Initialize the model manager."""
         self.models = {}
         self.adapters = {}
+        
+        # Use ConfigManager for centralized configuration
+        self.config_manager = ConfigManager()
+        self.path_manager = PathManager()
+        
+        # Legacy model configs for compatibility
         self.model_configs = {}
         self._load_model_configs()
         self._register_adapters()
 
     def _load_model_configs(self):
         """Load model configurations from config files."""
-        # Load from main config.json
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
-        if os.path.exists(config_path):
-            try:
-                with open(config_path) as f:
-                    config = json.load(f)
-                    if "vision" in config:
-                        self.model_configs["vision"] = config["vision"]
-            except Exception as e:
-                logger.error(f"Error loading config.json: {e}")
-
-        # Load from model_config.py if it exists
+        # Get vision config from ConfigManager
+        vision_config = {
+            'default_model': self.config_manager.get('vision.default_model', 'fastvlm'),
+            'model_size': self.config_manager.get('vision.model_size'),
+            'default_mode': self.config_manager.get('vision.default_mode', 'describe'),
+            'max_images': self.config_manager.get('vision.max_images', 10),
+            'output_format': self.config_manager.get('vision.output_format', 'json')
+        }
+        self.model_configs["vision"] = vision_config
+        
+        # Legacy compatibility: Load from model_config.py if it exists
         try:
             from src.models.config import MODEL_CONFIGS
-            self.model_configs.update(MODEL_CONFIGS)
+            # Merge legacy configs (ConfigManager takes precedence)
+            for key, legacy_config in MODEL_CONFIGS.items():
+                if key not in self.model_configs:
+                    self.model_configs[key] = legacy_config
+                else:
+                    # Update with legacy values that aren't already set
+                    for sub_key, value in legacy_config.items():
+                        if sub_key not in self.model_configs[key]:
+                            self.model_configs[key][sub_key] = value
         except ImportError:
-            logger.warning("model_config.py not found, using defaults")
+            logger.debug("model_config.py not found, using ConfigManager defaults")
 
     def _register_adapters(self):
         """Register available model adapters."""
@@ -130,6 +144,38 @@ class ModelManager:
             logger.warning(f"No adapter found for {model_name}")
 
         return None
+        
+    def _get_model_path(self, model_name: str, model_size: str | None = None, custom_path: str | None = None) -> str | None:
+        """Get model path with environment variable and config support."""
+        # Check environment variables first
+        if model_name == "fastvlm":
+            env_path = os.getenv('FA_MODEL_VISION_PATH')
+            if env_path:
+                return env_path
+                
+        # Use custom path if provided
+        if custom_path:
+            # Use PathManager to resolve the path
+            resolved_path = self.path_manager.get_model_path(model_name, custom_path)
+            if resolved_path:
+                return resolved_path
+            return custom_path
+            
+        # Get from configuration based on model name and size
+        config_key = f"models.{model_name}.path"
+        if model_size:
+            size_specific_key = f"models.{model_name}.sizes.{model_size}.path"
+            config_path = self.config_manager.get(size_specific_key) or self.config_manager.get(config_key)
+        else:
+            config_path = self.config_manager.get(config_key)
+            
+        if config_path:
+            resolved_path = self.path_manager.get_model_path(model_name, config_path)
+            if resolved_path:
+                return resolved_path
+            return config_path
+            
+        return None
 
     def create_model(self, model_type: str, model_name: str, model_size: str | None = None, **kwargs) -> ModelInterface | None:
         """
@@ -151,6 +197,11 @@ class ModelManager:
             return None
 
         try:
+            # Get model path with our path resolution system
+            model_path = self._get_model_path(model_name, model_size, kwargs.get('model_path'))
+            if model_path:
+                kwargs['model_path'] = model_path
+                
             # Create the model instance
             model = adapter_func(model_type=model_name, model_size=model_size, **kwargs)
             return model

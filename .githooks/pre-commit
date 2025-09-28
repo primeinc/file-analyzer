@@ -11,10 +11,10 @@ cd "$REPO_ROOT"
 echo "Checking artifact discipline..."
 
 # 1. Run preflight check for artifact discipline
-if ! ./preflight.sh --no-tmp-clean; then
+if ! ./scripts/preflight.sh --no-tmp-clean; then
   echo "❌ Pre-commit hook failed: Artifact discipline violations detected."
   echo
-  echo "🔍 Run './preflight.sh' to see details about the violations."
+  echo "🔍 Run './scripts/preflight.sh' to see details about the violations."
   echo "✅ Fix the issues and try committing again."
   exit 1
 fi
@@ -25,7 +25,7 @@ if [[ -n "$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.sh$' |
   git diff --cached --name-only --diff-filter=ACMR | grep -E '\.sh$' | while IFS= read -r script; do
     if [[ -f "$script" ]]; then
       echo "Checking $script"
-      ./check_script_conformity.sh "$script" || {
+      ./scripts/check_script_conformity.sh "$script" || {
         echo "ERROR: $script does not conform to artifact discipline requirements."
         echo "Please source artifact_guard_py_adapter.sh at the top of the script."
         exit 1
@@ -51,7 +51,7 @@ fi
 # Check if new Bash scripts are in the correct location
 if [[ -n "$(git diff --cached --name-only --diff-filter=A | grep -E '\.sh$' | grep -v "^tools/" | grep -v "^tests/" || true)" ]]; then
   # Allow specific root-level scripts
-  ALLOWED_ROOT_SCRIPTS=("preflight.sh" "cleanup.sh" "migrate_artifacts.sh" "check_script_conformity.sh" "artifact_guard_py_adapter.sh" "check_all_scripts.sh")
+  ALLOWED_ROOT_SCRIPTS=("preflight.sh" "cleanup.sh" "migrate_artifacts.sh" "check_script_conformity.sh" "artifact_guard_py_adapter.sh" "check_all_scripts.sh" "install.sh")
   
   git diff --cached --name-only --diff-filter=A | grep -E '\.sh$' | grep -v "^tools/" | grep -v "^tests/" | while IFS= read -r script; do
     script_name=$(basename "$script")

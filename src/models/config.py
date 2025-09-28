@@ -39,9 +39,9 @@ except ImportError:
     ARTIFACT_DISCIPLINE = False
     logger.warning("Artifact discipline tools not available. Using fallback paths.")
 
-# Constants for model paths and versions
-DEFAULT_MODEL_SIZE = "1.5b"
-DEFAULT_MODEL_TYPE = "fastvlm"
+# Constants for model paths and versions - with environment variable support
+DEFAULT_MODEL_SIZE = os.getenv('FA_MODEL_SIZE', "1.5b")
+DEFAULT_MODEL_TYPE = os.getenv('FA_MODEL_TYPE', "fastvlm")
 MODEL_SIZES = ["0.5b", "1.5b", "7b"]
 
 # User-level model directory - platform specific
@@ -103,9 +103,10 @@ def get_model_path(model_type: str = DEFAULT_MODEL_TYPE,
     Find the path to a model by type and size.
     
     This function searches for models in the following locations, in order:
-    1. User-level model directory (~/.local/share/fastvlm)
-    2. Project checkpoints directory (libs/ml-fastvlm/checkpoints)
-    3. Local checkpoints directory (checkpoints)
+    1. Environment variable override (FA_MODEL_*_PATH)
+    2. User-level model directory (~/.local/share/fastvlm)
+    3. Project checkpoints directory (libs/ml-fastvlm/checkpoints)
+    4. Local checkpoints directory (checkpoints)
     
     Args:
         model_type: Model type (e.g., "fastvlm")
@@ -114,6 +115,21 @@ def get_model_path(model_type: str = DEFAULT_MODEL_TYPE,
     Returns:
         Path to the model directory, or None if not found
     """
+    # Check environment variable overrides first
+    if model_type == "fastvlm":
+        # Check for general FastVLM path override
+        env_path = os.getenv('FA_MODEL_VISION_PATH')
+        if env_path and os.path.exists(env_path):
+            logger.info(f"Using model path from FA_MODEL_VISION_PATH: {env_path}")
+            return env_path
+            
+        # Check for size-specific path override
+        size_env_var = f"FA_MODEL_FASTVLM_{model_size.upper().replace('.', '_')}_PATH"
+        size_env_path = os.getenv(size_env_var)
+        if size_env_path and os.path.exists(size_env_path):
+            logger.info(f"Using model path from {size_env_var}: {size_env_path}")
+            return size_env_path
+            
     if model_type not in MODEL_CHECKPOINTS:
         logger.error(f"Unknown model type: {model_type}")
         return None

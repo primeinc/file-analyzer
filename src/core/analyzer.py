@@ -36,6 +36,9 @@ from src.core.artifact_guard import (
 # Import model analysis components
 from src.models.analyzer import ModelAnalyzer
 
+# Import configuration system
+from src.config.manager import ConfigManager
+from src.config.paths import PathManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -46,19 +49,72 @@ class FileAnalyzer:
 
     def __init__(self, config=None):
         """Initialize the file analyzer with optional configuration."""
-        self.config = config or {}
+        # Use ConfigManager for centralized configuration
+        self.config_manager = ConfigManager()
+        
+        # Legacy config support - merge with ConfigManager
+        if config:
+            # If legacy config is provided, use it as overrides
+            self.legacy_config = config
+        else:
+            self.legacy_config = {}
+            
         self.results = {}
-        self.model_analyzer = ModelAnalyzer(self.config)
+        self.model_analyzer = ModelAnalyzer(self._get_merged_config())
 
         # Set file extensions from config for filtering
-        if "file_extensions" in self.config and "images" in self.config["file_extensions"]:
-            self.image_extensions = set(self.config["file_extensions"]["images"])
+        image_extensions = self.config_manager.get('file_extensions.images')
+        if image_extensions:
+            self.image_extensions = set(image_extensions)
         else:
             self.image_extensions = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"}
 
         # Include/exclude patterns for file filtering
-        self.include_patterns = self.config.get("default_include_patterns", [])
-        self.exclude_patterns = self.config.get("default_exclude_patterns", [])
+        self.include_patterns = self.config_manager.get('analysis.default_include_patterns', [])
+        self.exclude_patterns = self.config_manager.get('analysis.default_exclude_patterns', [])
+        
+    def _get_config_value(self, key, default=None):
+        """Get configuration value with legacy config fallback."""
+        # First check ConfigManager
+        value = self.config_manager.get(key, None)
+        if value is not None:
+            return value
+            
+        # Then check legacy config using dot notation
+        legacy_value = self._get_legacy_config_value(key, default)
+        return legacy_value
+        
+    def _get_legacy_config_value(self, key, default):
+        """Get value from legacy config using dot notation."""
+        keys = key.split('.')
+        value = self.legacy_config
+        
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return default
+                
+        return value if value is not None else default
+        
+    def _get_merged_config(self):
+        """Get merged configuration for legacy components."""
+        # Start with ConfigManager data
+        merged = {}
+        
+        # Add vision config
+        vision_config = {
+            'model': self.config_manager.get('vision.default_model', 'fastvlm'),
+            'model_size': self.config_manager.get('vision.model_size'),
+            'mode': self.config_manager.get('vision.default_mode', 'describe')
+        }
+        merged['vision'] = vision_config
+        
+        # Overlay legacy config
+        if self.legacy_config:
+            merged.update(self.legacy_config)
+            
+        return merged
 
     def analyze(self, path, options):
         """Main analysis method that coordinates all analysis types."""
@@ -152,16 +208,16 @@ class FileAnalyzer:
 
             logging.info(f"Found {len(files_to_process)} files to process")
 
-            # Limit the number of files to process
-            max_files = self.config.get("max_metadata_files", 50)
+        # Limit the number of files to process
+            max_files = self._get_config_value('analysis.max_metadata_files', 50)
             if len(files_to_process) > max_files:
                 logging.info(f"Limiting to {max_files} files")
                 files_to_process = files_to_process[:max_files]
 
             # Process collected files directly
             if files_to_process:
-                # Get exiftool options from config
-                exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
+            # Get exiftool options from config
+                exiftool_options = self._get_config_value('tools.exiftool.options', [])
                 command = ["exiftool", "-json"]
 
                 # Check if -json is already in the config options to avoid duplication
@@ -183,7 +239,7 @@ class FileAnalyzer:
                 return None
 
             # Get exiftool options from config
-            exiftool_options = self.config.get("tool_options", {}).get("exiftool", [])
+            exiftool_options = self._get_config_value('tools.exiftool.options', [])
             command = ["exiftool", "-json"]
 
             # Check if -json is already in the config options to avoid duplication
@@ -366,8 +422,8 @@ class FileAnalyzer:
 
         # Get list of image files
         image_files = []
-        image_exts = self.config.get("file_extensions", {}).get("images",
-                                                             [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"])
+        image_exts = self._get_config_value("file_extensions.images", 
+                                          [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"])
 
         # Collect image files to process
         if os.path.isdir(path):
@@ -390,7 +446,7 @@ class FileAnalyzer:
             return None
 
         # Limit the number of images to process
-        max_images = self.config.get("max_ocr_images", 50)
+        max_images = self._get_config_value('analysis.max_ocr_images', 50)
         if len(image_files) > max_images:
             logging.info(f"Limiting OCR to {max_images} images")
             image_files = image_files[:max_images]
@@ -400,7 +456,7 @@ class FileAnalyzer:
         os.makedirs(ocr_output_dir, exist_ok=True)
 
         # Set up thread pool for parallel processing
-        max_workers = self.config.get("max_threads", os.cpu_count() or 4)
+        max_workers = self._get_config_value('analysis.max_threads', os.cpu_count() or 4)
         logging.info(f"Using {max_workers} threads for OCR processing")
 
         # Function to process a single image with OCR
@@ -415,7 +471,7 @@ class FileAnalyzer:
                 ocr_command = ["tesseract", str(image_path), os.path.splitext(output_file)[0]]
 
                 # Add any tesseract options from config
-                tesseract_options = self.config.get("tool_options", {}).get("tesseract", [])
+                tesseract_options = self._get_config_value('tools.tesseract.options', [])
                 ocr_command.extend(tesseract_options)
 
                 subprocess.run(ocr_command, check=True, capture_output=True, text=True)
@@ -479,7 +535,7 @@ class FileAnalyzer:
         output_file = os.path.join(artifact_dir, "malware_scan.txt")
 
         # Build command with options from config
-        clamscan_options = self.config.get("tool_options", {}).get("clamscan", ["-r"])
+        clamscan_options = self._get_config_value('tools.clamscan.options', ["-r"])
         command = ["clamscan"]
         command.extend(clamscan_options)
         command.append(str(path))
@@ -578,7 +634,7 @@ class FileAnalyzer:
         output_file = os.path.join(artifact_dir, f"search_{safe_search_text}.txt")
 
         # Build ripgrep command with options from config
-        ripgrep_options = self.config.get("tool_options", {}).get("ripgrep", ["-i", "-n", "--color", "never"])
+        ripgrep_options = self._get_config_value('tools.ripgrep.options', ["-i", "-n", "--color", "never"])
         command = ["rg"]
         command.extend(ripgrep_options)
 
@@ -671,7 +727,7 @@ class FileAnalyzer:
         output_file = os.path.join(artifact_dir, f"binary_analysis_{filename}.txt")
 
         # Build binwalk command with options from config
-        binwalk_options = self.config.get("tool_options", {}).get("binwalk", ["-B", "-e", "-M"])
+        binwalk_options = self._get_config_value('tools.binwalk.options', ["-B", "-e", "-M"])
         command = ["binwalk"]
         command.extend(binwalk_options)
         command.append(str(path))
@@ -744,7 +800,7 @@ class FileAnalyzer:
             output_path = os.path.join(artifact_dir, f"{file_base}_{model_name}_{model_mode}.json")
 
         # Get model size from config if available
-        model_size = self.config.get('vision', {}).get('model_size', None)
+        model_size = self._get_config_value('vision.model_size', None)
 
         try:
             # Run analysis

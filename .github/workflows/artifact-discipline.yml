@@ -55,15 +55,15 @@ jobs:
       
       - name: Set up environment
         run: |
-          chmod +x ./preflight.sh
+          chmod +x ./scripts/preflight.sh
           chmod +x ./cleanup.sh
-          chmod +x ./artifact_guard_py_adapter.sh
+          chmod +x ./scripts/artifact_guard_py_adapter.sh
           chmod +x ./tools/setup_fastvlm.sh
       
       - name: Run preflight check with strict enforcement
         run: |
           # During transition, allow legacy directories but enforce script discipline
-          ./preflight.sh --allow-legacy-dirs
+          ./scripts/preflight.sh --allow-legacy-dirs
       
       - name: Verify artifact structure exists
         run: |

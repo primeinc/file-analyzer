@@ -74,7 +74,8 @@ def check_scripts_conformity() -> tuple[bool, list[str]]:
         "preflight.sh",
         "install.sh",
         "check_script_conformity.sh",
-        "check_all_scripts.sh"
+        "check_all_scripts.sh",
+        "test_hook.sh"
     ]
 
     # Find all shell scripts

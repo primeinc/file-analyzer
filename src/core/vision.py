@@ -43,6 +43,10 @@ from src.core.artifact_guard import (
     validate_artifact_path,
 )
 
+# Import configuration system
+from src.config.manager import ConfigManager
+from src.config.paths import PathManager
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -96,17 +100,15 @@ VISION_MODELS = {
     }
 }
 
-# Default configuration for vision analysis
+# Default configuration - now managed by ConfigManager
+# Legacy support maintained for existing code
 DEFAULT_VISION_CONFIG = {
     "model": "fastvlm",
-    "max_images": 10,
+    "model_size": "1.5b", 
+    "mode": "describe",
     "resolution": "512x512",
-    "description_mode": "standard",  # standard, creative, detailed
-    "output_format": "json",         # text, json (default to json for better integration)
-    "model_path": None,              # Custom model path
-    "mmproj_path": None,             # For BakLLaVA CLIP model
-    "batch_processing": False,
-    "max_retries": 3                 # Max retries for JSON validation
+    "output_format": "json",
+    "max_images": 10
 }
 
 class VisionAnalyzer:
@@ -114,12 +116,19 @@ class VisionAnalyzer:
 
     def __init__(self, config=None):
         """Initialize the vision analyzer with the provided configuration."""
-        self.config = config or DEFAULT_VISION_CONFIG.copy()
-        self.model_name = self.config.get("model", "fastvlm")
+        # Use ConfigManager for centralized configuration
+        self.config_manager = ConfigManager()
+        self.path_manager = PathManager()
+        
+        # Legacy config support - merge with ConfigManager
+        self.legacy_config = config or {}
+        
+        # Get model name from config or environment
+        self.model_name = self._get_config_value("model", "fastvlm")
         self.model_info = VISION_MODELS.get(self.model_name, VISION_MODELS["fastvlm"])
 
         # Set up image processing parameters
-        resolution = self.config.get("resolution")
+        resolution = self._get_config_value("resolution")
         if not resolution and "resolution" in self.model_info:
             resolution_options = self.model_info.get("resolution", {})
             resolution = resolution_options.get("default")
@@ -136,8 +145,8 @@ class VisionAnalyzer:
             str: Model size/variant (e.g., "0.5B", "1.5B", "7B") or empty string if unknown
         """
         if self.model_name == "fastvlm":
-            # Get model_path from config or default options
-            model_path = str(self.config.get("model_path") or self.model_info["model_options"]["default"])
+            # Get model_path from config, environment variables, or default options
+            model_path = self._get_model_path()
 
             # Determine size from path
             if "0.5b" in model_path.lower():
@@ -148,6 +157,58 @@ class VisionAnalyzer:
                 return "7B"
 
         # Add logic for other models as needed
+        return ""
+        
+    def _get_config_value(self, key, default=None):
+        """Get configuration value with legacy config and environment variable support."""
+        # First check environment variables for specific vision config
+        if key == "model":
+            env_value = os.getenv('FA_MODEL_VISION_DEFAULT')
+            if env_value:
+                return env_value
+        elif key == "model_size":
+            env_value = os.getenv('FA_MODEL_SIZE')
+            if env_value:
+                return env_value
+        elif key == "model_path":
+            env_value = os.getenv('FA_MODEL_VISION_PATH')
+            if env_value:
+                return env_value
+                
+        # Then check ConfigManager
+        config_key = f"vision.{key}" if not key.startswith("vision.") else key
+        value = self.config_manager.get(config_key, None)
+        if value is not None:
+            return value
+            
+        # Then check legacy config
+        if key in self.legacy_config:
+            return self.legacy_config[key]
+            
+        return default
+        
+    def _get_model_path(self):
+        """Get model path with priority: env vars > config > defaults."""
+        # Check environment variables first
+        env_path = os.getenv('FA_MODEL_VISION_PATH')
+        if env_path:
+            return env_path
+            
+        # Then check configuration
+        config_path = self._get_config_value("model_path")
+        if config_path:
+            # Use PathManager to resolve the path
+            resolved_path = self.path_manager.get_model_path(self.model_name, config_path)
+            if resolved_path:
+                return resolved_path
+            return config_path
+            
+        # Use defaults from model info
+        if self.model_name in VISION_MODELS:
+            model_info = VISION_MODELS[self.model_name]
+            if "model_options" in model_info:
+                return model_info["model_options"]["default"]
+                
         return ""
 
     def get_model_display_name(self):
@@ -351,10 +412,10 @@ class VisionAnalyzer:
             # Track performance metrics
             start_time = time.time()
 
-            model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
-            creativity = 0.7 if self.config.get("description_mode") == "creative" else 0.0
-            output_format = self.config.get("output_format", "json")
-            max_retries = self.config.get("max_retries", 3)
+            model_path = self._get_model_path()
+            creativity = 0.7 if self._get_config_value("description_mode") == "creative" else 0.0
+            output_format = self._get_config_value("output_format", "json")
+            max_retries = self._get_config_value("max_retries", 3)
 
             # Check if we should use the JSON-specific implementation
             if output_format == "json":
@@ -497,8 +558,8 @@ class VisionAnalyzer:
 
         # BakLLaVA analysis
         elif model_name == "bakllava":
-            model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
-            mmproj_path = self.config.get("mmproj_path") or self.model_info["model_options"]["clip"]
+            model_path = self._get_model_path() or self.model_info["model_options"]["default"]
+            mmproj_path = self._get_config_value("mmproj_path") or self.model_info["model_options"]["clip"]
 
             # Check if using Fuzzy-Search implementation
             if os.path.exists("./realtime-bakllava/server"):
@@ -527,7 +588,7 @@ class VisionAnalyzer:
 
         # Qwen2-VL analysis
         elif model_name == "qwen2vl":
-            model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
+            model_path = self._get_model_path() or self.model_info["model_options"]["default"]
 
             cmd = [
                 "python", "-m", "mlx_vlm.cli",
@@ -538,7 +599,7 @@ class VisionAnalyzer:
             result = self.run_command(cmd)
 
         # Handle result return type consistency
-        if result and self.config.get("output_format") == "json":
+        if result and self._get_config_value("output_format") == "json":
             # If we want JSON but have a string, try to convert it
             if isinstance(result, str):
                 try:
@@ -603,7 +664,7 @@ class VisionAnalyzer:
                         f.write(f"{proc_path}\n")
 
                 # Get model path
-                model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
+                model_path = self._get_model_path()
 
                 # Run batch processing
                 cmd = [
@@ -708,14 +769,14 @@ class VisionAnalyzer:
             return None
 
         # Limit number of images if specified
-        max_images = self.config.get("max_images", 10)
+        max_images = self._get_config_value("max_images", 10)
         if len(image_files) > max_images:
             print(f"Limiting to {max_images} images (out of {len(image_files)} found)")
             image_files = image_files[:max_images]
 
         # First preprocess all images in parallel
         from concurrent.futures import ThreadPoolExecutor
-        max_workers = self.config.get("max_threads", os.cpu_count() or 4)
+        max_workers = self._get_config_value("max_threads", os.cpu_count() or 4)
 
         # Define preprocessing function
         def preprocess_batch_image(img_path):
@@ -730,8 +791,8 @@ class VisionAnalyzer:
         # Use PathGuard to ensure all output file operations respect artifact discipline
         with PathGuard(output_dir):
             # FastVLM batch processing
-            if self.model_name == "fastvlm" and self.config.get("batch_processing", False):
-                model_path = self.config.get("model_path") or self.model_info["model_options"]["default"]
+            if self.model_name == "fastvlm" and self._get_config_value("batch_processing", False):
+                model_path = self._get_model_path()
                 cmd = [
                     "fastvlm", "batch",
                     "--model", model_path,
@@ -768,7 +829,7 @@ class VisionAnalyzer:
 
                         # Save individual result
                         base_name = os.path.basename(image_file)
-                        file_ext = ".json" if self.config.get("output_format") == "json" else ".txt"
+                        file_ext = ".json" if self._get_config_value("output_format") == "json" else ".txt"
                         output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}{file_ext}")
 
                         with open(output_file, 'w') as f:
@@ -795,7 +856,7 @@ class VisionAnalyzer:
         if not results:
             return None
 
-        output_format = self.config.get("output_format", "json")  # Default to JSON
+        output_format = self._get_config_value("output_format", "json")  # Default to JSON
 
         # Use canonical artifact path if output_file is not specified
         if output_file is None:
@@ -914,7 +975,7 @@ class VisionAnalyzer:
                     # Add a summary section
                     f.write("## Summary\n\n")
                     f.write(f"- Total images analyzed: {len(results)}\n")
-                    f.write(f"- Analysis mode: {self.config.get('vision_mode', 'describe')}\n")
+                    f.write(f"- Analysis mode: {self._get_config_value('mode', 'describe')}\n")
 
             else:  # text format (default fallback)
                 with open(output_file, 'w') as f:
@@ -949,15 +1010,17 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    config = DEFAULT_VISION_CONFIG.copy()
-    config["model"] = args.model
-    config["batch_processing"] = args.batch
-    config["output_format"] = args.format
-
+    # Create legacy config for compatibility
+    legacy_config = {
+        "model": args.model,
+        "batch_processing": args.batch,
+        "output_format": args.format
+    }
+    
     if args.model_path:
-        config["model_path"] = args.model_path
+        legacy_config["model_path"] = args.model_path
 
-    analyzer = VisionAnalyzer(config)
+    analyzer = VisionAnalyzer(legacy_config)
 
     # Use canonical artifact paths by default
     if os.path.isdir(args.image) and args.batch:

@@ -24,12 +24,13 @@ app = typer.Typer(help="Check shell scripts for artifact discipline")
 GUARD_SCRIPT = "artifact_guard_py_adapter.sh"
 ALLOWED_UNSOURCED = [
     GUARD_SCRIPT,
-    "preflight.sh",
+    "scripts/preflight.sh",
     "cleanup.sh",
-    "check_script_conformity.sh",
+    "scripts/check_script_conformity.sh",
     "artifacts.env",
-    "check_all_scripts.sh",
-    "install.sh"
+    "scripts/check_all_scripts.sh",
+    "scripts/install.sh",
+    "scripts/artifact_guard_py_adapter.sh"
 ]
 
 # Initialize console

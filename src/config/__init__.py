@@ -24,12 +24,14 @@ Usage:
     # FA_MODEL_DEFAULT_SIZE=0.5b -> settings.model.default_size = "0.5b"
 """
 
+from .manager import ConfigManager
 from .paths import PathManager, paths
 from .settings import AppSettings, ModelSettings, PathSettings, settings
 
 
 __all__ = [
     "AppSettings",
+    "ConfigManager", 
     "ModelSettings",
     "PathManager",
     "PathSettings",
