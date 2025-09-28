@@ -109,10 +109,10 @@ def get_user_cache_dir() -> Path:
 class PathSettings(BaseSettingsClass):
     """Path-related configuration with automatic environment variable binding."""
 
-    # Project structure paths - computed automatically but overrideable
+    # Project structure paths - computed automatically but overridable
     project_root: Path = Field(default_factory=find_project_root)
 
-    # User data paths - platform-specific but overrideable
+    # User data paths - platform-specific but overridable
     user_data_dir: Path = Field(default_factory=get_user_data_dir)
     user_cache_dir: Path = Field(default_factory=get_user_cache_dir)
 
