@@ -37,6 +37,8 @@ repos:
     hooks:
       - id: bandit
         args: [-r, src]
+        additional_dependencies:
+          - pbr
         exclude: ^tests/
 
   # Documentation and spelling
