@@ -56,7 +56,7 @@ def get_json_value(file_path: str, key: str, default: Any | None = None) -> Any:
         return default
 
 
-def main():
+def main() -> None:
     """Command-line interface"""
     if len(sys.argv) < 3:
         print(

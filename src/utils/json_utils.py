@@ -19,6 +19,7 @@ import json
 import logging
 import re
 import time
+from typing import Any, Optional
 
 
 # Configure logging
@@ -41,7 +42,7 @@ class JSONValidator:
     """
 
     @staticmethod
-    def extract_json_from_text(text):
+    def extract_json_from_text(text: str) -> dict[str, Any] | None:
         """
         Extract JSON from text using robust extraction methods.
 
@@ -191,7 +192,11 @@ class JSONValidator:
         return None
 
     @staticmethod
-    def validate_json_structure(json_data, expected_fields=None, model_type=None):
+    def validate_json_structure(
+        json_data: dict[str, Any] | None,
+        expected_fields: list[str] | None = None,
+        model_type: str | None = None,
+    ) -> bool:
         """
         Validate that JSON data contains expected fields for the given model type.
 
@@ -219,7 +224,10 @@ class JSONValidator:
         return all(field in json_data for field in expected_fields)
 
     @staticmethod
-    def add_metadata(json_data, metadata=None):
+    def add_metadata(
+        json_data: dict[str, Any] | None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """
         Add or update metadata in JSON result.
 
