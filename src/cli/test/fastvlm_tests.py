@@ -20,18 +20,24 @@ This modular approach improves maintainability, readability, and makes the code
 easier to extend with new test capabilities.
 """
 
+import json
+import logging
 import os
 import sys
-import json
 import time
-import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 
-# Import model-related modules
-from src.models.fastvlm.benchmark import download_test_images, find_test_images, run_benchmark
 import src.models.fastvlm.analyzer
 import src.models.fastvlm.errors
+
+# Import model-related modules
+from src.models.fastvlm.benchmark import (
+    download_test_images,
+    find_test_images,
+    run_benchmark,
+)
+
 
 # Define a mock analyzer for testing without creating files
 class MockAnalyzer:
@@ -39,12 +45,12 @@ class MockAnalyzer:
     def __init__(self):
         self.model_info = {'name': 'MockModel'}
         self.model_path = '/mock/path'
-        
+
     def analyze_image(self, path, prompt=None, mode="describe"):
         """Simulate analyzing an image."""
         # Add slight delay to simulate processing
         time.sleep(0.1)
-        
+
         if mode == "describe":
             return {
                 "description": f"Mock analysis of image: {path}",
@@ -85,7 +91,7 @@ class MockAnalyzer:
 
 # Helper functions for run_test
 
-def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
+def test_analysis_modes(test_env: dict[str, Any]) -> dict[str, Any]:
     """
     Test different analysis modes with a sample image.
     
@@ -104,14 +110,14 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
     test_image = test_env["test_image"]
     config = test_env["config"]
     sample_images = test_env.get("sample_images", [])
-    
+
     # Initialize results
     results = {}
     errors = []
-    
+
     if console:
-        console.print(f"[blue]Testing with local image...[/blue]")
-        
+        console.print("[blue]Testing with local image...[/blue]")
+
     try:
         # Use provided test image or default
         if test_image:
@@ -124,18 +130,18 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
                 test_data_dir / "Layer 3 Merge.png",
                 test_data_dir / "Untitled_4x.png"
             ]
-            
+
             # Find first existing image
             test_img_path = None
             for img in test_img_candidates:
                 if img.exists():
                     test_img_path = str(img)
                     break
-                    
+
             # If no image found, use the first sample image
             if not test_img_path and sample_images:
                 test_img_path = sample_images[0]
-                
+
         if not test_img_path or not os.path.exists(test_img_path):
             logger.warning("No test image found")
             results["test_image"] = {
@@ -149,11 +155,11 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
                 "message": f"Using test image: {test_img_path}",
                 "path": test_img_path
             }
-            
+
             # 8. Test different analysis modes with analyzer
             if console:
-                console.print(f"[blue]Testing different analysis modes...[/blue]")
-                
+                console.print("[blue]Testing different analysis modes...[/blue]")
+
             try:
                 # If using mock, use the built-in mock analyzer
                 if use_mock:
@@ -161,23 +167,23 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
                 else:
                     # Use real analyzer
                     analyzer = src.models.fastvlm.analyzer.FastVLMAnalyzer(model_size=model_size)
-                    
+
                 # Test different modes
                 modes = ["describe", "detect", "document"]
                 mode_results = {}
-                
+
                 for mode in modes:
                     try:
                         logger.info(f"Testing mode: {mode}")
                         result = analyzer.analyze_image(test_img_path, mode=mode)
-                        
+
                         output_file = os.path.join(output_dir, f"{mode}_mode_result.txt")
                         with open(output_file, "w") as f:
                             if isinstance(result, dict):
                                 json.dump(result, f, indent=2)
                             else:
                                 f.write(str(result))
-                                
+
                         mode_results[mode] = {
                             "status": "ok",
                             "message": f"Mode {mode} test completed",
@@ -187,10 +193,10 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
                         logger.error(f"Error testing mode {mode}: {e}")
                         mode_results[mode] = {
                             "status": "error",
-                            "message": f"Error testing mode {mode}: {str(e)}"
+                            "message": f"Error testing mode {mode}: {e!s}"
                         }
-                        errors.append(f"Mode {mode} test failed: {str(e)}")
-                        
+                        errors.append(f"Mode {mode} test failed: {e!s}")
+
                 results["analysis_modes"] = {
                     "status": "ok" if all(r.get("status") == "ok" for r in mode_results.values()) else "warning",
                     "message": "All modes tested successfully" if all(r.get("status") == "ok" for r in mode_results.values()) else "Some modes failed",
@@ -200,23 +206,23 @@ def test_analysis_modes(test_env: Dict[str, Any]) -> Dict[str, Any]:
                 logger.error(f"Error testing analysis modes: {e}")
                 results["analysis_modes"] = {
                     "status": "error",
-                    "message": f"Error testing analysis modes: {str(e)}"
+                    "message": f"Error testing analysis modes: {e!s}"
                 }
-                errors.append(f"Analysis modes test failed: {str(e)}")
+                errors.append(f"Analysis modes test failed: {e!s}")
     except Exception as e:
         logger.error(f"Error with test image: {e}")
         results["test_image"] = {
             "status": "error",
-            "message": f"Error with test image: {str(e)}"
+            "message": f"Error with test image: {e!s}"
         }
-        errors.append(f"Test image testing failed: {str(e)}")
-        
+        errors.append(f"Test image testing failed: {e!s}")
+
     return {
         "results": results,
         "errors": errors
     }
 
-def run_benchmarks(test_env: Dict[str, Any]) -> Dict[str, Any]:
+def run_benchmarks(test_env: dict[str, Any]) -> dict[str, Any]:
     """
     Run benchmarks using either mock or real FastVLM model.
     
@@ -233,28 +239,28 @@ def run_benchmarks(test_env: Dict[str, Any]) -> Dict[str, Any]:
     model_size = test_env["model_size"]
     use_mock = test_env["use_mock"]
     model_info = test_env.get("models", {}).get("model_info", {})
-    
+
     # Initialize results
     results = {}
     errors = []
-    
+
     # 5a. Run the mock benchmark with standard test images
     if use_mock:
         if console:
-            console.print(f"[blue]Running benchmark with mock analyzer...[/blue]")
-            
+            console.print("[blue]Running benchmark with mock analyzer...[/blue]")
+
         try:
             # Use our built-in MockAnalyzer class
             mock_analyzer = MockAnalyzer()
-            
+
             # Find test images
             image_files = find_test_images()
-            
+
             if image_files:
                 logger.info(f"Running benchmark with {len(image_files)} test images")
                 output_file = os.path.join(output_dir, "mock_benchmark_results.json")
                 benchmark_results = run_benchmark(mock_analyzer, image_files, output_file)
-                
+
                 results["mock_benchmark"] = {
                     "status": "ok",
                     "message": f"Mock benchmark completed with {len(image_files)} images",
@@ -268,38 +274,38 @@ def run_benchmarks(test_env: Dict[str, Any]) -> Dict[str, Any]:
                     "message": "No test images found for testing"
                 }
                 errors.append("No test images found for benchmark")
-                
+
         except Exception as e:
             logger.error(f"Error running mock benchmark: {e}")
             results["mock_benchmark"] = {
                 "status": "error",
-                "message": f"Error running mock benchmark: {str(e)}"
+                "message": f"Error running mock benchmark: {e!s}"
             }
-            errors.append(f"Mock benchmark failed: {str(e)}")
-    
+            errors.append(f"Mock benchmark failed: {e!s}")
+
     # 5b. Run the actual benchmark script (if model exists and not using mock)
     if not use_mock and model_info.get("available"):
         if console:
-            console.print(f"[blue]Running actual benchmark with FastVLM model...[/blue]")
-            
+            console.print("[blue]Running actual benchmark with FastVLM model...[/blue]")
+
         try:
             # Run the benchmark directly
             from src.models.fastvlm.benchmark import main as benchmark_main
-            
+
             # Redirect stdout/stderr temporarily to capture output
             original_stdout = sys.stdout
             original_stderr = sys.stderr
-            
+
             benchmark_output_file = os.path.join(output_dir, "benchmark.txt")
-            
+
             try:
                 with open(benchmark_output_file, "w") as f:
                     sys.stdout = f
                     sys.stderr = f
-                    
+
                     # Run the benchmark with default arguments plus output file
                     benchmark_main(["--output", benchmark_output_file, "--size", model_size])
-                    
+
                 results["benchmark"] = {
                     "status": "ok",
                     "message": "Benchmark completed successfully",
@@ -309,29 +315,29 @@ def run_benchmarks(test_env: Dict[str, Any]) -> Dict[str, Any]:
                 logger.warning(f"Benchmark failed: {e}")
                 results["benchmark"] = {
                     "status": "warning",
-                    "message": f"Benchmark failed: {str(e)}",
+                    "message": f"Benchmark failed: {e!s}",
                     "output_file": benchmark_output_file
                 }
-                errors.append(f"Benchmark failed: {str(e)}")
+                errors.append(f"Benchmark failed: {e!s}")
             finally:
                 # Restore stdout/stderr
                 sys.stdout = original_stdout
                 sys.stderr = original_stderr
-                
+
         except Exception as e:
             logger.error(f"Error running benchmark: {e}")
             results["benchmark"] = {
                 "status": "error",
-                "message": f"Error running benchmark: {str(e)}"
+                "message": f"Error running benchmark: {e!s}"
             }
-            errors.append(f"Benchmark failed: {str(e)}")
-            
+            errors.append(f"Benchmark failed: {e!s}")
+
     return {
         "results": results,
         "errors": errors
     }
 
-def setup_sample_images(test_env: Dict[str, Any]) -> Dict[str, Any]:
+def setup_sample_images(test_env: dict[str, Any]) -> dict[str, Any]:
     """
     Set up sample images for testing.
     
@@ -346,30 +352,30 @@ def setup_sample_images(test_env: Dict[str, Any]) -> Dict[str, Any]:
     logger = test_env["logger"]
     console = test_env["console"]
     config = test_env["config"]
-    
+
     # Initialize results
     results = {}
     errors = []
     images = []
-    
+
     if console:
-        console.print(f"[blue]Using standard sample test images...[/blue]")
-        
+        console.print("[blue]Using standard sample test images...[/blue]")
+
     try:
         # Ensure test data directory exists
         sample_dir = Path(config.runtime["project_root"]) / "test_data" / "sample_images"
         os.makedirs(sample_dir, exist_ok=True)
-        
+
         # Download test images if needed
         images = download_test_images()
-        
+
         # Save sample images log
         sample_images_log = os.path.join(output_dir, "sample_images_log.txt")
         with open(sample_images_log, "w") as f:
             f.write(f"Using {len(images)} sample test images in {os.path.abspath(sample_dir)}\n")
             for img in images:
                 f.write(f"- {img}\n")
-                
+
         results["sample_images"] = {
             "status": "ok",
             "message": f"Found {len(images)} sample test images",
@@ -379,17 +385,17 @@ def setup_sample_images(test_env: Dict[str, Any]) -> Dict[str, Any]:
         logger.error(f"Error with sample images: {e}")
         results["sample_images"] = {
             "status": "error",
-            "message": f"Error with sample images: {str(e)}"
+            "message": f"Error with sample images: {e!s}"
         }
-        errors.append(f"Sample images setup failed: {str(e)}")
-        
+        errors.append(f"Sample images setup failed: {e!s}")
+
     return {
         "results": results,
         "errors": errors,
         "images": images
     }
 
-def find_models(test_env: Dict[str, Any]) -> Dict[str, Any]:
+def find_models(test_env: dict[str, Any]) -> dict[str, Any]:
     """
     Find available FastVLM models.
     
@@ -406,19 +412,19 @@ def find_models(test_env: Dict[str, Any]) -> Dict[str, Any]:
     model_size = test_env["model_size"]
     use_mock = test_env["use_mock"]
     config = test_env["config"]
-    
+
     # Initialize results
     results = {}
     errors = []
     use_mock_result = use_mock
-    
+
     if console:
-        console.print(f"[blue]Looking for model files...[/blue]")
-        
+        console.print("[blue]Looking for model files...[/blue]")
+
     try:
         # Check for model files
         model_info = config.get_model_info("fastvlm", model_size)
-        
+
         # Save model files info
         model_files_path = os.path.join(output_dir, "model_files.txt")
         with open(model_files_path, "w") as f:
@@ -430,13 +436,13 @@ def find_models(test_env: Dict[str, Any]) -> Dict[str, Any]:
                         f.write(f"  - {file_info['name']} ({file_info['size_mb']:.2f} MB)\n")
             else:
                 f.write("No models found\n")
-                
+
         results["models"] = {
             "status": "ok" if model_info.get("available") else "warning",
             "message": "Model found" if model_info.get("available") else "No model found (will use mock)",
             "model_info": model_info
         }
-        
+
         if not model_info.get("available") and not use_mock:
             logger.warning("No model found, tests will use mock model")
             use_mock_result = True
@@ -444,18 +450,18 @@ def find_models(test_env: Dict[str, Any]) -> Dict[str, Any]:
         logger.error(f"Error finding models: {e}")
         results["models"] = {
             "status": "error",
-            "message": f"Error finding models: {str(e)}"
+            "message": f"Error finding models: {e!s}"
         }
-        errors.append(f"Model discovery failed: {str(e)}")
+        errors.append(f"Model discovery failed: {e!s}")
         use_mock_result = True
-        
+
     return {
         "results": results,
         "errors": errors,
         "use_mock": use_mock_result
     }
 
-def check_environment(test_env: Dict[str, Any]) -> Dict[str, Any]:
+def check_environment(test_env: dict[str, Any]) -> dict[str, Any]:
     """
     Check the FastVLM environment for issues.
     
@@ -469,22 +475,22 @@ def check_environment(test_env: Dict[str, Any]) -> Dict[str, Any]:
     output_dir = test_env["output_dir"]
     logger = test_env["logger"]
     console = test_env["console"]
-    
+
     # Initialize results
     results = {}
     errors = []
-    
+
     if console:
-        console.print(f"[blue]Checking environment...[/blue]")
-        
+        console.print("[blue]Checking environment...[/blue]")
+
     try:
         # Check environment using FastVLM error handler
         checker = src.models.fastvlm.analyzer.FastVLMAnalyzer()
         issues = []
-        
+
         if src.models.fastvlm.errors.ERROR_HANDLER_AVAILABLE:
             issues = src.models.fastvlm.errors.FastVLMErrorHandler.check_environment()
-            
+
         # Save environment check results
         env_check_file = os.path.join(output_dir, "environment_check.txt")
         with open(env_check_file, "w") as f:
@@ -508,16 +514,16 @@ def check_environment(test_env: Dict[str, Any]) -> Dict[str, Any]:
         logger.error(f"Error checking environment: {e}")
         results["environment"] = {
             "status": "error",
-            "message": f"Error checking environment: {str(e)}"
+            "message": f"Error checking environment: {e!s}"
         }
-        errors.append(f"Environment check failed: {str(e)}")
-        
+        errors.append(f"Environment check failed: {e!s}")
+
     return {
         "results": results,
         "errors": errors
     }
 
-def prepare_test_environment(context: Dict[str, Any]) -> Dict[str, Any]:
+def prepare_test_environment(context: dict[str, Any]) -> dict[str, Any]:
     """
     Prepare the test environment by extracting context parameters
     and setting up the output directory.
@@ -539,23 +545,23 @@ def prepare_test_environment(context: Dict[str, Any]) -> Dict[str, Any]:
     model_size = context.get("model_size", "0.5b")
     use_mock = context.get("use_mock", False)
     test_image = context.get("test_image")
-    
+
     # Create output directory
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
     else:
         # Use artifact system for output directory
-        output_dir = context["config"].get_artifact_path("test", f"fastvlm_quick_test")
+        output_dir = context["config"].get_artifact_path("test", "fastvlm_quick_test")
         os.makedirs(output_dir, exist_ok=True)
-    
+
     # Print test information
     logger.info(f"Running FastVLM tests (mock: {use_mock}, size: {model_size})")
     logger.info(f"Output directory: {output_dir}")
-    
+
     if console:
-        console.print(f"[blue]Running FastVLM tests...[/blue]")
+        console.print("[blue]Running FastVLM tests...[/blue]")
         console.print(f"[blue]Results will be saved to: {output_dir}[/blue]")
-        
+
     # Return test setup details
     return {
         "name": name,
@@ -571,7 +577,7 @@ def prepare_test_environment(context: Dict[str, Any]) -> Dict[str, Any]:
         "config": context.get("config")
     }
 
-def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
+def run_test(context: dict[str, Any]) -> dict[str, Any]:
     """
     Run FastVLM model tests.
     
@@ -589,37 +595,37 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     # Set up test environment
     test_env = prepare_test_environment(context)
-    
+
     # Extract common variables for convenience
     output_dir = test_env["output_dir"]
     logger = test_env["logger"]
     console = test_env["console"]
     model_size = test_env["model_size"]
     use_mock = test_env["use_mock"]
-    
+
     # Initialize results and errors tracking
     results = {}
     errors = []
-    
+
     # 1. Run basic environment check
     check_result = check_environment(test_env)
     results.update(check_result["results"])
     errors.extend(check_result["errors"])
-        
+
     # 2. Find available models
     model_result = find_models(test_env)
     results.update(model_result["results"])
     errors.extend(model_result["errors"])
-    
+
     # Update use_mock flag based on model finding results
     if model_result.get("use_mock"):
         use_mock = True
-        
+
     # 3. Use our built-in mock analyzer if needed
     if use_mock:
         if console:
-            console.print(f"[blue]Using mock analyzer for testing...[/blue]")
-            
+            console.print("[blue]Using mock analyzer for testing...[/blue]")
+
         try:
             # Use our built-in MockAnalyzer class
             results["mock_analyzer"] = {
@@ -630,33 +636,33 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
             logger.error(f"Error setting up mock analyzer: {e}")
             results["mock_analyzer"] = {
                 "status": "error",
-                "message": f"Error setting up mock analyzer: {str(e)}"
+                "message": f"Error setting up mock analyzer: {e!s}"
             }
-            errors.append(f"Mock analyzer setup failed: {str(e)}")
-            
+            errors.append(f"Mock analyzer setup failed: {e!s}")
+
     # 4. Use or download standard sample images
     sample_result = setup_sample_images(test_env)
     results.update(sample_result["results"])
     errors.extend(sample_result["errors"])
-    
+
     # Update the test_env with image paths in case they're needed later
     if "images" in sample_result:
         test_env["sample_images"] = sample_result["images"]
-        
+
     # 5. Run benchmarks (either mock or real)
     benchmark_result = run_benchmarks(test_env)
     results.update(benchmark_result["results"])
     errors.extend(benchmark_result["errors"])
-            
+
     # 7. Test with standard local test image and run mode testing
     mode_test_result = test_analysis_modes(test_env)
     results.update(mode_test_result["results"])
     errors.extend(mode_test_result["errors"])
-        
+
     # 9. Summarize tests
     if console:
-        console.print(f"[green]All tests completed. Summary:[/green]")
-        
+        console.print("[green]All tests completed. Summary:[/green]")
+
     # Create summary
     summary_path = os.path.join(output_dir, "summary.txt")
     with open(summary_path, "w") as f:
@@ -671,7 +677,7 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
         f.write(f"Errors: {len(errors)}\n")
         for i, error in enumerate(errors):
             f.write(f"  {i+1}. {error}\n")
-            
+
     # Save full results as JSON
     results_path = os.path.join(output_dir, "test_results.json")
     with open(results_path, "w") as f:
@@ -682,10 +688,10 @@ def run_test(context: Dict[str, Any]) -> Dict[str, Any]:
             "errors": errors,
             "results": results
         }, f, indent=2)
-        
+
     # Ensure output directory is accessible
     # Note: Explicit permissions no longer set as os.makedirs creates with sufficient permissions
-        
+
     # Return test results
     return {
         "success": len(errors) == 0,

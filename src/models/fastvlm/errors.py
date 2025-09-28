@@ -13,14 +13,15 @@ This makes FastVLM more robust in production environments.
 """
 
 import os
-import sys
 import platform
 import subprocess
+import sys
 from pathlib import Path
+
 
 class FastVLMErrorHandler:
     """Handles FastVLM errors and environment validation."""
-    
+
     @staticmethod
     def check_environment():
         """Check the environment for FastVLM requirements.
@@ -29,7 +30,7 @@ class FastVLMErrorHandler:
             list: Issues found, with severity and solutions
         """
         issues = []
-        
+
         # Check Apple Silicon for MLX
         if platform.system() == "Darwin" and platform.machine() == "arm64":
             # Check MLX availability
@@ -48,7 +49,7 @@ class FastVLMErrorHandler:
                 "message": "Not running on Apple Silicon. FastVLM with MLX is optimized for M-series chips.",
                 "solution": "For optimal performance, run on MacOS with Apple Silicon."
             })
-            
+
         # Check Python version
         python_version = sys.version_info
         if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 8):
@@ -57,7 +58,7 @@ class FastVLMErrorHandler:
                 "message": f"Python version {python_version.major}.{python_version.minor} is not supported. FastVLM requires Python 3.8+",
                 "solution": "Upgrade to Python 3.8 or later."
             })
-        
+
         # Check PIL/Pillow availability
         try:
             from PIL import Image
@@ -67,9 +68,9 @@ class FastVLMErrorHandler:
                 "message": "Pillow (PIL) is not installed. This is required for image preprocessing.",
                 "solution": "Run pip install Pillow to install the Pillow library."
             })
-            
+
         return issues
-    
+
     @staticmethod
     def check_model_files(model_path):
         """Check FastVLM model files for completeness.
@@ -81,12 +82,12 @@ class FastVLMErrorHandler:
             dict: Result with status and message
         """
         model_path = Path(model_path)
-        
+
         # If it's a directory, check for required files
         if model_path.is_dir():
             required_files = ["config.json", "model.safetensors", "tokenizer_config.json", "vocab.json"]
             missing_files = [f for f in required_files if not (model_path / f).exists()]
-            
+
             if missing_files:
                 return {
                     "status": "error",
@@ -101,7 +102,7 @@ class FastVLMErrorHandler:
                     "message": f"Model file not found: {model_path}",
                     "solution": "Verify the path or download the model."
                 }
-            
+
             # Check file extension
             if model_path.suffix not in [".safetensors", ".bin", ".pt", ".gguf"]:
                 return {
@@ -109,9 +110,9 @@ class FastVLMErrorHandler:
                     "message": f"Unexpected model file extension: {model_path.suffix}",
                     "solution": "Check that this is a valid model file."
                 }
-        
+
         return {"status": "success"}
-        
+
     @staticmethod
     def diagnose_error(error_text):
         """Diagnose a FastVLM error from the error message.
@@ -148,10 +149,10 @@ class FastVLMErrorHandler:
                     "message": f"Missing Python module: {module}",
                     "solution": f"Install the required module: pip install {module}"
                 }
-        
+
         # Unknown error
         return None
-        
+
     @staticmethod
     def fix_common_issues():
         """Try to fix common FastVLM issues automatically.
@@ -160,11 +161,11 @@ class FastVLMErrorHandler:
             list: Applied fixes, or empty list if none applied
         """
         applied_fixes = []
-        
+
         # Check if ml-fastvlm exists and download if not
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         ml_fastvlm_dir = os.path.join(project_root, "ml-fastvlm")
-        
+
         if not os.path.exists(ml_fastvlm_dir):
             try:
                 subprocess.run(
@@ -175,7 +176,7 @@ class FastVLMErrorHandler:
             except subprocess.SubprocessError:
                 # Skip if git clone fails
                 pass
-        
+
         # Install MLX if not available
         try:
             import mlx
@@ -189,7 +190,7 @@ class FastVLMErrorHandler:
             except subprocess.SubprocessError:
                 # Skip if pip install fails
                 pass
-        
+
         # Install Pillow if not available
         try:
             from PIL import Image
@@ -203,5 +204,5 @@ class FastVLMErrorHandler:
             except subprocess.SubprocessError:
                 # Skip if pip install fails
                 pass
-        
+
         return applied_fixes

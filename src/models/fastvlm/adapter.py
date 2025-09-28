@@ -6,21 +6,19 @@ This module provides a simplified interface for using FastVLM models with the
 file analyzer system. It handles model discovery, initialization, and prediction.
 
 The adapter supports both:
-1. Using FastVLM installed via pip (mlx-fastvlm package)
+1. Using FastVLM installed via pip (mlx-vlm package)
 2. Using the FastVLM model files directly via the predict.py script
 
 It automatically finds models in the centralized model directory structure.
 """
 
-import os
-import sys
 import json
 import logging
+import os
 import subprocess
-import tempfile
-from pathlib import Path
-from typing import Dict, List, Optional, Union, Any, Tuple
+import sys
 from datetime import datetime
+from typing import Any
 
 
 def run_model_command(cmd: list[str], cwd: str = None, timeout: int = 120):
@@ -73,18 +71,23 @@ if project_root not in sys.path:
 
 # Import model configuration
 from src.models.config import (
-    get_model_path,
-    get_model_info,
-    download_model,
-    get_predict_script_path,
-    create_artifact_path_for_model_output,
+    DEFAULT_MODEL_SIZE,
     DEFAULT_MODEL_TYPE,
-    DEFAULT_MODEL_SIZE
+    create_artifact_path_for_model_output,
+    download_model,
+    get_model_info,
+    get_model_path,
+    get_predict_script_path,
 )
+
 
 # Import JSON utility if available
 try:
-    from src.utils.json_utils import JSONValidator, process_model_output, get_json_prompt
+    from src.utils.json_utils import (
+        JSONValidator,
+        get_json_prompt,
+        process_model_output,
+    )
     JSON_UTILS_AVAILABLE = True
 except ImportError:
     JSON_UTILS_AVAILABLE = False
@@ -92,7 +95,11 @@ except ImportError:
 
 # Import artifact discipline tools if available
 try:
-    from src.core.artifact_guard import get_canonical_artifact_path, PathGuard, validate_artifact_path
+    from src.core.artifact_guard import (
+        PathGuard,
+        get_canonical_artifact_path,
+        validate_artifact_path,
+    )
     ARTIFACT_DISCIPLINE = True
 except ImportError:
     ARTIFACT_DISCIPLINE = False
@@ -102,8 +109,8 @@ class FastVLMAdapter:
     """
     Adapter for FastVLM models that handles model discovery and prediction.
     """
-    
-    def __init__(self, model_type: str = DEFAULT_MODEL_TYPE, 
+
+    def __init__(self, model_type: str = DEFAULT_MODEL_TYPE,
                 model_size: str = DEFAULT_MODEL_SIZE,
                 auto_download: bool = True):
         """
@@ -120,10 +127,10 @@ class FastVLMAdapter:
         self.predict_script = None
         self.model_info = None
         self.initialized = False
-        
+
         # Get model info
         self._initialize_model(auto_download)
-        
+
     def _initialize_model(self, auto_download: bool = True) -> bool:
         """
         Initialize the model by finding the model path and predict script.
@@ -136,21 +143,21 @@ class FastVLMAdapter:
         """
         # Get model info
         self.model_info = get_model_info(self.model_type, self.model_size)
-        
+
         if "error" in self.model_info:
             logger.error(f"Error getting model info: {self.model_info['error']}")
             return False
-            
+
         # Get model path
         self.model_path = get_model_path(self.model_type, self.model_size)
-        
+
         if not self.model_path:
             logger.warning(f"Model {self.model_type} {self.model_size} not found")
-            
+
             if auto_download:
                 logger.info(f"Attempting to download {self.model_type} {self.model_size}...")
                 success, message = download_model(self.model_type, self.model_size)
-                
+
                 if success:
                     logger.info(f"Successfully downloaded model: {message}")
                     self.model_path = get_model_path(self.model_type, self.model_size)
@@ -160,23 +167,23 @@ class FastVLMAdapter:
             else:
                 logger.error("Model not found and auto_download is disabled")
                 return False
-        
+
         # Get predict script path
         self.predict_script = get_predict_script_path(self.model_type)
-        
+
         if not self.predict_script:
             logger.error(f"Predict script for {self.model_type} not found")
             return False
-            
+
         logger.debug(f"Initialized {self.model_type} {self.model_size} at {self.model_path}")
-        logger.debug(f"Using predict script: {'mlx-fastvlm package' if self.predict_script == 'package' else self.predict_script}")
-        
+        logger.debug(f"Using predict script: {'mlx-vlm package' if self.predict_script == 'package' else self.predict_script}")
+
         self.initialized = True
         return True
-        
-    def predict(self, image_path: str, prompt: str = None, 
+
+    def predict(self, image_path: str, prompt: str = None,
                 output_path: str = None, mode: str = "describe",
-                timeout_seconds: int = 60, mock: bool = False) -> Dict[str, Any]:
+                timeout_seconds: int = 60, mock: bool = False) -> dict[str, Any]:
         """
         Run prediction with the FastVLM model.
         
@@ -197,11 +204,11 @@ class FastVLMAdapter:
         if not self.initialized:
             if not self._initialize_model():
                 raise RuntimeError(f"Model initialization failed for {self.model_type} {self.model_size}")
-                
+
         # Use mock mode for testing when requested
         if mock:
             logger.info("Running in mock mode - will not actually invoke the model")
-            
+
             mock_result = {
                 "description": f"This is a mock response for image {os.path.basename(image_path)}",
                 "tags": ["mock", "test", "image"],
@@ -212,12 +219,12 @@ class FastVLMAdapter:
                     "mock": True
                 }
             }
-            
+
             # Save result to output path if provided
             if output_path:
                 try:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    
+
                     # Use PathGuard if available
                     if ARTIFACT_DISCIPLINE:
                         with PathGuard(os.path.dirname(output_path)):
@@ -228,14 +235,14 @@ class FastVLMAdapter:
                             json.dump(mock_result, f, indent=2)
                 except Exception as e:
                     raise RuntimeError(f"Failed to write mock output to {output_path}: {e}")
-                        
+
             return mock_result
-                
+
         # Convert to absolute path and validate image path
         image_path = os.path.abspath(os.path.expanduser(image_path))
         if not os.path.exists(image_path):
             raise RuntimeError(f"Image file not found: {image_path}")
-            
+
         # Use JSON prompt if available and no custom prompt provided
         if prompt is None and JSON_UTILS_AVAILABLE:
             prompt = get_json_prompt(mode, retry_attempt=0)
@@ -247,13 +254,13 @@ class FastVLMAdapter:
                 prompt = "Identify objects in this image. Format your response as JSON with 'objects' and 'description' fields."
             elif mode == "document":
                 prompt = "Extract text from this document. Format your response as JSON with 'text' and 'document_type' fields."
-                
+
         # Create output path if not provided
         if output_path is None:
             # Extract image basename for context
             image_basename = os.path.basename(image_path)
             image_name = os.path.splitext(image_basename)[0]
-            
+
             # Create canonical artifact path
             if ARTIFACT_DISCIPLINE:
                 artifact_dir = create_artifact_path_for_model_output(self.model_type, f"{mode}_{self.model_size}")
@@ -261,46 +268,46 @@ class FastVLMAdapter:
             else:
                 # Fallback path
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                artifact_dir = os.path.join(project_root, "artifacts", "vision", 
+                artifact_dir = os.path.join(project_root, "artifacts", "vision",
                                           f"{self.model_type}_{mode}_{self.model_size}_{timestamp}")
                 os.makedirs(artifact_dir, exist_ok=True)
                 output_path = os.path.join(artifact_dir, f"{image_name}_result.json")
-                
+
         # Run prediction with explicit error handling
         start_time = datetime.now()
-        
+
         try:
             # Check if we're using the package or the script
             if self.predict_script == "package":
                 result = self._predict_with_package(image_path, prompt, mode, timeout_seconds)
             else:
                 result = self._predict_with_script(image_path, prompt, timeout_seconds, output_path)
-                
+
         except Exception as e:
             # Log the full error details
             logger.error(f"Model prediction failed for {image_path}: {e}")
             logger.error(f"Model: {self.model_type}_{self.model_size}, Mode: {mode}")
             # Re-raise with explicit error message
             raise RuntimeError(f"Model prediction failed: {e}")
-            
+
         end_time = datetime.now()
         execution_time = (end_time - start_time).total_seconds()
-        
+
         # Process the result
         if isinstance(result, dict):
             # Add metadata
             if "metadata" not in result:
                 result["metadata"] = {}
-                
+
             result["metadata"]["model"] = f"{self.model_type}_{self.model_size}"
             result["metadata"]["execution_time"] = execution_time
             result["metadata"]["timestamp"] = datetime.now().isoformat()
-            
+
             # Save result to output path if provided (only if not already saved by _predict_with_script)
             if output_path and self.predict_script == "package":
                 try:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    
+
                     # Use PathGuard if available
                     if ARTIFACT_DISCIPLINE:
                         with PathGuard(os.path.dirname(output_path)):
@@ -312,9 +319,9 @@ class FastVLMAdapter:
                     logger.debug(f"Successfully wrote model output to: {output_path}")
                 except Exception as e:
                     raise RuntimeError(f"Failed to write model output to {output_path}: {e}")
-                        
+
             return result
-            
+
         elif JSON_UTILS_AVAILABLE:
             # Try to extract JSON from text result
             metadata = {
@@ -322,17 +329,17 @@ class FastVLMAdapter:
                 "execution_time": execution_time,
                 "timestamp": datetime.now().isoformat(),
             }
-            
+
             try:
                 json_result = process_model_output(result, metadata, mode)
             except Exception as e:
                 raise RuntimeError(f"Failed to process model output: {e}")
-            
+
             # Save result to output path if provided
             if output_path:
                 try:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    
+
                     # Use PathGuard if available
                     if ARTIFACT_DISCIPLINE:
                         with PathGuard(os.path.dirname(output_path)):
@@ -344,9 +351,9 @@ class FastVLMAdapter:
                     logger.debug(f"Successfully wrote processed output to: {output_path}")
                 except Exception as e:
                     raise RuntimeError(f"Failed to write processed output to {output_path}: {e}")
-                        
+
             return json_result
-            
+
         else:
             # Return raw text result with metadata
             result_dict = {
@@ -357,12 +364,12 @@ class FastVLMAdapter:
                     "timestamp": datetime.now().isoformat(),
                 }
             }
-            
+
             # Save result to output path if provided
             if output_path:
                 try:
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    
+
                     # Use PathGuard if available
                     if ARTIFACT_DISCIPLINE:
                         with PathGuard(os.path.dirname(output_path)):
@@ -374,13 +381,13 @@ class FastVLMAdapter:
                     logger.debug(f"Successfully wrote raw output to: {output_path}")
                 except Exception as e:
                     raise RuntimeError(f"Failed to write raw output to {output_path}: {e}")
-                        
+
             return result_dict
-            
-    def _predict_with_package(self, image_path: str, prompt: str, 
-                             mode: str, timeout_seconds: int) -> Union[Dict[str, Any], str]:
+
+    def _predict_with_package(self, image_path: str, prompt: str,
+                             mode: str, timeout_seconds: int) -> dict[str, Any] | str:
         """
-        Run prediction using the mlx-fastvlm package.
+        Run prediction using the mlx-vlm package.
         
         Args:
             image_path: Path to the image to analyze
@@ -393,53 +400,53 @@ class FastVLMAdapter:
         """
         try:
             # Import the package
-            from mlx_fastvlm import FastVLM
-            
+            from mlx.vlm import FastVLM
+
             # Check for double-nested structure and handle it
             model_path = self.model_path
             nested_path = os.path.join(self.model_path, os.path.basename(self.model_path))
-            
+
             # Check if we have a double-nested directory structure (common with downloads)
             if os.path.isdir(nested_path):
                 # Check for required model files in the nested path, including sharded model files
                 required_files = ["tokenizer_config.json", "config.json"]
                 model_files = ["model.safetensors", "model.safetensors.index.json", "model-00001-of-00004.safetensors"]
-                
+
                 # First check for config files
                 has_config = False
                 for req_file in required_files:
                     if os.path.exists(os.path.join(nested_path, req_file)):
                         has_config = True
                         break
-                        
+
                 # Then check for model files (regular or sharded format)
                 has_model = False
                 for model_file in model_files:
                     if os.path.exists(os.path.join(nested_path, model_file)):
                         has_model = True
                         break
-                        
+
                 if has_config and has_model:
                     # Found required files in the nested structure
                     logger.info(f"Detected double-nested model structure. Using {nested_path} instead of {model_path}")
                     model_path = nested_path
-            
+
             # Initialize the model with the potentially updated path
             model = FastVLM(model_path)
-            
+
             # Run prediction
             result = model.predict(image_path, prompt)
-            
+
             # Try to parse as JSON
             try:
                 return json.loads(result)
             except json.JSONDecodeError:
                 return result
         except ImportError:
-            raise ImportError("mlx-fastvlm package not installed")
-            
-    def _predict_with_script(self, image_path: str, prompt: str, 
-                           timeout_seconds: int, output_path: str = None) -> Union[Dict[str, Any], str]:
+            raise ImportError("mlx-vlm package not installed")
+
+    def _predict_with_script(self, image_path: str, prompt: str,
+                           timeout_seconds: int, output_path: str = None) -> dict[str, Any] | str:
         """
         Run prediction using the predict.py script.
         
@@ -455,38 +462,37 @@ class FastVLMAdapter:
         Raises:
             RuntimeError: For all failure cases with explicit diagnostic messages
         """
-        import platform
-        
+
         # Check for double-nested structure and handle it
         model_path = self.model_path
         nested_path = os.path.join(self.model_path, os.path.basename(self.model_path))
-        
+
         # Check if we have a double-nested directory structure (common with downloads)
         # where model files are actually inside model_path/model_name/ rather than directly in model_path
         if os.path.isdir(nested_path):
             # Check for required model files in the nested path, including sharded model files
             required_files = ["tokenizer_config.json", "config.json"]
             model_files = ["model.safetensors", "model.safetensors.index.json", "model-00001-of-00004.safetensors"]
-            
+
             # First check for config files
             has_config = False
             for req_file in required_files:
                 if os.path.exists(os.path.join(nested_path, req_file)):
                     has_config = True
                     break
-                    
+
             # Then check for model files (regular or sharded format)
             has_model = False
             for model_file in model_files:
                 if os.path.exists(os.path.join(nested_path, model_file)):
                     has_model = True
                     break
-                    
+
             if has_config and has_model:
                 # Found required files in the nested structure
                 logger.info(f"Detected double-nested model structure. Using {nested_path} instead of {model_path}")
                 model_path = nested_path
-        
+
         # Build command with the possibly updated model_path
         cmd = [
             sys.executable, self.predict_script,
@@ -495,7 +501,7 @@ class FastVLMAdapter:
             "--prompt", prompt,
             "--max_new_tokens", "256"  # Reduced to prevent repetition issues
         ]
-        
+
         working_dir = os.path.dirname(self.predict_script)
         logger.debug(f"Running command: {' '.join(cmd)}")
         logger.debug(f"Working directory: {working_dir}")
@@ -506,7 +512,7 @@ class FastVLMAdapter:
         except RuntimeError as e:
             # Re-raise with additional context
             raise RuntimeError(f"Model subprocess failed: {e}")
-            
+
         output = output.strip()
         if not output:
             raise RuntimeError(f"Model returned empty output. Command: {' '.join(cmd)}")
@@ -528,7 +534,7 @@ class FastVLMAdapter:
         # Validate required fields
         if not isinstance(parsed, dict):
             raise RuntimeError(f"Model output is not a valid JSON object. Got: {type(parsed)}")
-        
+
         if "description" not in parsed or "tags" not in parsed:
             available_keys = list(parsed.keys()) if isinstance(parsed, dict) else "N/A"
             raise RuntimeError(f"Model output missing required fields (description, tags). Available keys: {available_keys}")
@@ -544,8 +550,8 @@ class FastVLMAdapter:
                 raise RuntimeError(f"Failed to write model output to disk at {output_path}: {e}")
 
         return parsed
-            
-    def get_model_info(self) -> Dict[str, Any]:
+
+    def get_model_info(self) -> dict[str, Any]:
         """
         Get information about the model.
         
@@ -555,11 +561,11 @@ class FastVLMAdapter:
         if not self.initialized:
             if not self._initialize_model():
                 return {"error": "Model initialization failed"}
-                
+
         return self.model_info
 
 # Convenience function to create and initialize adapter
-def create_adapter(model_type: str = DEFAULT_MODEL_TYPE, 
+def create_adapter(model_type: str = DEFAULT_MODEL_TYPE,
                   model_size: str = DEFAULT_MODEL_SIZE,
                   auto_download: bool = True) -> FastVLMAdapter:
     """
@@ -588,12 +594,12 @@ def init_fastvlm(model_size=DEFAULT_MODEL_SIZE, download_if_missing=True):
         FastVLM adapter instance that mimics the old API
     """
     adapter = create_adapter("fastvlm", model_size, download_if_missing)
-    
+
     # Create a wrapper that mimics the old API
     class BackwardCompatWrapper:
         def __init__(self, adapter):
             self.adapter = adapter
-            
+
         def run(self, image_path, prompt, temperature=0.1):
             result = self.adapter.predict(image_path, prompt)
             if "error" in result:
@@ -603,11 +609,11 @@ def init_fastvlm(model_size=DEFAULT_MODEL_SIZE, download_if_missing=True):
             if isinstance(result, dict) and "response" in result:
                 return result["response"]
             return str(result)
-    
+
     return BackwardCompatWrapper(adapter)
 
 # Backward compatibility with previous API
-def run_fastvlm_analysis(image_path, prompt="Describe this image in detail.", 
+def run_fastvlm_analysis(image_path, prompt="Describe this image in detail.",
                         model_size=DEFAULT_MODEL_SIZE, temperature=0.1):
     """
     Run FastVLM analysis on an image (backward compatibility).
@@ -623,18 +629,18 @@ def run_fastvlm_analysis(image_path, prompt="Describe this image in detail.",
     """
     adapter = create_adapter("fastvlm", model_size, True)
     result = adapter.predict(image_path, prompt)
-    
+
     # Convert to old response format
     if "error" in result:
         return {"error": result["error"]}
-    
+
     if "raw_output" in result:
         response = result["raw_output"]
     elif isinstance(result, dict) and "response" in result:
         response = result["response"]
     else:
         response = str(result)
-    
+
     return {
         "response": response,
         "model": f"FastVLM-{model_size}",
@@ -645,24 +651,24 @@ def run_fastvlm_analysis(image_path, prompt="Describe this image in detail.",
 if __name__ == "__main__":
     # Command-line interface
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="FastVLM Adapter")
     parser.add_argument("--model", default=DEFAULT_MODEL_TYPE, help=f"Model type (default: {DEFAULT_MODEL_TYPE})")
     parser.add_argument("--size", default=DEFAULT_MODEL_SIZE, help=f"Model size (default: {DEFAULT_MODEL_SIZE})")
     parser.add_argument("--image", required=True, help="Path to the image to analyze")
     parser.add_argument("--prompt", help="Custom prompt (if omitted, uses default JSON prompt)")
     parser.add_argument("--output", help="Path to save the output JSON (if omitted, uses canonical artifact path)")
-    parser.add_argument("--mode", default="describe", choices=["describe", "detect", "document"], 
+    parser.add_argument("--mode", default="describe", choices=["describe", "detect", "document"],
                         help="Analysis mode (default: describe)")
     parser.add_argument("--timeout", type=int, default=60, help="Timeout in seconds (default: 60)")
-    
+
     args = parser.parse_args()
-    
+
     # Initialize adapter
     adapter = create_adapter(args.model, args.size)
-    
+
     # Run prediction
     result = adapter.predict(args.image, args.prompt, args.output, args.mode, args.timeout)
-    
+
     # Print result
     print(json.dumps(result, indent=2))

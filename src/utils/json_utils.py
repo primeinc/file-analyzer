@@ -16,9 +16,10 @@ These utilities are used by various modules including:
 """
 
 import json
+import logging
 import re
 import time
-import logging
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,7 +36,7 @@ class JSONValidator:
     The strategies are tried in order, with each subsequent strategy being more robust
     but potentially less precise for our specific output format.
     """
-    
+
     @staticmethod
     def extract_json_from_text(text):
         """
@@ -54,28 +55,28 @@ class JSONValidator:
         """
         if not text:
             return None
-            
+
         # Strategy 1: Try to parse the entire text as JSON
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             pass
-        
+
         # Strategy 2: Extract all potential JSON objects
         potential_jsons = []
-        
+
         # Find all opening braces
         start_positions = [i for i, char in enumerate(text) if char == '{']
-        
+
         for start_pos in start_positions:
             # Track nesting level of braces
             nest_level = 0
             in_string = False
             escape_next = False
-            
+
             for i in range(start_pos, len(text)):
                 char = text[i]
-                
+
                 # Handle string boundaries and escaping
                 if char == '"' and not escape_next:
                     in_string = not in_string
@@ -83,14 +84,14 @@ class JSONValidator:
                     escape_next = True
                 else:
                     escape_next = False
-                
+
                 # Only count braces outside of strings
                 if not in_string:
                     if char == '{':
                         nest_level += 1
                     elif char == '}':
                         nest_level -= 1
-                        
+
                         # Found a complete JSON object
                         if nest_level == 0:
                             json_str = text[start_pos:i+1]
@@ -100,41 +101,40 @@ class JSONValidator:
                                 break  # Found a valid JSON, move to next starting position
                             except json.JSONDecodeError:
                                 pass  # Not valid JSON, continue searching
-                
+
                 # If the nesting goes negative, this isn't valid
                 if nest_level < 0:
                     break
-        
+
         # If we found potential JSON objects, select the most relevant one
         if potential_jsons:
             # First look for objects with required fields for vision output
             for json_obj in potential_jsons:
                 if isinstance(json_obj, dict) and "description" in json_obj and "tags" in json_obj:
                     return json_obj
-                    
+
             # Then check for objects with any of our expected fields
             expected_fields = ["description", "tags", "objects", "text", "document_type"]
             for json_obj in potential_jsons:
                 if isinstance(json_obj, dict) and any(field in json_obj for field in expected_fields):
                     return json_obj
-            
+
             # If no objects with expected fields, return the largest one
             return max(potential_jsons, key=lambda x: len(json.dumps(x)) if isinstance(x, dict) else 0)
-        
+
         # Strategy 3: More aggressive extraction for strings with escaped characters
         # Find sequences that look like JSON by using regex (with safety limits)
-        import re
         # Limit text size to prevent regex catastrophic backtracking
         if len(text) > 10000:
             text = text[:10000]  # Truncate very long text
-        
+
         # Look for more complex JSON-like patterns that might have nested structure
         json_pattern = r'(\{(?:[^{}]|\"(?:\\.|[^\"])*\")*\})'
         try:
             matches = re.findall(json_pattern, text, re.DOTALL)
         except re.error:
             matches = []  # Skip regex if it fails
-        
+
         # Try each potential match
         for match in matches:
             # Look for our expected fields
@@ -166,10 +166,10 @@ class JSONValidator:
                             return json_obj
                     except json.JSONDecodeError:
                         continue  # Try next parsing strategy
-                        
+
         # No valid JSON found
         return None
-    
+
     @staticmethod
     def validate_json_structure(json_data, expected_fields=None, model_type=None):
         """
@@ -185,7 +185,7 @@ class JSONValidator:
         """
         if not json_data or not isinstance(json_data, dict):
             return False
-            
+
         # Default expected fields for vision models
         if expected_fields is None:
             if model_type == "detect":
@@ -194,10 +194,10 @@ class JSONValidator:
                 expected_fields = ["text", "document_type"]
             else:  # Default to description mode
                 expected_fields = ["description", "tags"]
-        
+
         # Check if all expected fields exist
         return all(field in json_data for field in expected_fields)
-    
+
     @staticmethod
     def add_metadata(json_data, metadata=None):
         """
@@ -212,24 +212,24 @@ class JSONValidator:
         """
         if not json_data:
             return None
-            
+
         # Create a copy to avoid modifying the original
         result = json_data.copy()
-        
+
         # Initialize metadata if it doesn't exist
         if "metadata" not in result:
             result["metadata"] = {}
-            
+
         # Add standard metadata fields if not provided
         if metadata:
             result["metadata"].update(metadata)
-            
+
         # Ensure timestamp is present
         if "timestamp" not in result["metadata"]:
             result["metadata"]["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
-            
+
         return result
-    
+
     @staticmethod
     def format_fallback_response(text, metadata=None):
         """
@@ -249,10 +249,10 @@ class JSONValidator:
                 "json_parsing_failed": True
             }
         }
-        
+
         if metadata:
             response["metadata"].update(metadata)
-            
+
         return response
 
 # Common prompt templates for JSON output
@@ -263,21 +263,21 @@ JSON_PROMPT_TEMPLATES = {
     - 'tags': a list of all applicable tags as an array of strings.
     
     Your entire response MUST be a valid, parseable JSON object.""",
-    
+
     "detect": """Analyze the objects in this image.
     Output your answer ONLY as a valid JSON object with these fields:
     - 'objects': an array of objects detected, each with 'name' and 'location' properties
     - 'description': a brief scene description
     
     Your entire response MUST be a valid, parseable JSON object.""",
-    
+
     "document": """Extract all text content from this document image.
     Output your answer ONLY as a valid JSON object with these fields:
     - 'text': all the extracted text content, preserving layout where possible
     - 'document_type': the type of document detected
     
     Your entire response MUST be a valid, parseable JSON object.""",
-    
+
     # More robust prompts for retry attempts
     "retry": """Your ENTIRE response must be VALID JSON. Do NOT include any text before or after the JSON.
     Describe this image as a JSON object with exactly these fields:
@@ -301,7 +301,7 @@ def process_model_output(output, mode="describe", metadata=None, attempt_count=0
     """
     # Try to extract JSON
     json_data = JSONValidator.extract_json_from_text(output)
-    
+
     # Check if extraction was successful and validate structure
     expected_fields = None
     if mode == "detect":
@@ -310,41 +310,41 @@ def process_model_output(output, mode="describe", metadata=None, attempt_count=0
         expected_fields = ["text", "document_type"]
     else:  # Default to description mode
         expected_fields = ["description", "tags"]
-    
+
     if json_data and JSONValidator.validate_json_structure(json_data, expected_fields, mode):
         # Add metadata
         base_metadata = {
             "mode": mode,
         }
-        
+
         # Record the actual attempt count
         if attempt_count > 0:
             base_metadata["attempts"] = attempt_count
-            
+
         if metadata:
             base_metadata.update(metadata)
-            
+
         # Mark as extracted if the original wasn't pure JSON
         try:
             json.loads(output)
         except json.JSONDecodeError:
             base_metadata["extracted"] = True
-            
+
         return JSONValidator.add_metadata(json_data, base_metadata)
-    
+
     # If JSON extraction failed, return formatted fallback
     base_metadata = {
         "mode": mode,
         "json_parsing_failed": True
     }
-    
+
     # Record the actual attempt count
     if attempt_count > 0:
         base_metadata["attempts"] = attempt_count
-        
+
     if metadata:
         base_metadata.update(metadata)
-        
+
     return JSONValidator.format_fallback_response(output, base_metadata)
 
 def get_json_prompt(mode="describe", retry_attempt=0):
@@ -360,5 +360,5 @@ def get_json_prompt(mode="describe", retry_attempt=0):
     """
     if retry_attempt > 0:
         return JSON_PROMPT_TEMPLATES["retry"]
-    
+
     return JSON_PROMPT_TEMPLATES.get(mode, JSON_PROMPT_TEMPLATES["describe"])

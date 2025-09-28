@@ -24,21 +24,17 @@ Usage:
             f.write("Test output")
 """
 
-import os
-import json
-import sys
-import re
-import time
-import subprocess
-import tempfile
-import datetime
-import uuid
-import socket
 import argparse
-import glob
+import datetime
+import json
+import os
+import re
 import shutil
+import subprocess
+import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Tuple, Any, Callable
+
 
 # Known artifact types that match directory structure
 ARTIFACT_TYPES = ["analysis", "vision", "test", "benchmark", "json", "tmp"]
@@ -54,7 +50,7 @@ def _get_git_commit() -> str:
     """Get the current git commit hash, or 'nogit' if not in a git repo."""
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], 
+            ["git", "rev-parse", "--short", "HEAD"],
             stderr=subprocess.DEVNULL,
             universal_newlines=True
         ).strip()
@@ -77,7 +73,7 @@ def _get_job_id() -> str:
 ARTIFACT_GIT_COMMIT = _get_git_commit()
 ARTIFACT_JOB_ID = _get_job_id()
 
-def get_canonical_artifact_path(type_name: str, context: str) -> str:
+def get_canonical_artifact_path(type_name: str, context: str) -> Path:
     """
     Generate a canonical artifact path with auto-generated unique ID.
     
@@ -86,7 +82,7 @@ def get_canonical_artifact_path(type_name: str, context: str) -> str:
         context: Description of the artifact context
         
     Returns:
-        Canonical path to the artifact directory
+        Canonical Path object to the artifact directory
         
     Raises:
         ValueError: If the artifact type is invalid
@@ -94,32 +90,32 @@ def get_canonical_artifact_path(type_name: str, context: str) -> str:
     # Validate artifact type
     if type_name not in ARTIFACT_TYPES:
         raise ValueError(f"Invalid artifact type: {type_name}. Valid types: {', '.join(ARTIFACT_TYPES)}")
-    
+
     # Ensure the artifacts root directory exists
     setup_artifact_structure()
-    
+
     # Clean context string (remove special chars, convert to lowercase, preserve underscores)
     clean_context = re.sub(r'[^a-z0-9_]', '_', context.lower())
-    
+
     # Generate unique identifiers
     pid = os.getpid()
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    
+
     # Generate canonical directory name
     dir_id = f"{ARTIFACT_GIT_COMMIT}_{ARTIFACT_JOB_ID}_{pid}_{timestamp}"
     if clean_context:
         dir_id = f"{clean_context}_{dir_id}"
-    
+
     # Complete path
-    artifact_path = os.path.join(ARTIFACTS_ROOT, type_name, dir_id)
-    
+    artifact_path = Path(ARTIFACTS_ROOT) / type_name / dir_id
+
     # Record this path as used
-    _ARTIFACT_ROOTS_USED.append(artifact_path)
-    
+    _ARTIFACT_ROOTS_USED.append(str(artifact_path))
+
     # Create directory and manifest
-    os.makedirs(artifact_path, exist_ok=True)
-    _create_artifact_manifest(artifact_path, type_name, context)
-    
+    artifact_path.mkdir(parents=True, exist_ok=True)
+    _create_artifact_manifest(str(artifact_path), type_name, context)
+
     return artifact_path
 
 def _create_artifact_manifest(artifact_dir: str, artifact_type: str, context: str) -> None:
@@ -132,10 +128,10 @@ def _create_artifact_manifest(artifact_dir: str, artifact_type: str, context: st
         context: Description of the artifact context
     """
     manifest_file = os.path.join(artifact_dir, "manifest.json")
-    
+
     # Default retention days
     retention_days = 7
-    
+
     # Determine the calling script - use a more robust approach
     # Walk the call stack to find the most appropriate caller
     # This is more resilient to changes in the call stack
@@ -144,19 +140,19 @@ def _create_artifact_manifest(artifact_dir: str, artifact_type: str, context: st
         # More robust approach using traceback module
         import traceback
         stack = traceback.extract_stack()
-        
+
         # Filter out frames from this module and built-ins
         external_frames = [
-            frame for frame in stack 
+            frame for frame in stack
             if not frame.filename.endswith(("artifact_guard.py", "pathlib.py", "<frozen importlib", "__init__.py"))
             and not frame.filename.startswith("<")
         ]
-        
+
         # Get the most relevant caller (first external frame)
         if external_frames:
             # Use the most appropriate caller from the stack
             caller = external_frames[0].filename
-            
+
             # If we have multiple external frames, try to find a more specific one
             # by looking for test or script files that might be the actual entry point
             for frame in external_frames:
@@ -166,7 +162,7 @@ def _create_artifact_manifest(artifact_dir: str, artifact_type: str, context: st
     except Exception:
         # Fall back to a safe value on any error
         pass
-    
+
     # Create manifest JSON
     manifest = {
         "created": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -181,7 +177,7 @@ def _create_artifact_manifest(artifact_dir: str, artifact_type: str, context: st
             "description": context
         }
     }
-    
+
     with open(manifest_file, 'w') as f:
         json.dump(manifest, f, indent=2)
 
@@ -197,35 +193,35 @@ def validate_artifact_path(path: str) -> bool:
     """
     # Convert to absolute path if needed
     abs_path = os.path.abspath(path)
-    
+
     # Check if path is within artifacts root - use os.sep to ensure correct path validation
     if abs_path.startswith(ARTIFACTS_ROOT + os.sep) or abs_path == ARTIFACTS_ROOT:
         return True
-    
+
     # Check if path is within project structure (src, tools, tests)
     for valid_dir in ['src', 'tools', 'tests', '.git', '.github', '.githooks']:
         valid_path = os.path.join(PROJECT_ROOT, valid_dir)
         if abs_path.startswith(valid_path + os.sep) or abs_path == valid_path:
             return True
-    
+
     # Check if path is a file directly in project root
     if os.path.dirname(abs_path) == PROJECT_ROOT:
         # Root directory files (README.md, etc.)
         base_name = os.path.basename(abs_path)
         # Prohibited patterns for files in root
-        if (base_name.startswith('test_') or 
-            '_results' in base_name or 
+        if (base_name.startswith('test_') or
+            '_results' in base_name or
             base_name.startswith('fastvlm_test_') or
             base_name.startswith('analysis_')):
             return False
         # Basic file in root is okay
         return True
-    
+
     # ===== IMPORTANT: We need to strictly limit system directory access =====
     # Only allow read access to core system directories, not write access
     # For artifact discipline, we should NOT allow writing to system temp dirs
     # as these bypass our artifact structure
-    
+
     # Use more robust regex patterns for system directories
     # Special case for system directories that should NEVER be valid for artifact output
     system_temp_patterns = [
@@ -234,22 +230,22 @@ def validate_artifact_path(path: str) -> bool:
         r'^/private/tmp(/|$)',
         r'^/var/folders(/|$)'
     ]
-    
+
     # Harmonized with artifact_guard_py_adapter.sh logic - never allow temporary paths
     if any(re.match(pattern, abs_path) for pattern in system_temp_patterns):
         # We explicitly reject temp directories for artifacts
         return False
-    
+
     # System directories that should be readable but not writable for artifacts
     system_dir_patterns = [
-        r'^/dev(/|$)', 
-        r'^/proc(/|$)', 
-        r'^/sys(/|$)', 
-        r'^/var(/|$)', 
+        r'^/dev(/|$)',
+        r'^/proc(/|$)',
+        r'^/sys(/|$)',
+        r'^/var(/|$)',
         r'^/etc(/|$)',
-        r'^/usr(/|$)', 
-        r'^/lib(/|$)', 
-        r'^/opt(/|$)', 
+        r'^/usr(/|$)',
+        r'^/lib(/|$)',
+        r'^/opt(/|$)',
         r'^/bin(/|$)',
         r'^/sbin(/|$)',
         r'^/Applications(/|$)',  # macOS applications
@@ -262,7 +258,7 @@ def validate_artifact_path(path: str) -> bool:
     if any(re.match(pattern, abs_path) for pattern in system_dir_patterns):
         # These directories are valid for the operating system but NOT for our artifacts
         return False
-    
+
     # Also check for paths that look like temporary directories
     temp_path_patterns = [
         r'(/|^)temp(/|$)',
@@ -273,7 +269,7 @@ def validate_artifact_path(path: str) -> bool:
         # Also reject any directory that looks temporary but isn't in our canonical structure
         if not abs_path.startswith(os.path.join(ARTIFACTS_ROOT, "tmp")):
             return False
-    
+
     # Not a valid artifact path
     return False
 
@@ -298,7 +294,7 @@ def enforce_path_discipline(func: Callable) -> Callable:
         import inspect
         sig = inspect.signature(func)
         bound_args = sig.bind(*args, **kwargs)
-        
+
         # Inspect parameter names and look for path-like parameters
         for param_name, param_value in bound_args.arguments.items():
             # Enhanced detection of path parameters - more comprehensive list of keywords
@@ -316,7 +312,7 @@ def enforce_path_discipline(func: Callable) -> Callable:
                     # Get caller information for better error message
                     caller_frame = sys._getframe(1)
                     caller_info = f"{caller_frame.f_code.co_filename}:{caller_frame.f_lineno}"
-                    
+
                     # Provide detailed error message
                     raise ValueError(
                         f"ERROR: Non-canonical artifact path detected: {param_value}\n"
@@ -324,15 +320,15 @@ def enforce_path_discipline(func: Callable) -> Callable:
                         f"Called from: {caller_info}\n"
                         f"Hint: Use get_canonical_artifact_path() to generate valid artifact paths"
                     )
-        
+
         # Call the original function
         return func(*args, **kwargs)
-    
+
     # Update wrapper metadata
     wrapper.__name__ = func.__name__
     wrapper.__doc__ = func.__doc__
     wrapper.__module__ = func.__module__
-    
+
     return wrapper
 
 
@@ -349,35 +345,35 @@ class PathGuard:
     This manager intercepts all calls to the built-in open() function and validates
     paths to ensure they comply with artifact discipline.
     """
-    def __init__(self, artifact_dir: str):
-        self.artifact_dir = artifact_dir
+    def __init__(self, artifact_dir: str | Path):
+        self.artifact_dir = str(artifact_dir)  # Convert Path to string if needed
         self.original_open = None
         self._enforce_validation = True
-        
+
     def __enter__(self):
         # Override built-in open function
         import builtins
         self.original_open = builtins.open
         builtins.open = self._guarded_open
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Restore original open function
         import builtins
         builtins.open = self.original_open
-        
+
     def _guarded_open(self, file, mode='r', *args, **kwargs):
         # Check if this is a write operation
         if self._enforce_validation and ('w' in mode or 'a' in mode or '+' in mode):
             # Get absolute path for validation
             abs_path = os.path.abspath(file)
-            
+
             # Check if the path is valid
             if not validate_artifact_path(abs_path):
                 # Get caller information for better error message
                 caller_frame = sys._getframe(1)
                 caller_info = f"{caller_frame.f_code.co_filename}:{caller_frame.f_lineno}"
-                
+
                 # Provide detailed error message
                 raise ValueError(
                     f"ERROR: Non-canonical artifact path detected: {abs_path}\n"
@@ -385,7 +381,7 @@ class PathGuard:
                     f"Called from: {caller_info}\n"
                     f"Hint: Use get_canonical_artifact_path() to generate valid artifact paths"
                 )
-                
+
         # If validation passes or it's a read operation, proceed with the original open
         return self.original_open(file, mode, *args, **kwargs)
 
@@ -398,7 +394,7 @@ def print_warning():
     yellow = '\033[0;33m' if sys.stdout.isatty() else ''
     bold = '\033[1m' if sys.stdout.isatty() else ''
     reset = '\033[0m' if sys.stdout.isatty() else ''
-    
+
     print(f"{yellow}{bold}WARNING: Python Artifact Discipline{reset}")
     print("Ensure all file operations respect the canonical artifact paths.")
     print("Always use get_canonical_artifact_path for artifact directories:")
@@ -437,11 +433,11 @@ def safe_copy(src: str, dst: str) -> str:
             f"Called from: {caller_info}\n"
             f"Hint: Use get_canonical_artifact_path() to generate valid artifact paths"
         )
-        
+
     try:
         shutil.copy2(src, dst)
     except Exception as e:
-        raise IOError(f"Failed to copy {src} to {dst}: {str(e)}")
+        raise OSError(f"Failed to copy {src} to {dst}: {e!s}")
     return dst
 
 @enforce_path_discipline
@@ -500,23 +496,23 @@ def safe_write(file_path: str, content: str, mode: str = 'w') -> str:
     if not validate_artifact_path(parent_dir):
         caller_frame = sys._getframe(1)
         caller_info = f"{caller_frame.f_code.co_filename}:{caller_frame.f_lineno}"
-        
+
         raise ValueError(
             f"ERROR: Non-canonical artifact path detected: {file_path}\n"
             f"All artifact files must be created in {ARTIFACTS_ROOT}\n"
             f"Called from: {caller_info}\n"
             f"Hint: Use get_canonical_artifact_path() to generate valid artifact paths"
         )
-        
+
     # Create parent directory if it doesn't exist
     os.makedirs(parent_dir, exist_ok=True)
-    
+
     # Write the file
     with open(file_path, mode) as f:
         f.write(content)
     return file_path
 
-def cleanup_artifacts(retention_days: int = 7, type_name: Optional[str] = None) -> int:
+def cleanup_artifacts(retention_days: int = 7, type_name: str | None = None) -> int:
     """
     Clean up old artifacts based on retention policy.
     
@@ -527,114 +523,113 @@ def cleanup_artifacts(retention_days: int = 7, type_name: Optional[str] = None) 
     Returns:
         Number of artifacts cleaned up
     """
-    import time
     from datetime import datetime, timedelta
-    
+
     # Calculate cutoff date
     cutoff_date = datetime.now() - timedelta(days=retention_days)
     cutoff_timestamp = cutoff_date.timestamp()
-    
+
     # Get artifact types to clean up
     types_to_clean = [type_name] if type_name else ARTIFACT_TYPES
-    
+
     # Count artifacts cleaned up
     cleaned_count = 0
-    
+
     # Clean up each artifact type
     for artifact_type in types_to_clean:
         artifact_type_dir = os.path.join(ARTIFACTS_ROOT, artifact_type)
         if not os.path.exists(artifact_type_dir):
             continue
-            
+
         # List all artifact directories of this type
         for artifact_dir in os.listdir(artifact_type_dir):
             artifact_path = os.path.join(artifact_type_dir, artifact_dir)
-            
+
             # Skip if not a directory
             if not os.path.isdir(artifact_path):
                 continue
-                
+
             # Check manifest file for retention policy
             manifest_path = os.path.join(artifact_path, 'manifest.json')
             retention = retention_days  # Default retention
-            
+
             if os.path.exists(manifest_path):
                 try:
-                    with open(manifest_path, 'r') as f:
+                    with open(manifest_path) as f:
                         manifest = json.load(f)
                         # Get retention days from manifest
                         if 'retention_days' in manifest:
                             retention = manifest['retention_days']
-                except (json.JSONDecodeError, IOError):
+                except (OSError, json.JSONDecodeError):
                     # Use default retention if manifest is invalid
                     pass
-                    
+
             # Get artifact creation time
             try:
                 created_time = os.path.getctime(artifact_path)
             except OSError:
                 # Use directory modification time if creation time is not available
                 created_time = os.path.getmtime(artifact_path)
-                
+
             # Check if artifact is older than retention period
             if created_time < cutoff_timestamp:
                 try:
                     # Remove the artifact directory
                     shutil.rmtree(artifact_path)
                     cleaned_count += 1
-                except (OSError, IOError) as e:
-                    print(f"Error cleaning up {artifact_path}: {str(e)}")
-                    
+                except OSError as e:
+                    print(f"Error cleaning up {artifact_path}: {e!s}")
+
     return cleaned_count
 
 def setup_artifact_structure() -> None:
     """Create the artifact directory structure if it doesn't exist."""
     # Create artifacts root directory
     os.makedirs(ARTIFACTS_ROOT, exist_ok=True)
-    
+
     # Create subdirectories for each artifact type
     for artifact_type in ARTIFACT_TYPES:
         os.makedirs(os.path.join(ARTIFACTS_ROOT, artifact_type), exist_ok=True)
-    
+
     # Print a diagnostic message to help debug paths
     if os.environ.get("FA_DEBUG", "").lower() in ("1", "true", "yes"):
         print(f"Artifact structure set up at: {ARTIFACTS_ROOT}")
         for artifact_type in ARTIFACT_TYPES:
             print(f"  - {artifact_type}: {os.path.join(ARTIFACTS_ROOT, artifact_type)}")
-        
+
     # Create artifacts.env file if it doesn't exist
     env_file = os.path.join(PROJECT_ROOT, "artifacts.env")
     if not os.path.exists(env_file):
         with open(env_file, 'w') as f:
-            f.write(f"# Artifact configuration\n")
+            f.write("# Artifact configuration\n")
             f.write(f"ARTIFACTS_ROOT={ARTIFACTS_ROOT}\n")
-            f.write(f"ARTIFACT_QUIET=1\n")
+            f.write("ARTIFACT_QUIET=1\n")
 
 def main() -> None:
     """Command-line interface for artifact_guard.py"""
     parser = argparse.ArgumentParser(description="Artifact path discipline management")
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
-    
+
     # Create command
     create_parser = subparsers.add_parser("create", help="Create a canonical artifact path")
     create_parser.add_argument("type", choices=ARTIFACT_TYPES, help="Artifact type")
     create_parser.add_argument("context", help="Artifact context description")
-    
+
     # Validate command
     validate_parser = subparsers.add_parser("validate", help="Validate a path against artifact discipline")
     validate_parser.add_argument("path", help="Path to validate")
-    
+
     # Cleanup command
     cleanup_parser = subparsers.add_parser("cleanup", help="Clean up old artifacts")
     cleanup_parser.add_argument("--days", type=int, default=7, help="Retention days (default: 7)")
     cleanup_parser.add_argument("--type", choices=ARTIFACT_TYPES, help="Artifact type to clean up")
-    
+
     # Setup command
     setup_parser = subparsers.add_parser("setup", help="Set up artifact directory structure")
-    
+
     # Parse arguments
     args = parser.parse_args()
-    
+
     if args.command == "create":
         # Create canonical artifact path
         path = get_canonical_artifact_path(args.type, args.context)

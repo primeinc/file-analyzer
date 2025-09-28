@@ -14,15 +14,14 @@ analysis in the file analyzer system, with these capabilities:
 6. Artifact discipline for all output files
 """
 
-import os
-import sys
 import json
 import logging
-import time
-from typing import Dict, List, Any, Optional, Union, Tuple
-from datetime import datetime
-from pathlib import Path
+import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import Any
+
 
 # Fix imports
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,18 +29,13 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import artifact discipline components
-from src.core.artifact_guard import (
-    get_canonical_artifact_path,
-    validate_artifact_path,
-    PathGuard,
-    safe_write
-)
+from src.core.artifact_guard import PathGuard, get_canonical_artifact_path
 
 # Import model management
-from src.models.manager import ModelManager, create_manager
+from src.models.manager import create_manager
+
 
 # Import JSON utilities
-from src.utils.json_utils import JSONValidator, process_model_output
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -55,8 +49,8 @@ class ModelAnalyzer:
     types of models (vision, text, etc.) while maintaining consistent
     output formats and artifact discipline.
     """
-    
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Initialize the model analyzer with optional configuration.
         
@@ -65,19 +59,19 @@ class ModelAnalyzer:
                 - model_manager: A custom model manager instance
         """
         self.config = config or {}
-        
+
         # Use provided model manager or create a new one
         if "model_manager" in self.config:
             self.model_manager = self.config["model_manager"]
         else:
             self.model_manager = create_manager()
-            
+
         self.results = {}
-    
-    def analyze_file(self, file_path: str, model_type: str = "vision", 
-                   model_name: str = "fastvlm", model_size: Optional[str] = None,
-                   prompt: Optional[str] = None, mode: str = "describe", 
-                   output_path: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+
+    def analyze_file(self, file_path: str, model_type: str = "vision",
+                   model_name: str = "fastvlm", model_size: str | None = None,
+                   prompt: str | None = None, mode: str = "describe",
+                   output_path: str | None = None, **kwargs) -> dict[str, Any]:
         """
         Analyze a single file with the specified model.
         
@@ -95,7 +89,7 @@ class ModelAnalyzer:
             Dictionary with analysis results
         """
         logger.info(f"Analyzing {file_path} with {model_name} ({model_size or 'default'}) in {mode} mode")
-        
+
         # Use default output path if not specified
         if not output_path:
             artifact_dir = get_canonical_artifact_path(model_type, f"{model_name}_{mode}")
@@ -103,7 +97,7 @@ class ModelAnalyzer:
             file_base = os.path.splitext(file_name)[0]
             output_path = os.path.join(artifact_dir, f"{file_base}_result.json")
             logger.info(f"Using canonical artifact path: {output_path}")
-        
+
         # Run analysis through model manager
         result = self.model_manager.analyze_file(
             file_path,
@@ -115,7 +109,7 @@ class ModelAnalyzer:
             output_path=output_path,
             **kwargs
         )
-        
+
         # Store result in results dictionary
         self.results[file_path] = {
             "status": "success" if "error" not in result else "error",
@@ -124,15 +118,15 @@ class ModelAnalyzer:
             "output_path": output_path,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         return result
-    
-    def batch_analyze(self, directory: str, model_type: str = "vision", 
-                     model_name: str = "fastvlm", model_size: Optional[str] = None,
-                     prompt: Optional[str] = None, mode: str = "describe", 
-                     output_dir: Optional[str] = None, max_files: int = 10,
-                     file_extensions: Optional[List[str]] = None, 
-                     parallel: bool = True, **kwargs) -> Dict[str, Dict[str, Any]]:
+
+    def batch_analyze(self, directory: str, model_type: str = "vision",
+                     model_name: str = "fastvlm", model_size: str | None = None,
+                     prompt: str | None = None, mode: str = "describe",
+                     output_dir: str | None = None, max_files: int = 10,
+                     file_extensions: list[str] | None = None,
+                     parallel: bool = True, **kwargs) -> dict[str, dict[str, Any]]:
         """
         Analyze multiple files in a directory.
         
@@ -153,12 +147,12 @@ class ModelAnalyzer:
             Dictionary mapping file paths to analysis results
         """
         logger.info(f"Batch analyzing {directory} with {model_name} ({model_size or 'default'}) in {mode} mode")
-        
+
         # Use default output directory if not specified
         if not output_dir:
             output_dir = get_canonical_artifact_path(model_type, f"batch_{model_name}_{mode}")
             logger.info(f"Using canonical artifact path: {output_dir}")
-        
+
         # Use model manager to get files and create model instance
         if not file_extensions:
             # Default extensions based on model type
@@ -166,19 +160,19 @@ class ModelAnalyzer:
                 file_extensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif"]
             else:
                 file_extensions = [".txt", ".md", ".html", ".pdf"]
-        
+
         # Process files either in parallel or sequentially
         if parallel:
             return self._parallel_batch_process(
-                directory, 
-                model_type, 
-                model_name, 
-                model_size, 
-                prompt, 
-                mode, 
-                output_dir, 
-                max_files, 
-                file_extensions, 
+                directory,
+                model_type,
+                model_name,
+                model_size,
+                prompt,
+                mode,
+                output_dir,
+                max_files,
+                file_extensions,
                 **kwargs
             )
         else:
@@ -194,12 +188,12 @@ class ModelAnalyzer:
                 file_extensions=file_extensions,
                 **kwargs
             )
-    
-    def _parallel_batch_process(self, directory: str, model_type: str, 
-                              model_name: str, model_size: Optional[str],
-                              prompt: Optional[str], mode: str, 
+
+    def _parallel_batch_process(self, directory: str, model_type: str,
+                              model_name: str, model_size: str | None,
+                              prompt: str | None, mode: str,
                               output_dir: str, max_files: int,
-                              file_extensions: List[str], **kwargs) -> Dict[str, Dict[str, Any]]:
+                              file_extensions: list[str], **kwargs) -> dict[str, dict[str, Any]]:
         """
         Process files in parallel using ThreadPoolExecutor.
         
@@ -220,52 +214,52 @@ class ModelAnalyzer:
         """
         # Get files to process
         all_files = self.model_manager._get_files(directory, file_extensions, max_files)
-        
+
         # Create model instance
         model = self.model_manager.create_model(model_type, model_name, model_size, **kwargs)
         if not model:
             return {"error": f"Failed to create model {model_name}"}
-        
+
         # Define processing function
         def process_file(file_path):
             file_name = os.path.basename(file_path)
             file_base = os.path.splitext(file_name)[0]
             file_output_path = os.path.join(output_dir, f"{file_base}_{mode}.json")
-            
+
             try:
                 result = model.predict(file_path, prompt=prompt, mode=mode, **kwargs)
-                
+
                 # Save result
                 with PathGuard(os.path.dirname(file_output_path)):
                     with open(file_output_path, 'w') as f:
                         json.dump(result, f, indent=2)
-                
+
                 return file_path, result
             except Exception as e:
                 logger.error(f"Error processing {file_path}: {e}")
                 error_result = {
-                    "error": f"Analysis failed: {str(e)}",
+                    "error": f"Analysis failed: {e!s}",
                     "metadata": {
                         "model": f"{model_name}_{model_size or 'default'}",
                         "timestamp": datetime.now().isoformat()
                     }
                 }
-                
+
                 # Save error result
                 with PathGuard(os.path.dirname(file_output_path)):
                     with open(file_output_path, 'w') as f:
                         json.dump(error_result, f, indent=2)
-                
+
                 return file_path, error_result
-        
+
         # Process files in parallel
         results = {}
         max_workers = min(os.cpu_count() or 4, len(all_files))
-        
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for file_path, result in executor.map(process_file, all_files):
                 results[file_path] = result
-        
+
         # Write batch summary
         summary_path = os.path.join(output_dir, "batch_summary.json")
         batch_summary = {
@@ -276,14 +270,14 @@ class ModelAnalyzer:
             "mode": mode,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         with PathGuard(os.path.dirname(summary_path)):
             with open(summary_path, 'w') as f:
                 json.dump(batch_summary, f, indent=2)
-        
+
         return results
-    
-    def get_summary(self) -> Dict[str, Any]:
+
+    def get_summary(self) -> dict[str, Any]:
         """
         Get a summary of all analyses run during this session.
         
@@ -303,30 +297,30 @@ class ModelAnalyzer:
 def main():
     """Main entry point for command-line execution."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Model Analyzer")
     parser.add_argument("path", help="File or directory to analyze")
     parser.add_argument("--model", default="fastvlm", help="Model to use")
     parser.add_argument("--size", help="Model size variant")
-    parser.add_argument("--mode", default="describe", 
-                       choices=["describe", "detect", "document"], 
+    parser.add_argument("--mode", default="describe",
+                       choices=["describe", "detect", "document"],
                        help="Analysis mode")
-    parser.add_argument("--batch", action="store_true", 
+    parser.add_argument("--batch", action="store_true",
                        help="Process directory in batch mode")
     parser.add_argument("--output", help="Output file or directory")
-    parser.add_argument("--max-files", type=int, default=10, 
+    parser.add_argument("--max-files", type=int, default=10,
                        help="Maximum files to process in batch mode")
     parser.add_argument("--prompt", help="Custom prompt for analysis")
     parser.add_argument("--parallel", action="store_true", default=True,
                        help="Process files in parallel (batch mode only)")
     parser.add_argument("--sequential", action="store_true",
                        help="Process files sequentially (batch mode only)")
-    
+
     args = parser.parse_args()
-    
+
     # Initialize analyzer
     analyzer = ModelAnalyzer()
-    
+
     if os.path.isdir(args.path) or args.batch:
         # Batch processing
         parallel = not args.sequential
@@ -340,12 +334,12 @@ def main():
             prompt=args.prompt,
             parallel=parallel
         )
-        
+
         # Print summary
         summary = analyzer.get_summary()
         print(f"Batch processing complete. Processed {summary['analyses']} files.")
         print(f"Successful: {summary['successful']}, Failed: {summary['failed']}")
-        
+
         if args.output:
             print(f"Results saved to {args.output}")
     else:
@@ -358,7 +352,7 @@ def main():
             output_path=args.output,
             prompt=args.prompt
         )
-        
+
         # Print result (truncated if too large)
         result_json = json.dumps(result, indent=2)
         if len(result_json) > 1000:
@@ -366,7 +360,7 @@ def main():
             print(result_json[:1000] + "...\n[Output truncated]")
         else:
             print(result_json)
-        
+
         if args.output:
             print(f"Full result saved to {args.output}")
 

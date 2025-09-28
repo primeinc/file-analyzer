@@ -6,34 +6,36 @@ This module implements the 'benchmark' subcommand, which provides
 a Typer-based interface for benchmark functionality.
 """
 
+import json
 import os
+import statistics
 import sys
 import time
-import json
-import tempfile
-from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple
-import statistics
+from pathlib import Path
 
 import typer
-from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.table import Table
-from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 
 # Import CLI common utilities
-from src.cli.common.config import config
 from src.cli.main import console
 
 # Import artifact_guard utilities
 from src.core.artifact_guard import (
     get_canonical_artifact_path,
     validate_artifact_path,
-    PathGuard
 )
 
 # Import local modules
 from src.models.fastvlm.analyzer import FastVLMAnalyzer
+
 
 # Check if PIL is available
 try:
@@ -44,6 +46,7 @@ except ImportError:
 
 # Import subcommands
 from src.cli.benchmark.samples import app as samples_app
+
 
 # Create Typer app for benchmark subcommand
 app = typer.Typer(help="Benchmark model performance")
@@ -64,7 +67,7 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     """
     # Import the setup_logging function from main module
     from src.cli.main import setup_logging
-    
+
     # Update the logging configuration based on current verbose/quiet flags
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
@@ -76,7 +79,6 @@ def callback():
     
     Benchmark commands allow testing model performance on different datasets.
     """
-    pass
 
 def download_test_images(output_dir=None):
     """
@@ -96,7 +98,7 @@ def download_test_images(output_dir=None):
             "description": "Emoji stickers on hands"
         },
         {
-            "url": "https://github.com/apple/ml-fastvlm/raw/main/docs/fastvlm-counting.gif", 
+            "url": "https://github.com/apple/ml-fastvlm/raw/main/docs/fastvlm-counting.gif",
             "filename": "counting.gif",
             "description": "Counting fingers"
         },
@@ -111,18 +113,18 @@ def download_test_images(output_dir=None):
             "description": "Accuracy vs latency chart"
         }
     ]
-    
+
     # Create canonical artifact path for test images
     if output_dir is None:
         output_dir = get_canonical_artifact_path("benchmark", "test_images")
-    
+
     # Create directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Check if images already exist
     downloaded_paths = []
     console.print("[bold]Downloading test images for benchmarking...[/bold]")
-    
+
     with Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
@@ -131,36 +133,37 @@ def download_test_images(output_dir=None):
         console=console
     ) as progress:
         overall_task = progress.add_task("[green]Downloading images...", total=len(test_images))
-        
+
         for i, image_info in enumerate(test_images):
             # Set output path for this image
             file_path = os.path.join(output_dir, image_info["filename"])
             downloaded_paths.append(file_path)
-            
+
             # Skip if file already exists
             if os.path.exists(file_path):
                 progress.update(overall_task, advance=1, description=f"[green]Using existing {image_info['filename']} ({i+1}/{len(test_images)})")
                 continue
-                
+
             try:
                 # Download image
                 task_desc = f"[green]Downloading {image_info['filename']} ({i+1}/{len(test_images)})"
                 progress.update(overall_task, description=task_desc)
-                
+
                 # Use urllib to download the file
                 import urllib.request
                 urllib.request.urlretrieve(image_info["url"], file_path)
-                
+
                 # Update progress
                 progress.update(overall_task, advance=1)
-                
+
             except Exception as e:
-                console.print(f"[red]Error downloading {image_info['filename']}:[/red] {str(e)}")
-    
+                console.print(f"[red]Error downloading {image_info['filename']}:[/red] {e!s}")
+
     return downloaded_paths
 
 # Import shared utilities
 from src.cli.benchmark.utils import find_test_images as find_test_images_util
+
 
 def find_test_images():
     """
@@ -169,21 +172,22 @@ def find_test_images():
     """
     # Get images from the utility function
     image_list = find_test_images_util()
-    
+
     # Add console output for the CLI version
     if not image_list:
-        console.print(f"[yellow]No images found in benchmark directories.[/yellow]")
-    
+        console.print("[yellow]No images found in benchmark directories.[/yellow]")
+
     # If still no images found, download sample images
     if not image_list:
         console.print("[yellow]No test images found. Downloading sample images...[/yellow]")
         downloaded_paths = download_test_images()
         image_list = [Path(p) for p in downloaded_paths if os.path.exists(p)]
-    
+
     return image_list
 
 # Import additional shared utilities
-from src.cli.benchmark.utils import get_image_info, format_size
+from src.cli.benchmark.utils import format_size, get_image_info
+
 
 def run_benchmark(analyzer, images, output_file=None):
     """
@@ -200,33 +204,33 @@ def run_benchmark(analyzer, images, output_file=None):
     if not images:
         console.print("[red]Error:[/red] No test images available for benchmarking")
         return {}
-        
+
     # Create results directory using canonical artifact paths
     if output_file is None:
         output_dir = get_canonical_artifact_path("benchmark", f"fastvlm_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
         output_file = os.path.join(output_dir, "benchmark_results.json")
     else:
         output_dir = os.path.dirname(output_file)
-        
+
     # Create directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # Check if we can run the benchmark
     if not PIL_AVAILABLE:
         console.print("[red]Error:[/red] PIL/Pillow library is required for benchmarking")
         return {}
-    
+
     # Print benchmark settings
-    console.print(f"\n[bold]Running FastVLM Benchmark[/bold]")
+    console.print("\n[bold]Running FastVLM Benchmark[/bold]")
     console.print(f"[bold]Images:[/bold] {len(images)}")
-    
+
     # Get model info
     model_info = analyzer.get_model_info()
     if model_info:
         console.print(f"[bold]Model:[/bold] {model_info.get('name', 'Unknown')}")
         console.print(f"[bold]Size:[/bold] {model_info.get('size', 'Unknown')}")
         console.print(f"[bold]Backend:[/bold] {model_info.get('backend', 'Unknown')}")
-    
+
     # Create results structure
     results = {
         "timestamp": datetime.now().isoformat(),
@@ -238,13 +242,13 @@ def run_benchmark(analyzer, images, output_file=None):
         "images": {},
         "summary": {}
     }
-    
+
     # Lists to track metrics
     load_times = []
     ttft_times = []  # Time to first token
     total_times = []
     token_rates = []
-    
+
     # Run benchmark for each image
     with Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -254,34 +258,34 @@ def run_benchmark(analyzer, images, output_file=None):
         console=console
     ) as progress:
         benchmark_task = progress.add_task("[green]Running benchmark...", total=len(images))
-        
+
         for i, image_path in enumerate(images):
             try:
                 # Update progress description
                 image_name = image_path.name
                 progress.update(benchmark_task, description=f"[green]Processing {image_name} ({i+1}/{len(images)})")
-                
+
                 # Get image info
                 image_info = get_image_info(image_path)
-                
+
                 # Run model and measure performance
                 load_start = time.time()
                 result = analyzer.analyze_image_benchmark(str(image_path))
                 load_end = time.time()
-                
+
                 # Extract metrics
                 load_time = load_end - load_start
                 ttft = result.get("time_to_first_token", 0)
                 total_processing_time = result.get("total_processing_time", 0)
                 tokens = result.get("total_tokens", 0)
                 token_rate = tokens / total_processing_time if total_processing_time > 0 and tokens > 0 else 0
-                
+
                 # Store metrics
                 load_times.append(load_time)
                 ttft_times.append(ttft)
                 total_times.append(total_processing_time)
                 token_rates.append(token_rate)
-                
+
                 # Store result for this image
                 results["images"][image_name] = {
                     "path": str(image_path),
@@ -293,14 +297,14 @@ def run_benchmark(analyzer, images, output_file=None):
                     "token_rate": token_rate,
                     "response": result.get("response", "")
                 }
-                
+
                 # Update progress
                 progress.update(benchmark_task, advance=1)
-                
+
             except Exception as e:
-                console.print(f"[red]Error processing {image_name}:[/red] {str(e)}")
+                console.print(f"[red]Error processing {image_name}:[/red] {e!s}")
                 progress.update(benchmark_task, advance=1)
-    
+
     # Calculate summary statistics if we have results
     if load_times:
         results["summary"] = {
@@ -330,7 +334,7 @@ def run_benchmark(analyzer, images, output_file=None):
                 "max": max(token_rates)
             }
         }
-    
+
     # Print summary
     if results["summary"]:
         console.print("\n[bold]Benchmark Summary:[/bold]")
@@ -339,26 +343,26 @@ def run_benchmark(analyzer, images, output_file=None):
         console.print(f"Average time to first token: [green]{results['summary']['time_to_first_token']['mean']:.4f}s[/green]")
         console.print(f"Average processing time: [green]{results['summary']['total_processing_time']['mean']:.4f}s[/green]")
         console.print(f"Average token rate: [green]{results['summary']['token_rate']['mean']:.2f} tokens/s[/green]")
-    
+
     # Save results to file
     try:
         with open(output_file, 'w') as f:
             json.dump(results, f, indent=2)
         console.print(f"\nResults saved to: [bold]{output_file}[/bold]")
     except Exception as e:
-        console.print(f"[red]Error saving results:[/red] {str(e)}")
-    
+        console.print(f"[red]Error saving results:[/red] {e!s}")
+
     return results
 
 @app.command("run")
 def run(
-    model_path: Optional[str] = typer.Option(
+    model_path: str | None = typer.Option(
         None, "--model", "-m", help="Path to FastVLM model"
     ),
-    images_dir: Optional[str] = typer.Option(
+    images_dir: str | None = typer.Option(
         None, "--images", "-i", help="Directory containing test images"
     ),
-    output_file: Optional[str] = typer.Option(
+    output_file: str | None = typer.Option(
         None, "--output", "-o", help="Output file for benchmark results"
     ),
     canonical: bool = typer.Option(
@@ -379,11 +383,11 @@ def run(
     """
     # Get configured logger
     logger = get_logger(verbose, quiet)
-    
+
     try:
         # Initialize analyzer
         analyzer = FastVLMAnalyzer(model_path=model_path)
-        
+
         # Find test images
         if images_dir and os.path.exists(images_dir) and not canonical:
             # Check if the provided directory is a canonical artifact path
@@ -395,24 +399,24 @@ def run(
                 if images:
                     console.print(f"[green]Using {len(images)} images from provided canonical artifact path[/green]")
                 else:
-                    console.print(f"[yellow]No images found in provided directory. Searching canonical artifact paths...[/yellow]")
+                    console.print("[yellow]No images found in provided directory. Searching canonical artifact paths...[/yellow]")
                     images = find_test_images()
             else:
                 console.print(f"[yellow]Warning: Provided image directory {images_dir} is not a canonical artifact path[/yellow]")
-                console.print(f"[yellow]Consider moving images to canonical artifact paths[/yellow]")
-                console.print(f"[yellow]Searching canonical artifact paths instead...[/yellow]")
+                console.print("[yellow]Consider moving images to canonical artifact paths[/yellow]")
+                console.print("[yellow]Searching canonical artifact paths instead...[/yellow]")
                 images = find_test_images()
         else:
             images = find_test_images()
-        
+
         # Run benchmark
         run_benchmark(analyzer, images, output_file)
-        
+
         return 0
-    
+
     except Exception as e:
-        console.print(f"[red]Error running benchmark:[/red] {str(e)}")
-        logger.error(f"Error running benchmark: {str(e)}")
+        console.print(f"[red]Error running benchmark:[/red] {e!s}")
+        logger.error(f"Error running benchmark: {e!s}")
         return 1
 
 @app.command("images")
@@ -420,7 +424,7 @@ def images(
     download: bool = typer.Option(
         False, "--download", "-d", help="Download test images"
     ),
-    output_dir: Optional[str] = typer.Option(
+    output_dir: str | None = typer.Option(
         None, "--output", "-o", help="Output directory for downloaded images"
     ),
     verbose: bool = typer.Option(
@@ -437,58 +441,58 @@ def images(
     """
     # Get configured logger
     logger = get_logger(verbose, quiet)
-    
+
     try:
         if download:
             # Download test images
             downloaded_paths = download_test_images(output_dir)
             console.print(f"[green]Downloaded {len(downloaded_paths)} test images[/green]")
-            
+
             # Print image list
             table = Table(title="Downloaded Test Images")
             table.add_column("Filename", style="cyan")
             table.add_column("Path", style="green")
             table.add_column("Size", style="blue")
-            
+
             for path in downloaded_paths:
                 if os.path.exists(path):
                     size = format_size(path)
                     table.add_row(os.path.basename(path), path, size)
-            
+
             console.print(table)
-            
+
         else:
             # Find and list test images
             images = find_test_images()
-            
+
             if not images:
                 console.print("[yellow]No test images found[/yellow]")
                 console.print("Use 'fa benchmark images --download' to download sample images")
                 return 0
-            
+
             # Print image list
             table = Table(title="Available Test Images")
             table.add_column("Filename", style="cyan")
             table.add_column("Path", style="green")
             table.add_column("Size", style="blue")
             table.add_column("Dimensions", style="yellow")
-            
+
             for image in images:
                 info = get_image_info(image)
                 table.add_row(
-                    image.name, 
-                    str(image), 
+                    image.name,
+                    str(image),
                     info.get("size", "Unknown"),
                     info.get("dimensions", "Unknown")
                 )
-            
+
             console.print(table)
-        
+
         return 0
-    
+
     except Exception as e:
-        console.print(f"[red]Error managing benchmark images:[/red] {str(e)}")
-        logger.error(f"Error managing benchmark images: {str(e)}")
+        console.print(f"[red]Error managing benchmark images:[/red] {e!s}")
+        logger.error(f"Error managing benchmark images: {e!s}")
         return 1
 
 if __name__ == "__main__":

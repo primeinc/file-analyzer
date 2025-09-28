@@ -5,8 +5,7 @@ Shared utilities for benchmark command modules
 
 import os
 from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+
 
 # Check if PIL is available
 PIL_AVAILABLE = False
@@ -17,11 +16,8 @@ except ImportError:
     pass
 
 # Import artifact_guard utilities
-from src.core.artifact_guard import (
-    get_canonical_artifact_path,
-    validate_artifact_path,
-    PathGuard
-)
+from src.core.artifact_guard import get_canonical_artifact_path
+
 
 def find_test_images():
     """
@@ -38,22 +34,22 @@ def find_test_images():
     # Look in canonical benchmark path
     benchmark_path = get_canonical_artifact_path("benchmark", "test_images")
     image_list = []
-    
+
     # Check if directory exists and contains images
     if os.path.exists(benchmark_path):
         for ext in [".jpg", ".jpeg", ".png", ".gif", ".tiff", ".bmp"]:
             image_list.extend(list(Path(benchmark_path).glob(f"*{ext}")))
-    
+
     # If no images found in benchmark path, check test_data directory
     if not image_list:
         # Get project root
         project_root = Path(__file__).resolve().parents[3]
         test_path = project_root / "test_data" / "images"
-        
+
         if test_path.exists():
             for ext in [".jpg", ".jpeg", ".png", ".gif", ".tiff", ".bmp"]:
                 image_list.extend(list(test_path.glob(f"*{ext}")))
-            
+
     return image_list
 
 def format_size(path):
@@ -68,7 +64,7 @@ def get_image_info(image_path):
     """Get image dimensions and size"""
     if not PIL_AVAILABLE:
         return {"size": format_size(image_path), "dimensions": "Unknown (PIL not available)"}
-    
+
     try:
         with Image.open(image_path) as img:
             width, height = img.size
@@ -78,4 +74,4 @@ def get_image_info(image_path):
                 "format": img.format
             }
     except Exception as e:
-        return {"size": format_size(image_path), "dimensions": f"Error: {str(e)}"}
+        return {"size": format_size(image_path), "dimensions": f"Error: {e!s}"}

@@ -20,10 +20,10 @@ Example:
 
 import json
 import sys
-from typing import Any, Optional
+from typing import Any
 
 
-def get_json_value(file_path: str, key: str, default: Optional[Any] = None) -> Any:
+def get_json_value(file_path: str, key: str, default: Any | None = None) -> Any:
     """
     Extract a value from a JSON file by key.
     
@@ -36,9 +36,9 @@ def get_json_value(file_path: str, key: str, default: Optional[Any] = None) -> A
         The value as a string, or the default value if not found
     """
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             data = json.load(f)
-            
+
         # Handle nested keys with dot notation
         if '.' in key:
             keys = key.split('.')
@@ -51,7 +51,7 @@ def get_json_value(file_path: str, key: str, default: Optional[Any] = None) -> A
             return value
         else:
             return data.get(key, default)
-    except (json.JSONDecodeError, FileNotFoundError, IOError) as e:
+    except (OSError, json.JSONDecodeError, FileNotFoundError):
         # Return default on any error
         return default
 
@@ -61,13 +61,13 @@ def main():
     if len(sys.argv) < 3:
         print(f"Usage: {sys.argv[0]} <file_path> <key> [default_value]", file=sys.stderr)
         sys.exit(1)
-        
+
     file_path = sys.argv[1]
     key = sys.argv[2]
     default = sys.argv[3] if len(sys.argv) > 3 else None
-    
+
     value = get_json_value(file_path, key, default)
-    
+
     # Always print as string for shell script consumption
     if value is not None:
         print(value)

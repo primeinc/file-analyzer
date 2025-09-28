@@ -7,12 +7,12 @@ in the artifact management package.
 """
 
 import os
-from typing import List, Tuple
 
 # Import artifact_guard utilities
 from src.core.artifact_guard import ARTIFACTS_ROOT
 
-def check_artifact_sprawl(check_dir: str = ".") -> Tuple[bool, List[str]]:
+
+def check_artifact_sprawl(check_dir: str = ".") -> tuple[bool, list[str]]:
     """
     Check for artifacts outside the standard structure.
     
@@ -24,26 +24,26 @@ def check_artifact_sprawl(check_dir: str = ".") -> Tuple[bool, List[str]]:
     """
     # Convert to absolute path
     check_dir = os.path.abspath(check_dir)
-    
+
     # Find artifact directories outside canonical structure
     non_canonical_dirs = []
     project_root = os.path.abspath(os.path.join(os.path.dirname(ARTIFACTS_ROOT), ".."))
     root_artifacts_dir = os.path.join(project_root, "artifacts")
-    
+
     # Skip project root artifacts dir if it's in .gitignore
     skip_root_artifacts = False
     gitignore_path = os.path.join(project_root, ".gitignore")
     if os.path.exists(gitignore_path):
-        with open(gitignore_path, 'r') as f:
+        with open(gitignore_path) as f:
             if any(line.strip() == "/artifacts/" for line in f):
                 skip_root_artifacts = True
-    
+
     # Walk the directory tree to find artifacts/ directories
     for root, dirs, _ in os.walk(check_dir):
         # Skip the canonical ARTIFACTS_ROOT
         if root == os.path.dirname(ARTIFACTS_ROOT) and "artifacts" in dirs:
             continue
-            
+
         # Check for artifacts/ directories
         if "artifacts" in dirs:
             artifacts_dir = os.path.join(root, "artifacts")
@@ -55,6 +55,6 @@ def check_artifact_sprawl(check_dir: str = ".") -> Tuple[bool, List[str]]:
                 continue
             # Otherwise add to non-canonical list
             non_canonical_dirs.append(artifacts_dir)
-    
+
     # Return results
     return len(non_canonical_dirs) == 0, non_canonical_dirs

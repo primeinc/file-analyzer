@@ -14,16 +14,15 @@ Key features:
 - Helpers for downloading and managing model files
 """
 
-import os
-import sys
 import json
 import logging
+import os
 import platform
 import subprocess
-import hashlib
-from pathlib import Path
-from typing import Dict, List, Optional, Union, Tuple, Any
+import sys
 from datetime import datetime
+from typing import Any
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -31,7 +30,10 @@ logger = logging.getLogger(__name__)
 
 # Import artifact discipline tools if available
 try:
-    from src.core.artifact_guard import get_canonical_artifact_path, validate_artifact_path
+    from src.core.artifact_guard import (
+        get_canonical_artifact_path,
+        validate_artifact_path,
+    )
     ARTIFACT_DISCIPLINE = True
 except ImportError:
     ARTIFACT_DISCIPLINE = False
@@ -47,7 +49,7 @@ if platform.system() == "Windows":
     USER_MODEL_DIR = os.path.join(os.environ.get("LOCALAPPDATA", ""), "fastvlm")
 else:
     USER_MODEL_DIR = os.path.expanduser("~/.local/share/fastvlm")
-    
+
 # Project root directory
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -95,8 +97,8 @@ MODEL_CHECKPOINTS = {
     }
 }
 
-def get_model_path(model_type: str = DEFAULT_MODEL_TYPE, 
-                  model_size: str = DEFAULT_MODEL_SIZE) -> Optional[str]:
+def get_model_path(model_type: str = DEFAULT_MODEL_TYPE,
+                  model_size: str = DEFAULT_MODEL_SIZE) -> str | None:
     """
     Find the path to a model by type and size.
     
@@ -115,14 +117,14 @@ def get_model_path(model_type: str = DEFAULT_MODEL_TYPE,
     if model_type not in MODEL_CHECKPOINTS:
         logger.error(f"Unknown model type: {model_type}")
         return None
-        
+
     if model_size not in MODEL_CHECKPOINTS[model_type]:
         logger.error(f"Unknown model size: {model_size} for {model_type}")
         return None
-        
+
     # Get the model path suffix
     model_path_suffix = MODEL_CHECKPOINTS[model_type][model_size]["path"]
-    
+
     # Search for the model in standard locations
     for base_path in MODEL_PATHS:
         # Try with exact path from config
@@ -132,28 +134,28 @@ def get_model_path(model_type: str = DEFAULT_MODEL_TYPE,
             if os.path.exists(os.path.join(full_path, "model.safetensors")):
                 # Found the model with safetensors in root
                 return full_path
-                
+
             # Check for nested structure (model.safetensors in a nested folder)
             nested_path = os.path.join(full_path, model_path_suffix)
             if os.path.exists(nested_path) and os.path.exists(os.path.join(nested_path, "model.safetensors")):
                 # Found the model with safetensors in nested structure
                 return nested_path
-                
+
             # Found the path but not the safetensors file - still return as it's the closest match
             logger.warning(f"Found model directory {full_path} but missing model.safetensors file")
             return full_path
-            
+
         # Try with model size as directory name instead of full path
         alt_path = os.path.join(base_path, model_size)
         if os.path.exists(alt_path):
             # Found alternative path
             return alt_path
-            
+
     # Model not found
     logger.warning(f"Model {model_type} {model_size} not found in standard locations")
     return None
 
-def list_available_models() -> Dict[str, List[str]]:
+def list_available_models() -> dict[str, list[str]]:
     """
     List all available models on the system.
     
@@ -161,18 +163,18 @@ def list_available_models() -> Dict[str, List[str]]:
         Dictionary mapping model types to lists of available sizes
     """
     available_models = {}
-    
+
     for model_type, sizes in MODEL_CHECKPOINTS.items():
         available_models[model_type] = []
-        
+
         for size in sizes:
             if get_model_path(model_type, size):
                 available_models[model_type].append(size)
-                
+
     return available_models
 
-def get_model_info(model_type: str = DEFAULT_MODEL_TYPE, 
-                  model_size: str = DEFAULT_MODEL_SIZE) -> Dict[str, Any]:
+def get_model_info(model_type: str = DEFAULT_MODEL_TYPE,
+                  model_size: str = DEFAULT_MODEL_SIZE) -> dict[str, Any]:
     """
     Get information about a model.
     
@@ -185,18 +187,18 @@ def get_model_info(model_type: str = DEFAULT_MODEL_TYPE,
     """
     if model_type not in MODEL_CHECKPOINTS:
         return {"error": f"Unknown model type: {model_type}"}
-        
+
     if model_size not in MODEL_CHECKPOINTS[model_type]:
         return {"error": f"Unknown model size: {model_size} for {model_type}"}
-        
+
     # Get model info from config
     model_info = MODEL_CHECKPOINTS[model_type][model_size].copy()
-    
+
     # Add model path
     model_path = get_model_path(model_type, model_size)
     model_info["full_path"] = model_path
     model_info["available"] = bool(model_path)
-    
+
     # Check which model files exist
     if model_path and os.path.exists(model_path):
         model_info["files"] = []
@@ -209,12 +211,12 @@ def get_model_info(model_type: str = DEFAULT_MODEL_TYPE,
                     "size_mb": os.path.getsize(file_path) / (1024 * 1024)
                 }
                 model_info["files"].append(file_info)
-    
+
     return model_info
 
-def download_model(model_type: str = DEFAULT_MODEL_TYPE, 
+def download_model(model_type: str = DEFAULT_MODEL_TYPE,
                   model_size: str = DEFAULT_MODEL_SIZE,
-                  force: bool = False) -> Tuple[bool, str]:
+                  force: bool = False) -> tuple[bool, str]:
     """
     Download a model to the user's model directory.
     
@@ -228,74 +230,74 @@ def download_model(model_type: str = DEFAULT_MODEL_TYPE,
     """
     if model_type not in MODEL_CHECKPOINTS:
         return False, f"Unknown model type: {model_type}"
-        
+
     if model_size not in MODEL_CHECKPOINTS[model_type]:
         return False, f"Unknown model size: {model_size} for {model_type}"
-        
+
     # Get model info
     model_info = MODEL_CHECKPOINTS[model_type][model_size]
-    
+
     # Create user model directory if it doesn't exist
     os.makedirs(USER_MODEL_DIR, exist_ok=True)
-    
+
     # Create model directory
     model_dir = os.path.join(USER_MODEL_DIR, model_info["path"])
-    
+
     # Check if model already exists
     if os.path.exists(model_dir) and not force:
         # Verify model files exist
         model_files = os.listdir(model_dir) if os.path.exists(model_dir) else []
         if model_files and any(f.endswith('.mlx') for f in model_files):
             return True, f"Model already exists at {model_dir}"
-    
+
     # Create the directory if it doesn't exist
     os.makedirs(model_dir, exist_ok=True)
-    
+
     # Download the model
     try:
         import tempfile
         import zipfile
-        
+
         # Create artifact directory for download logs if artifact discipline is available
         log_dir = None
         if ARTIFACT_DISCIPLINE:
             log_dir = get_canonical_artifact_path("tmp", f"model_download_{model_type}_{model_size}")
             log_file = os.path.join(log_dir, "download.log")
-            
+
         url = model_info["download_url"]
-        
+
         # Log download start
         logger.info(f"Downloading {model_type} {model_size} from {url}")
         if log_dir:
             with open(log_file, "a") as f:
                 f.write(f"Downloading {model_type} {model_size} from {url}\n")
-        
+
         # Create a temporary file to download to
         with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_file:
             temp_path = temp_file.name
-        
+
         try:
             # Download the model
             subprocess.run(["curl", "-L", url, "-o", temp_path], check=True)
-            
+
             # Extract the model
             with zipfile.ZipFile(temp_path, 'r') as zip_ref:
                 # First, check the zip content to see if it has a subdirectory
                 contents = zip_ref.namelist()
                 has_subdirectory = any('/' in name for name in contents)
-                
+
                 if has_subdirectory:
                     # Extract normally if the zip already has a directory structure
                     zip_ref.extractall(model_dir)
                 else:
                     # Extract directly into the model directory
                     zip_ref.extractall(model_dir)
-                    
+
                     # Check if extraction was successful by listing files
                     extracted_files = os.listdir(model_dir)
                     if not extracted_files:
                         logger.error(f"Extraction seemed to succeed but no files found in {model_dir}")
-                        
+
                         # Try direct extraction for certain known formats
                         # Sometimes we need to explicitly create config files
                         if model_type == "fastvlm":
@@ -308,10 +310,10 @@ def download_model(model_type: str = DEFAULT_MODEL_TYPE,
                                 "eos_token": "</s>",
                                 "unk_token": "<unk>"
                             }
-                            
+
                             with open(os.path.join(model_dir, "tokenizer_config.json"), "w") as f:
                                 json.dump(tokenizer_config, f, indent=2)
-                                
+
                             # Create model config
                             model_config = {
                                 "model_type": "llama",
@@ -322,17 +324,17 @@ def download_model(model_type: str = DEFAULT_MODEL_TYPE,
                                 "num_hidden_layers": 32,
                                 "vocab_size": 32000
                             }
-                            
+
                             with open(os.path.join(model_dir, "config.json"), "w") as f:
                                 json.dump(model_config, f, indent=2)
-            
+
             # Remove the temporary file
             os.unlink(temp_path)
-            
+
             # Verify extraction success
             if not os.listdir(model_dir):
                 return False, f"Extraction failed: no files found in {model_dir}"
-                
+
             # Create metadata file
             metadata = {
                 "model_type": model_type,
@@ -343,24 +345,24 @@ def download_model(model_type: str = DEFAULT_MODEL_TYPE,
                 "url": model_info["download_url"],
                 "version": model_info["version"]
             }
-            
+
             with open(os.path.join(model_dir, "metadata.json"), "w") as f:
                 json.dump(metadata, f, indent=2)
-                
+
             return True, f"Model downloaded successfully to {model_dir}"
-            
+
         except Exception as e:
             # Clean up failed download
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
-            return False, f"Download failed: {str(e)}"
-            
+            return False, f"Download failed: {e!s}"
+
     except ImportError:
         return False, "Required packages not available"
     except Exception as e:
-        return False, f"Download failed: {str(e)}"
+        return False, f"Download failed: {e!s}"
 
-def create_artifact_path_for_model_output(model_type: str = DEFAULT_MODEL_TYPE, 
+def create_artifact_path_for_model_output(model_type: str = DEFAULT_MODEL_TYPE,
                                          context: str = None) -> str:
     """
     Create a canonical artifact path for model output.
@@ -375,16 +377,16 @@ def create_artifact_path_for_model_output(model_type: str = DEFAULT_MODEL_TYPE,
     if not ARTIFACT_DISCIPLINE:
         # Fallback without artifact discipline
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = os.path.join(PROJECT_ROOT, "artifacts", "vision", 
+        output_dir = os.path.join(PROJECT_ROOT, "artifacts", "vision",
                                f"{model_type}_{context}_{timestamp}" if context else f"{model_type}_{timestamp}")
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
-        
+
     # Create canonical artifact path with artifact discipline
     context_str = f"{model_type}_{context}" if context else model_type
     return get_canonical_artifact_path("vision", context_str)
 
-def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> Optional[str]:
+def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> str | None:
     """
     Find the path to the prediction script for a model.
     
@@ -397,22 +399,22 @@ def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> Optional[st
     if model_type != "fastvlm":
         logger.error(f"Unknown model type: {model_type}")
         return None
-        
+
     # Standard location in project structure
     paths_to_check = [
         os.path.join(PROJECT_ROOT, "libs", "ml-fastvlm", "predict.py"),  # Main project repo location
         os.path.join(PROJECT_ROOT, "ml-fastvlm", "predict.py"),  # Alt project location
         os.path.join(USER_MODEL_DIR, "predict.py"),  # User model directory
     ]
-    
+
     # Check if model is installed as a package
     try:
-        import mlx_fastvlm
+        import mlx.vlm
         # If installed as a package, we can use the package's predict function directly
         return "package"
     except ImportError:
         pass
-        
+
     # Check standard locations
     for path in paths_to_check:
         if os.path.exists(path):
@@ -420,44 +422,44 @@ def get_predict_script_path(model_type: str = DEFAULT_MODEL_TYPE) -> Optional[st
             return path
         else:
             logger.debug(f"No predict script at: {path}")
-            
+
     logger.warning(f"Predict script for {model_type} not found in standard locations")
     return None
 
 if __name__ == "__main__":
     # Command-line interface
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Model Configuration Tool")
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
-    
+
     # List command
     list_parser = subparsers.add_parser("list", help="List available models")
-    
+
     # Info command
     info_parser = subparsers.add_parser("info", help="Get information about a model")
     info_parser.add_argument("--type", default=DEFAULT_MODEL_TYPE, help=f"Model type (default: {DEFAULT_MODEL_TYPE})")
     info_parser.add_argument("--size", default=DEFAULT_MODEL_SIZE, help=f"Model size (default: {DEFAULT_MODEL_SIZE})")
-    
+
     # Download command
     download_parser = subparsers.add_parser("download", help="Download a model")
     download_parser.add_argument("--type", default=DEFAULT_MODEL_TYPE, help=f"Model type (default: {DEFAULT_MODEL_TYPE})")
     download_parser.add_argument("--size", default=DEFAULT_MODEL_SIZE, help=f"Model size (default: {DEFAULT_MODEL_SIZE})")
     download_parser.add_argument("--force", action="store_true", help="Force re-download even if model exists")
-    
+
     # Path command
     path_parser = subparsers.add_parser("path", help="Get path to a model")
     path_parser.add_argument("--type", default=DEFAULT_MODEL_TYPE, help=f"Model type (default: {DEFAULT_MODEL_TYPE})")
     path_parser.add_argument("--size", default=DEFAULT_MODEL_SIZE, help=f"Model size (default: {DEFAULT_MODEL_SIZE})")
-    
+
     args = parser.parse_args()
-    
+
     if args.command == "list":
         available_models = list_available_models()
         print("Available Models:")
         for model_type, sizes in available_models.items():
             print(f"{model_type}: {', '.join(sizes) if sizes else 'None'}")
-            
+
     elif args.command == "info":
         model_info = get_model_info(args.type, args.size)
         print(f"{args.type} {args.size} Model Information:")
@@ -471,11 +473,11 @@ if __name__ == "__main__":
             print(f"Download URL: {model_info['download_url']}")
             print(f"Size: {model_info['file_size_bytes'] / (1024*1024):.2f} MB")
             print(f"Version: {model_info['version']}")
-            if "files" in model_info and model_info["files"]:
+            if model_info.get("files"):
                 print("Files:")
                 for file in model_info["files"]:
                     print(f"  {file['name']}: {file['size_mb']:.2f} MB")
-                    
+
     elif args.command == "download":
         success, message = download_model(args.type, args.size, args.force)
         if success:
@@ -483,7 +485,7 @@ if __name__ == "__main__":
         else:
             print(f"Error: {message}")
             sys.exit(1)
-            
+
     elif args.command == "path":
         model_path = get_model_path(args.type, args.size)
         if model_path:
@@ -491,6 +493,6 @@ if __name__ == "__main__":
         else:
             print(f"Error: Model {args.type} {args.size} not found")
             sys.exit(1)
-            
+
     else:
         parser.print_help()

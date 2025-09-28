@@ -6,16 +6,14 @@ This module implements the 'test' subcommand, which provides a framework for
 running tests on the File Analyzer components.
 """
 
-import os
-import sys
-import logging
 import importlib
+import logging
+import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
 
 import typer
 from rich.console import Console
-from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn
 from rich.table import Table
 
 # Import CLI common utilities
@@ -23,6 +21,7 @@ from src.cli.common.config import config
 
 # Import the test hook directly
 from src.cli.test.hook import app as hook_app
+
 
 # Create Typer app for test subcommand
 app = typer.Typer(help="Run test suites and validation checks")
@@ -38,12 +37,12 @@ class TestRegistry:
     This class maintains a registry of test plugins and provides
     methods for registering and retrieving tests.
     """
-    
+
     def __init__(self):
         """Initialize the test registry."""
         self.tests = {}
         self._discover_tests()
-    
+
     def _discover_tests(self):
         """
         Discover tests from entry points and direct imports.
@@ -52,7 +51,7 @@ class TestRegistry:
         try:
             from importlib.metadata import entry_points
             discovered_tests = entry_points(group='fa.tests')
-            
+
             for entry in discovered_tests:
                 try:
                     test_func = entry.load()
@@ -62,26 +61,26 @@ class TestRegistry:
                     logging.error(f"Failed to load test plugin '{entry.name}': {e}")
         except Exception as e:
             logging.warning(f"Error discovering test plugins: {e}")
-        
+
         # Discover tests from direct imports in this package
         try:
             # Get the directory containing this file
             test_dir = Path(__file__).parent
-            
+
             # Look for Python files in the directory
             for file_path in test_dir.glob("*.py"):
                 if file_path.name.startswith("_") or file_path.name == "main.py":
                     continue
-                
+
                 module_name = f"src.cli.test.{file_path.stem}"
                 try:
                     module = importlib.import_module(module_name)
-                    
+
                     # Look for run_test function
                     if hasattr(module, "run_test"):
                         self.register(file_path.stem, module.run_test)
                         logging.debug(f"Registered test from module: {file_path.stem}")
-                    
+
                     # Look for TESTS dictionary
                     if hasattr(module, "TESTS"):
                         for test_name, test_func in module.TESTS.items():
@@ -91,7 +90,7 @@ class TestRegistry:
                     logging.error(f"Failed to load test module '{file_path.stem}': {e}")
         except Exception as e:
             logging.warning(f"Error discovering test modules: {e}")
-    
+
     def register(self, name: str, test_func: callable):
         """
         Register a test function.
@@ -101,8 +100,8 @@ class TestRegistry:
             test_func: Test function
         """
         self.tests[name] = test_func
-    
-    def get_test(self, name: str) -> Optional[callable]:
+
+    def get_test(self, name: str) -> callable | None:
         """
         Get a test function by name.
         
@@ -113,8 +112,8 @@ class TestRegistry:
             Test function or None if not found
         """
         return self.tests.get(name)
-    
-    def get_all_tests(self) -> Dict[str, callable]:
+
+    def get_all_tests(self) -> dict[str, callable]:
         """
         Get all registered tests.
         
@@ -135,7 +134,6 @@ def callback():
     File Analyzer components, including FastVLM model tests,
     JSON output validation, and more.
     """
-    pass
 
 @app.command()
 def list():
@@ -143,16 +141,16 @@ def list():
     List available tests.
     """
     tests = test_registry.get_all_tests()
-    
+
     if not tests:
         console.print("[yellow]No tests registered[/yellow]")
         return
-    
+
     # Create table of tests
     table = Table(title="Available Tests")
     table.add_column("Test Name", style="cyan")
     table.add_column("Description", style="green")
-    
+
     for name, test_func in sorted(tests.items()):
         # Get description from function docstring
         description = test_func.__doc__
@@ -161,17 +159,17 @@ def list():
         else:
             # Use first line of docstring as description
             description = description.split("\n")[0].strip()
-        
+
         table.add_row(name, description)
-    
+
     console.print(table)
 
 @app.command()
 def run(
-    test_name: Optional[str] = typer.Argument(
+    test_name: str | None = typer.Argument(
         None, help="Name of the test to run (all tests if not specified)"
     ),
-    output_dir: Optional[str] = typer.Option(
+    output_dir: str | None = typer.Option(
         None, "--output", "-o", help="Output directory for test results"
     ),
     verbose: bool = typer.Option(
@@ -198,15 +196,15 @@ def run(
         log_level = logging.DEBUG
     elif quiet:
         log_level = logging.ERROR
-    
+
     # Use the existing logger configured in main.py
     logger = logging.getLogger("file-analyzer.test")
     logger.setLevel(log_level)
-    
+
     # Create output directory if specified
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    
+
     # Run either a specific test or all tests
     if test_name:
         # Run a specific test
@@ -214,9 +212,9 @@ def run(
         if not test_func:
             console.print(f"[red]Error:[/red] Test '{test_name}' not found")
             raise typer.Exit(code=1)
-        
+
         console.print(f"Running test: [cyan]{test_name}[/cyan]")
-        
+
         try:
             # Create test context
             context = {
@@ -230,15 +228,15 @@ def run(
                 "logger": logger,
                 "console": console if not quiet else None,
             }
-            
+
             # Run the test
             result = test_func(context)
-            
+
             # Check result
             if not result or not isinstance(result, dict):
                 console.print(f"[red]Error:[/red] Test '{test_name}' returned invalid result")
                 raise typer.Exit(code=1)
-            
+
             # Print result
             success = result.get("success", False)
             if success:
@@ -247,21 +245,21 @@ def run(
                 console.print(f"[red]Test '{test_name}' failed:[/red] {result.get('message', 'No error message')}")
                 raise typer.Exit(code=1)
         except Exception as e:
-            console.print(f"[red]Error running test '{test_name}':[/red] {str(e)}")
+            console.print(f"[red]Error running test '{test_name}':[/red] {e!s}")
             raise typer.Exit(code=1)
     else:
         # Run all tests
         tests = test_registry.get_all_tests()
-        
+
         if not tests:
             console.print("[yellow]No tests registered[/yellow]")
             return
-        
+
         console.print(f"Running [cyan]{len(tests)}[/cyan] tests...")
-        
+
         # Track test results
         results = []
-        
+
         # Run tests with progress indicator
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -270,10 +268,10 @@ def run(
             console=console
         ) as progress:
             task = progress.add_task("[green]Running tests...", total=len(tests))
-            
+
             for name, test_func in sorted(tests.items()):
                 progress.update(task, description=f"Running [cyan]{name}[/cyan]...")
-                
+
                 try:
                     # Create test context
                     context = {
@@ -287,10 +285,10 @@ def run(
                         "logger": logger,
                         "console": None,  # Disable console output during test
                     }
-                    
+
                     # Run the test
                     result = test_func(context)
-                    
+
                     # Check result
                     if not result or not isinstance(result, dict):
                         result = {
@@ -300,9 +298,9 @@ def run(
                         }
                     else:
                         result["name"] = name
-                    
+
                     results.append(result)
-                    
+
                     # Check for failure with fail_fast
                     if fail_fast and not result.get("success", False):
                         progress.update(task, completed=len(tests))
@@ -311,40 +309,40 @@ def run(
                     results.append({
                         "name": name,
                         "success": False,
-                        "message": f"Error: {str(e)}"
+                        "message": f"Error: {e!s}"
                     })
-                    
+
                     # Check for failure with fail_fast
                     if fail_fast:
                         progress.update(task, completed=len(tests))
                         break
-                
+
                 progress.update(task, advance=1)
-        
+
         # Compute summary
         passed = sum(1 for r in results if r.get("success", False))
         failed = len(results) - passed
-        
+
         # Print summary table
         table = Table(title=f"Test Results: {passed} passed, {failed} failed")
         table.add_column("Test", style="cyan")
         table.add_column("Result", style="green")
         table.add_column("Message", style="yellow")
-        
+
         for result in results:
             name = result.get("name", "Unknown")
             success = result.get("success", False)
             message = result.get("message", "")
-            
+
             if success:
                 result_text = "[green]PASS[/green]"
             else:
                 result_text = "[red]FAIL[/red]"
-            
+
             table.add_row(name, result_text, message)
-        
+
         console.print(table)
-        
+
         # Save results to output file if specified
         if output_dir:
             import json
@@ -356,16 +354,16 @@ def run(
                     "failed": failed,
                     "results": results
                 }, f, indent=2)
-            
+
             console.print(f"Results saved to: {results_file}")
-        
+
         # Exit with error code if any tests failed
         if failed > 0:
             raise typer.Exit(code=1)
 
 @app.command()
 def fastvlm(
-    output_dir: Optional[str] = typer.Option(
+    output_dir: str | None = typer.Option(
         None, "--output", "-o", help="Output directory for test results"
     ),
     model_size: str = typer.Option(
@@ -374,7 +372,7 @@ def fastvlm(
     use_mock: bool = typer.Option(
         False, "--mock", "-m", help="Use mock model for testing"
     ),
-    test_image: Optional[str] = typer.Option(
+    test_image: str | None = typer.Option(
         None, "--image", "-i", help="Path to test image (uses default if not specified)"
     ),
     verbose: bool = typer.Option(
@@ -390,7 +388,7 @@ def fastvlm(
     # Dynamically import the fastvlm test module
     try:
         from src.cli.test import fastvlm_tests
-        
+
         # Create test context
         context = {
             "name": "fastvlm",
@@ -406,19 +404,19 @@ def fastvlm(
             "use_mock": use_mock,
             "test_image": test_image,
         }
-        
+
         # Run the test
         result = fastvlm_tests.run_test(context)
-        
+
         # Check result
         if not result or not isinstance(result, dict):
-            console.print(f"[red]Error:[/red] FastVLM test returned invalid result")
+            console.print("[red]Error:[/red] FastVLM test returned invalid result")
             raise typer.Exit(code=1)
-        
+
         # Print result
         success = result.get("success", False)
         if success:
-            console.print(f"[green]FastVLM test passed[/green]")
+            console.print("[green]FastVLM test passed[/green]")
         else:
             console.print(f"[red]FastVLM test failed:[/red] {result.get('message', 'No error message')}")
             raise typer.Exit(code=1)
@@ -427,12 +425,12 @@ def fastvlm(
         console.print("Please ensure that fastvlm_tests.py is present in src/cli/test directory")
         raise typer.Exit(code=1)
     except Exception as e:
-        console.print(f"[red]Error running FastVLM test:[/red] {str(e)}")
+        console.print(f"[red]Error running FastVLM test:[/red] {e!s}")
         raise typer.Exit(code=1)
 
 @app.command()
 def json(
-    output_dir: Optional[str] = typer.Option(
+    output_dir: str | None = typer.Option(
         None, "--output", "-o", help="Output directory for test results"
     ),
     model_size: str = typer.Option(
@@ -441,7 +439,7 @@ def json(
     use_mock: bool = typer.Option(
         False, "--mock", "-m", help="Use mock model for testing"
     ),
-    test_image: Optional[str] = typer.Option(
+    test_image: str | None = typer.Option(
         None, "--image", "-i", help="Path to test image (uses default if not specified)"
     ),
     verbose: bool = typer.Option(
@@ -457,7 +455,7 @@ def json(
     # Dynamically import the json test module
     try:
         from src.cli.test import json_tests
-        
+
         # Create test context
         context = {
             "name": "json",
@@ -473,19 +471,19 @@ def json(
             "use_mock": use_mock,
             "test_image": test_image,
         }
-        
+
         # Run the test
         result = json_tests.run_test(context)
-        
+
         # Check result
         if not result or not isinstance(result, dict):
-            console.print(f"[red]Error:[/red] JSON test returned invalid result")
+            console.print("[red]Error:[/red] JSON test returned invalid result")
             raise typer.Exit(code=1)
-        
+
         # Print result
         success = result.get("success", False)
         if success:
-            console.print(f"[green]JSON test passed[/green]")
+            console.print("[green]JSON test passed[/green]")
         else:
             console.print(f"[red]JSON test failed:[/red] {result.get('message', 'No error message')}")
             raise typer.Exit(code=1)
@@ -494,7 +492,7 @@ def json(
         console.print("Please ensure that json_tests.py is present in src/cli/test directory")
         raise typer.Exit(code=1)
     except Exception as e:
-        console.print(f"[red]Error running JSON test:[/red] {str(e)}")
+        console.print(f"[red]Error running JSON test:[/red] {e!s}")
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":

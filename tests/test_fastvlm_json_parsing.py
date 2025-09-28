@@ -6,20 +6,21 @@ These tests use actual outputs captured from the FastVLM model to ensure
 our JSON parsing logic handles both valid and malformed JSON correctly.
 """
 
-import unittest
 import json
-import sys
 import os
+import sys
+import unittest
+
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 class TestFastVLMJSONParsing(unittest.TestCase):
     """Test FastVLM JSON parsing with real model outputs."""
-    
+
     def setUp(self):
         """Set up test fixtures with actual model outputs."""
-        
+
         # Valid JSON output from 256 tokens (this works)
         self.valid_json_256_tokens = """{
   "description": "The image is a vibrant, cartoon-style illustration featuring a yellow rubber duck wearing sunglasses and a purple wizard hat, sitting in a bowl filled with alphabet soup. The duck is holding a spoon and appears to be stirring the soup. Surrounding the duck are three penguins dressed in suits, each with a surprised expression on their faces. One penguin is holding a sign that reads 'Intergalactic Banana Launcher' with a banana illustration. To the right, a penguin is holding an open briefcase filled with colorful candies. The background is a bright blue sky with clouds and various symbols such as question marks, exclamation marks, and a hashtag. The image also includes several hashtags such as #, @, and #.",
@@ -70,25 +71,25 @@ class TestFastVLMJSONParsing(unittest.TestCase):
         """Test that json-repair can fix the malformed JSON."""
         try:
             from json_repair import repair_json
-            
+
             # Attempt to repair the malformed JSON
             repaired = repair_json(self.malformed_json_512_tokens)
             parsed = json.loads(repaired)
-            
+
             self.assertIsInstance(parsed, dict)
             self.assertIn("description", parsed)
             self.assertIn("tags", parsed)
             self.assertIsInstance(parsed["tags"], list)
-            
+
             # Check that repetitive "shark" entries are handled
             tag_counts = {}
             for tag in parsed["tags"]:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
-            
+
             # Should have fewer "shark" entries after repair
             if "shark" in tag_counts:
                 self.assertLess(tag_counts["shark"], 50, "JSON repair should reduce repetitive entries")
-                
+
         except ImportError:
             self.skipTest("json-repair package not available")
 
@@ -100,7 +101,7 @@ class TestFastVLMJSONParsing(unittest.TestCase):
             "tags": list,
             "metadata": dict
         }
-        
+
         # For now, just test that we can extract basic info
         self.assertIn("yellow duck", self.plain_text_output.lower())
         self.assertIn("penguins", self.plain_text_output.lower())
@@ -108,7 +109,7 @@ class TestFastVLMJSONParsing(unittest.TestCase):
 
     def test_adapter_json_parsing_logic(self):
         """Test the actual adapter JSON parsing logic with our samples."""
-        
+
         # Simulate the adapter's JSON parsing method
         def parse_model_output(output):
             """Simulate the adapter's parsing logic."""
@@ -143,13 +144,13 @@ class TestFastVLMJSONParsing(unittest.TestCase):
 
     def test_token_limit_recommendations(self):
         """Test that we can identify optimal token limits."""
-        
+
         # 256 tokens should produce valid JSON
         self.assertTrue(self._is_valid_json(self.valid_json_256_tokens))
-        
+
         # 512 tokens produces malformed JSON
         self.assertFalse(self._is_valid_json(self.malformed_json_512_tokens))
-        
+
         # This test documents that 256 tokens is the sweet spot
         recommended_token_limit = 256
         self.assertEqual(recommended_token_limit, 256, "256 tokens produces clean JSON without repetition")
