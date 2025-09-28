@@ -1,0 +1,21 @@
+# Normalize line endings across platforms
+# Default to LF to avoid CRLF churn in diffs, and explicitly set for script types
+
+* text=auto eol=lf
+
+# Common text formats
+*.py   text eol=lf
+*.toml text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+
+# Shell scripts should always be LF
+*.sh   text eol=lf
+*.bash text eol=lf
+*.zsh  text eol=lf
+
+# Windows-native scripts may use CRLF
+*.ps1  text eol=crlf
+*.bat  text eol=crlf

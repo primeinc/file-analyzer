@@ -112,7 +112,8 @@ jobs:
         
     - name: Run type checking with mypy
       run: |
-        uv run mypy src/ --ignore-missing-imports --no-strict-optional
+        # Use mypy configuration from pyproject.toml without overrides
+        uv run mypy src/
         
   integration-tests:
     name: Integration Tests
