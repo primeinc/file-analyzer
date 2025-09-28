@@ -19,7 +19,7 @@ import json
 import logging
 import re
 import time
-from typing import Any, Optional
+from typing import Any
 
 
 # Configure logging
