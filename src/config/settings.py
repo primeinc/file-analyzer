@@ -28,12 +28,14 @@ from typing import Any
 try:
     from pydantic import Field
     from pydantic_settings import BaseSettings as BaseSettingsNew
+
     # Try new pydantic-settings first, fall back to pydantic v1
     BaseSettingsClass = BaseSettingsNew
     PYDANTIC_AVAILABLE = True
 except ImportError:
     try:
         from pydantic import BaseSettings, Field
+
         BaseSettingsClass = BaseSettings
         PYDANTIC_AVAILABLE = True
     except ImportError:
@@ -44,7 +46,7 @@ except ImportError:
 
         # Mock Field for fallback
         def field(**kwargs):
-            return kwargs.get('default')
+            return kwargs.get("default")
 
         Field = field
 
@@ -52,6 +54,7 @@ from src.utils.path_utils import RUNTIME
 
 
 logger = logging.getLogger(__name__)
+
 
 def find_project_root(current_path: Path | None = None) -> Path:
     """
@@ -78,6 +81,7 @@ def find_project_root(current_path: Path | None = None) -> Path:
     logger.warning("No project root markers found, using current working directory")
     return Path.cwd()
 
+
 def get_user_data_dir() -> Path:
     """Get platform-appropriate user data directory."""
     if RUNTIME["windows"]:
@@ -89,6 +93,7 @@ def get_user_data_dir() -> Path:
 
     return base / "file-analyzer"
 
+
 def get_user_cache_dir() -> Path:
     """Get platform-appropriate user cache directory."""
     if RUNTIME["windows"]:
@@ -99,6 +104,7 @@ def get_user_cache_dir() -> Path:
     else:  # Linux, WSL, etc.
         base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
         return base / "file-analyzer"
+
 
 class PathSettings(BaseSettingsClass):
     """Path-related configuration with automatic environment variable binding."""
@@ -122,6 +128,7 @@ class PathSettings(BaseSettingsClass):
     project_model_dir: Path | None = None
 
     if PYDANTIC_AVAILABLE:
+
         class Config:
             env_prefix = "FA_PATH_"
             case_sensitive = False
@@ -152,6 +159,7 @@ class PathSettings(BaseSettingsClass):
         if not self.project_model_dir:
             self.project_model_dir = self.libs_dir / "ml-fastvlm" / "checkpoints"
 
+
 class ModelSettings(BaseSettingsClass):
     """Model-specific configuration."""
 
@@ -162,36 +170,40 @@ class ModelSettings(BaseSettingsClass):
     max_size_gb: int = 16
 
     # Model checkpoints configuration
-    checkpoints: dict[str, Any] = Field(default={
-        "fastvlm": {
-            "0.5b": {
-                "path": "llava-fastvithd_0.5b_stage3",
-                "description": "FastVLM 0.5B model (small)",
-                "download_url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage3.zip",
-                "file_size_bytes": 1075577344,  # ~1.0 GB
-                "version": "v1.0.2",
-            },
-            "1.5b": {
-                "path": "llava-fastvithd_1.5b_stage3",
-                "description": "FastVLM 1.5B model (medium)",
-                "download_url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage3.zip",
-                "file_size_bytes": 2969567232,  # ~2.8 GB
-                "version": "v1.0.2",
-            },
-            "7b": {
-                "path": "llava-fastvithd_7b_stage3",
-                "description": "FastVLM 7B model (large)",
-                "download_url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_7b_stage3.zip",
-                "file_size_bytes": 13959213056,  # ~13.0 GB
-                "version": "v1.0.2",
+    checkpoints: dict[str, Any] = Field(
+        default={
+            "fastvlm": {
+                "0.5b": {
+                    "path": "llava-fastvithd_0.5b_stage3",
+                    "description": "FastVLM 0.5B model (small)",
+                    "download_url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage3.zip",
+                    "file_size_bytes": 1075577344,  # ~1.0 GB
+                    "version": "v1.0.2",
+                },
+                "1.5b": {
+                    "path": "llava-fastvithd_1.5b_stage3",
+                    "description": "FastVLM 1.5B model (medium)",
+                    "download_url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage3.zip",
+                    "file_size_bytes": 2969567232,  # ~2.8 GB
+                    "version": "v1.0.2",
+                },
+                "7b": {
+                    "path": "llava-fastvithd_7b_stage3",
+                    "description": "FastVLM 7B model (large)",
+                    "download_url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_7b_stage3.zip",
+                    "file_size_bytes": 13959213056,  # ~13.0 GB
+                    "version": "v1.0.2",
+                },
             }
         }
-    })
+    )
 
     if PYDANTIC_AVAILABLE:
+
         class Config:
             env_prefix = "FA_MODEL_"
             case_sensitive = False
+
 
 class AppSettings(BaseSettingsClass):
     """Application-wide configuration."""
@@ -205,9 +217,11 @@ class AppSettings(BaseSettingsClass):
     tool_options: dict[str, Any] = Field(default={})
 
     if PYDANTIC_AVAILABLE:
+
         class Config:
             env_prefix = "FA_"
             case_sensitive = False
+
 
 class Settings:
     """
@@ -227,7 +241,9 @@ class Settings:
         self._setup_logging()
 
         # Log configuration summary
-        logger.info(f"Initialized configuration (project_root: {self.path.project_root})")
+        logger.info(
+            f"Initialized configuration (project_root: {self.path.project_root})"
+        )
         if self.app.debug:
             logger.debug(f"Runtime environment: {RUNTIME}")
 
@@ -237,13 +253,12 @@ class Settings:
 
         # Configure root logger
         logging.basicConfig(
-            level=level,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
 
         if self.app.debug:
             # Enable debug logging for our modules
-            for module in ['src.config', 'src.models', 'src.core', 'src.cli']:
+            for module in ["src.config", "src.models", "src.core", "src.cli"]:
                 logging.getLogger(module).setLevel(logging.DEBUG)
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -258,7 +273,7 @@ class Settings:
             Configuration value or default
         """
         # Handle dot notation (e.g., 'model.default_size')
-        parts = key.split('.')
+        parts = key.split(".")
 
         if len(parts) == 1:
             # Simple key - check app settings first for backwards compatibility
@@ -270,6 +285,7 @@ class Settings:
                 return getattr(section_obj, setting, default)
 
         return default
+
 
 # Create global settings instance
 settings = Settings()

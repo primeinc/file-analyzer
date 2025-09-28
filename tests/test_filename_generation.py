@@ -163,14 +163,14 @@ class TestFilenameExtractionFallback:
 class TestIntelligentFilenameGeneration:
     """Test the full intelligent filename generation with adapter integration."""
 
-    @patch('src.models.fastvlm.adapter.create_adapter')
+    @patch("src.models.fastvlm.adapter.create_adapter")
     def test_successful_model_filename_generation(self, mock_create_adapter):
         """Test successful filename generation using model."""
         # Mock the adapter and its predict method
         mock_adapter = MagicMock()
         mock_adapter.predict.return_value = {
             "description": "red-sports-car",
-            "text": "red-sports-car"
+            "text": "red-sports-car",
         }
         mock_create_adapter.return_value = mock_adapter
 
@@ -179,9 +179,7 @@ class TestIntelligentFilenameGeneration:
             tmp_file.flush()
 
             result = generate_intelligent_filename(
-                "A red sports car",
-                tmp_file.name,
-                ".jpg"
+                "A red sports car", tmp_file.name, ".jpg"
             )
 
             assert result == "red-sports-car.jpg"
@@ -190,7 +188,7 @@ class TestIntelligentFilenameGeneration:
             mock_create_adapter.assert_called_once()
             mock_adapter.predict.assert_called_once()
 
-    @patch('src.models.fastvlm.adapter.create_adapter')
+    @patch("src.models.fastvlm.adapter.create_adapter")
     def test_model_failure_fallback(self, mock_create_adapter):
         """Test fallback when model fails."""
         # Mock adapter to raise exception
@@ -199,34 +197,28 @@ class TestIntelligentFilenameGeneration:
         mock_create_adapter.return_value = mock_adapter
 
         result = generate_intelligent_filename(
-            "The letter T in red font",
-            "/fake/path.jpg",
-            ".jpg"
+            "The letter T in red font", "/fake/path.jpg", ".jpg"
         )
 
         # Should fall back to pattern extraction
         assert result == "letter-t.jpg"
 
-    @patch('src.models.fastvlm.adapter.create_adapter')
+    @patch("src.models.fastvlm.adapter.create_adapter")
     def test_invalid_model_response_fallback(self, mock_create_adapter):
         """Test fallback when model returns invalid response."""
         # Mock adapter to return invalid response
         mock_adapter = MagicMock()
-        mock_adapter.predict.return_value = {
-            "error": "Invalid response"
-        }
+        mock_adapter.predict.return_value = {"error": "Invalid response"}
         mock_create_adapter.return_value = mock_adapter
 
         result = generate_intelligent_filename(
-            "A duck wearing a wizard hat",
-            "/fake/path.jpg",
-            ".jpg"
+            "A duck wearing a wizard hat", "/fake/path.jpg", ".jpg"
         )
 
         # Should fall back to pattern extraction
         assert result == "duck.jpg"
 
-    @patch('src.models.fastvlm.adapter.create_adapter')
+    @patch("src.models.fastvlm.adapter.create_adapter")
     def test_filename_cleaning_and_validation(self, mock_create_adapter):
         """Test that generated filenames are properly cleaned."""
         # Mock adapter to return messy filename
@@ -237,9 +229,7 @@ class TestIntelligentFilenameGeneration:
         mock_create_adapter.return_value = mock_adapter
 
         result = generate_intelligent_filename(
-            "Test description",
-            "/fake/path.jpg",
-            ".jpg"
+            "Test description", "/fake/path.jpg", ".jpg"
         )
 
         # Should clean up the filename
@@ -248,20 +238,16 @@ class TestIntelligentFilenameGeneration:
         assert "!" not in result  # Should remove special chars
         assert "  " not in result  # Should collapse spaces
 
-    @patch('src.models.fastvlm.adapter.create_adapter')
+    @patch("src.models.fastvlm.adapter.create_adapter")
     def test_short_filename_rejection(self, mock_create_adapter):
         """Test that very short filenames are rejected."""
         # Mock adapter to return very short filename
         mock_adapter = MagicMock()
-        mock_adapter.predict.return_value = {
-            "description": "ab"
-        }
+        mock_adapter.predict.return_value = {"description": "ab"}
         mock_create_adapter.return_value = mock_adapter
 
         result = generate_intelligent_filename(
-            "The number 5 in blue",
-            "/fake/path.jpg",
-            ".jpg"
+            "The number 5 in blue", "/fake/path.jpg", ".jpg"
         )
 
         # Should fall back to pattern extraction since "ab" is too short
@@ -279,32 +265,24 @@ class TestIntelligentFilenameGeneration:
 
         for ext, description in test_cases:
             result = generate_intelligent_filename(
-                f"The letter T in red font - {description}",
-                f"/fake/path{ext}",
-                ext
+                f"The letter T in red font - {description}", f"/fake/path{ext}", ext
             )
 
             assert result.endswith(ext)
             assert "letter-t" in result
 
-    @patch('src.models.fastvlm.adapter.create_adapter')
+    @patch("src.models.fastvlm.adapter.create_adapter")
     def test_adapter_creation_parameters(self, mock_create_adapter):
         """Test that adapter is created with correct parameters."""
         mock_adapter = MagicMock()
         mock_adapter.predict.return_value = {"description": "test-filename"}
         mock_create_adapter.return_value = mock_adapter
 
-        generate_intelligent_filename(
-            "Test description",
-            "/fake/path.jpg",
-            ".jpg"
-        )
+        generate_intelligent_filename("Test description", "/fake/path.jpg", ".jpg")
 
         # Verify adapter creation with correct parameters
         mock_create_adapter.assert_called_once_with(
-            "fastvlm",
-            "1.5b",
-            auto_download=False
+            "fastvlm", "1.5b", auto_download=False
         )
 
         # Verify predict call parameters
@@ -330,7 +308,9 @@ class TestEdgeCases:
     def test_very_long_description(self):
         """Test handling of very long descriptions."""
         long_description = "A " + "very " * 100 + "long description with many words"
-        result = generate_intelligent_filename(long_description, "/fake/path.jpg", ".jpg")
+        result = generate_intelligent_filename(
+            long_description, "/fake/path.jpg", ".jpg"
+        )
 
         # Should handle gracefully and not crash
         assert result.endswith(".jpg")
@@ -338,13 +318,13 @@ class TestEdgeCases:
 
     def test_special_characters_in_description(self):
         """Test handling of special characters in description."""
-        description = "Image with / \\ : * ? \" < > | special characters"
+        description = 'Image with / \\ : * ? " < > | special characters'
         result = generate_intelligent_filename(description, "/fake/path.jpg", ".jpg")
 
         # Should handle gracefully and produce valid filename
         assert result.endswith(".jpg")
         # Should not contain filesystem-unsafe characters
-        unsafe_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+        unsafe_chars = ["/", "\\", ":", "*", "?", '"', "<", ">", "|"]
         for char in unsafe_chars:
             assert char not in result
 

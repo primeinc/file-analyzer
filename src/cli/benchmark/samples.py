@@ -39,77 +39,78 @@ DESCRIPTIONS = {
         "A beautiful landscape with mountains and a lake reflecting the sky.",
         "A forest scene with sunlight streaming through the trees and a path leading into the distance.",
         "A beach with white sand and turquoise water, palm trees lining the shore.",
-        "A meadow filled with wildflowers under a blue sky with scattered clouds."
+        "A meadow filled with wildflowers under a blue sky with scattered clouds.",
     ],
     # Animals
     "animals": [
         "A majestic lion sitting on a rock in the savanna, surveying its territory.",
         "Two playful dolphins jumping out of the water in synchrony.",
         "A colorful parrot perched on a branch, its vibrant feathers clearly visible.",
-        "A family of elephants walking across an open plain, with baby elephants protected by the adults."
+        "A family of elephants walking across an open plain, with baby elephants protected by the adults.",
     ],
     # People
     "people": [
         "A group of friends smiling and laughing together at a social gathering.",
         "A person concentrating deeply while playing a musical instrument.",
         "A child with a joyful expression blowing bubbles in a park.",
-        "Two people walking hand in hand on a beach at sunset."
+        "Two people walking hand in hand on a beach at sunset.",
     ],
     # Urban scenes
     "urban": [
         "A skyline of a modern city with skyscrapers reflecting the sunlight.",
         "A narrow cobblestone street in an old European city with historic buildings.",
         "A busy marketplace with vendors selling colorful goods and produce.",
-        "A quiet café with outdoor seating and people enjoying their drinks."
+        "A quiet café with outdoor seating and people enjoying their drinks.",
     ],
     # Food
     "food": [
         "A beautifully plated dish with vibrant colors and artistic presentation.",
         "A rustic wooden table with an assortment of fresh fruits and vegetables.",
         "A steaming cup of coffee next to a freshly baked pastry on a cafe table.",
-        "A traditional meal with multiple dishes arranged on a dining table."
+        "A traditional meal with multiple dishes arranged on a dining table.",
     ],
     # Objects
     "objects": [
         "A vintage camera on a wooden surface with soft lighting.",
         "A collection of antique books with worn leather covers on a bookshelf.",
         "A sleek modern smartphone displaying a colorful application.",
-        "A handcrafted ceramic vase with an intricate pattern."
+        "A handcrafted ceramic vase with an intricate pattern.",
     ],
     # Abstract
     "abstract": [
         "This image appears to be an abstract artwork with vibrant colors and geometric shapes.",
         "A pattern of repeating elements creating an optical illusion effect.",
         "This appears to be a digital art piece with flowing forms and gradient colors.",
-        "A minimalist composition with simple shapes and a limited color palette."
+        "A minimalist composition with simple shapes and a limited color palette.",
     ],
     # Charts
     "charts": [
         "A bar chart comparing data across multiple categories with clear labels.",
         "A line graph showing trends over time with multiple data series.",
         "A pie chart illustrating the distribution of resources or percentages.",
-        "A complex data visualization combining multiple chart types to present information."
+        "A complex data visualization combining multiple chart types to present information.",
     ],
     # Unknown
     "unknown": [
         "The image shows a scene with various elements that are difficult to categorize specifically.",
         "This appears to be a composite image with multiple subjects and themes.",
         "The image content is unclear or ambiguous in nature.",
-        "This image contains a mix of different elements and subjects."
-    ]
+        "This image contains a mix of different elements and subjects.",
+    ],
 }
 
 # Create Typer app for samples command
 app = typer.Typer(help="Generate benchmark sample data")
 
+
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for benchmark commands and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -120,13 +121,14 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
 
+
 def get_image_hash(image_path):
     """
     Generate a simple hash for an image path to use as cache key.
-    
+
     Args:
         image_path: Path to the image
-        
+
     Returns:
         str: MD5 hash of the image path and file stats
     """
@@ -135,14 +137,15 @@ def get_image_hash(image_path):
     hash_str = f"{path_str}_{stats.st_size}_{stats.st_mtime}"
     return hashlib.md5(hash_str.encode()).hexdigest()
 
+
 def categorize_image(image_path):
     """
     Assign a category to an image based on its filename.
     This is a simple heuristic to simulate image content recognition.
-    
+
     Args:
         image_path: Path to the image
-        
+
     Returns:
         str: Category name
     """
@@ -150,14 +153,23 @@ def categorize_image(image_path):
 
     # Check filename for category hints
     categories = {
-        "nature": ["nature", "landscape", "forest", "beach", "mountain", "tree", "sky", "lake"],
+        "nature": [
+            "nature",
+            "landscape",
+            "forest",
+            "beach",
+            "mountain",
+            "tree",
+            "sky",
+            "lake",
+        ],
         "animals": ["animal", "dog", "cat", "bird", "wildlife", "pet", "zoo"],
         "people": ["person", "people", "face", "portrait", "human", "child"],
         "urban": ["city", "building", "street", "urban", "architecture"],
         "food": ["food", "meal", "dish", "fruit", "vegetable", "dessert"],
         "objects": ["object", "item", "product", "device", "tool", "furniture"],
         "abstract": ["abstract", "art", "pattern", "design", "texture"],
-        "charts": ["chart", "graph", "plot", "diagram", "data", "infographic"]
+        "charts": ["chart", "graph", "plot", "diagram", "data", "infographic"],
     }
 
     for category, keywords in categories.items():
@@ -170,14 +182,15 @@ def categorize_image(image_path):
     categories_list = list(categories.keys()) + ["unknown"]
     return categories_list[filename_hash]
 
+
 def generate_sample_response(image_path, category=None):
     """
     Generate a sample response for an image without using actual model.
-    
+
     Args:
         image_path: Path to the image
         category: Optional category to use (if None, will be determined)
-        
+
     Returns:
         dict: Sample response data
     """
@@ -203,7 +216,7 @@ def generate_sample_response(image_path, category=None):
         "objects": ["object", "item", "product", "still life"],
         "abstract": ["abstract", "art", "pattern", "design"],
         "charts": ["chart", "graph", "data", "visualization"],
-        "unknown": ["scene", "mixed", "miscellaneous", "general"]
+        "unknown": ["scene", "mixed", "miscellaneous", "general"],
     }.get(category, ["image", "scene", "photo"])
 
     # Create fake timing data
@@ -222,15 +235,16 @@ def generate_sample_response(image_path, category=None):
         "total_processing_time": total_time,
         "token_rate": tokens / total_time if total_time > 0 else 0,
         "total_tokens": tokens,
-        "generated_at": datetime.now().isoformat()
+        "generated_at": datetime.now().isoformat(),
     }
 
     return response
 
+
 def create_or_load_cache():
     """
     Create or load the cache file for sample response data.
-    
+
     Returns:
         dict: Cache data structure
     """
@@ -243,38 +257,42 @@ def create_or_load_cache():
             with open(CACHE_FILE) as f:
                 return json.load(f)
         except (OSError, json.JSONDecodeError):
-            console.print("[yellow]Cache file exists but could not be read. Creating new cache.[/yellow]")
+            console.print(
+                "[yellow]Cache file exists but could not be read. Creating new cache.[/yellow]"
+            )
 
     # Create new cache
     return {"images": {}, "metadata": {"created_at": datetime.now().isoformat()}}
 
+
 def save_cache(cache_data):
     """
     Save cache data to the cache file.
-    
+
     Args:
         cache_data: Cache data to save
-        
+
     Returns:
         bool: Success status
     """
     try:
-        with open(CACHE_FILE, 'w') as f:
+        with open(CACHE_FILE, "w") as f:
             json.dump(cache_data, f, indent=2)
         return True
     except (OSError, PermissionError) as e:
         console.print(f"[red]Error saving cache file: {e!s}[/red]")
         return False
 
+
 def get_or_generate_response(image_path, cache, force_generate=False):
     """
     Get response from cache or generate a new one.
-    
+
     Args:
         image_path: Path to the image
         cache: Cache data structure
         force_generate: Whether to force regeneration
-        
+
     Returns:
         dict: Response data
     """
@@ -293,15 +311,16 @@ def get_or_generate_response(image_path, cache, force_generate=False):
 
     return response
 
+
 def generate_benchmark_data(output_file=None, use_cache=True, force_generate=False):
     """
     Generate benchmark data for all test images.
-    
+
     Args:
         output_file: Path to save output file (if None, uses canonical path)
         use_cache: Whether to use/update cache
         force_generate: Whether to force regeneration of all responses
-        
+
     Returns:
         dict: Benchmark data
     """
@@ -319,26 +338,28 @@ def generate_benchmark_data(output_file=None, use_cache=True, force_generate=Fal
     benchmark_data = {
         "generated_at": datetime.now().isoformat(),
         "images": {},
-        "summary": {
-            "image_count": len(images),
-            "categories": {}
-        }
+        "summary": {"image_count": len(images), "categories": {}},
     }
 
     # Process each image
-    console.print(f"[bold]Generating sample benchmark data for {len(images)} images...[/bold]")
+    console.print(
+        f"[bold]Generating sample benchmark data for {len(images)} images...[/bold]"
+    )
 
     with Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[green]Processing images...", total=len(images))
 
         for i, image_path in enumerate(images):
             # Update progress
-            progress.update(task, description=f"[green]Processing {image_path.name} ({i+1}/{len(images)})")
+            progress.update(
+                task,
+                description=f"[green]Processing {image_path.name} ({i + 1}/{len(images)})",
+            )
 
             try:
                 # Get or generate response
@@ -375,7 +396,7 @@ def generate_benchmark_data(output_file=None, use_cache=True, force_generate=Fal
 
     # Save benchmark data
     try:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(benchmark_data, f, indent=2)
         console.print(f"[green]Benchmark data saved to: {output_file}[/green]")
     except Exception as e:
@@ -383,7 +404,9 @@ def generate_benchmark_data(output_file=None, use_cache=True, force_generate=Fal
 
     # Print summary
     console.print("\n[bold]Benchmark Data Summary:[/bold]")
-    console.print(f"Generated samples for [green]{len(benchmark_data['images'])}[/green] images")
+    console.print(
+        f"Generated samples for [green]{len(benchmark_data['images'])}[/green] images"
+    )
 
     # Print category distribution
     if benchmark_data["summary"]["categories"]:
@@ -401,14 +424,16 @@ def generate_benchmark_data(output_file=None, use_cache=True, force_generate=Fal
 
     return benchmark_data
 
+
 @app.callback()
 def callback():
     """
     Generate and manage benchmark sample data.
-    
+
     The samples command provides utilities for generating sample benchmark data
     without running actual models, which is useful for testing.
     """
+
 
 @app.command("generate")
 def generate(
@@ -430,7 +455,7 @@ def generate(
 ):
     """
     Generate benchmark sample data.
-    
+
     Creates sample model response data for test images without running actual models.
     """
     # Get configured logger
@@ -446,14 +471,11 @@ def generate(
         logger.error(f"Error generating benchmark data: {e!s}")
         return 1
 
+
 @app.command("cache")
 def cache(
-    clear: bool = typer.Option(
-        False, "--clear", "-c", help="Clear the cache"
-    ),
-    info: bool = typer.Option(
-        True, "--info", "-i", help="Show cache information"
-    ),
+    clear: bool = typer.Option(False, "--clear", "-c", help="Clear the cache"),
+    info: bool = typer.Option(True, "--info", "-i", help="Show cache information"),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
     ),
@@ -463,7 +485,7 @@ def cache(
 ):
     """
     Manage benchmark sample data cache.
-    
+
     View or clear the cache of pregenerated sample responses.
     """
     # Get configured logger
@@ -493,7 +515,11 @@ def cache(
 
                 # Get file info
                 file_size = os.path.getsize(CACHE_FILE)
-                file_size_formatted = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
+                file_size_formatted = (
+                    f"{file_size / 1024:.1f} KB"
+                    if file_size < 1024 * 1024
+                    else f"{file_size / (1024 * 1024):.1f} MB"
+                )
 
                 # Print cache info
                 console.print(f"[bold]Cache File:[/bold] {CACHE_FILE}")
@@ -536,6 +562,7 @@ def cache(
         console.print(f"[red]Error managing cache:[/red] {e!s}")
         logger.error(f"Error managing cache: {e!s}")
         return 1
+
 
 if __name__ == "__main__":
     app()

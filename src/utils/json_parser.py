@@ -26,12 +26,12 @@ from typing import Any
 def get_json_value(file_path: str, key: str, default: Any | None = None) -> Any:
     """
     Extract a value from a JSON file by key.
-    
+
     Args:
         file_path: Path to the JSON file
         key: Key to extract (can be nested with dot notation, e.g., 'context.description')
         default: Default value if the key is not found
-        
+
     Returns:
         The value as a string, or the default value if not found
     """
@@ -40,8 +40,8 @@ def get_json_value(file_path: str, key: str, default: Any | None = None) -> Any:
             data = json.load(f)
 
         # Handle nested keys with dot notation
-        if '.' in key:
-            keys = key.split('.')
+        if "." in key:
+            keys = key.split(".")
             value = data
             for k in keys:
                 if isinstance(value, dict) and k in value:
@@ -59,7 +59,9 @@ def get_json_value(file_path: str, key: str, default: Any | None = None) -> Any:
 def main():
     """Command-line interface"""
     if len(sys.argv) < 3:
-        print(f"Usage: {sys.argv[0]} <file_path> <key> [default_value]", file=sys.stderr)
+        print(
+            f"Usage: {sys.argv[0]} <file_path> <key> [default_value]", file=sys.stderr
+        )
         sys.exit(1)
 
     file_path = sys.argv[1]

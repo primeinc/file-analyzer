@@ -18,14 +18,15 @@ from src.cli.main import console
 # Create Typer app for install subcommand
 app = typer.Typer(help="Install the File Analyzer tools")
 
+
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for install commands and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -36,19 +37,22 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
 
+
 def get_project_root() -> Path:
     """Get the project root directory."""
     # Assuming this file is in src/cli/install/main.py
     return Path(__file__).parent.parent.parent.parent.absolute()
 
+
 @app.callback()
 def callback():
     """
     Install the File Analyzer tools.
-    
+
     The install command provides utilities for installing the File Analyzer
     tools to a specified directory, creating symbolic links for easy access.
     """
+
 
 @app.command()
 def run(
@@ -64,7 +68,7 @@ def run(
 ):
     """
     Install the File Analyzer tools to the specified directory.
-    
+
     Creates symbolic links for the analyzer tools in the target directory.
     If no directory is specified, it will install to $HOME/bin by default.
     """
@@ -79,12 +83,16 @@ def run(
     try:
         os.makedirs(install_dir, exist_ok=True)
     except OSError as e:
-        console.print(f"[red]Error:[/red] Installation directory {install_dir} could not be created: {e}")
+        console.print(
+            f"[red]Error:[/red] Installation directory {install_dir} could not be created: {e}"
+        )
         return 1
 
     # Check if directory is writable
     if not os.access(install_dir, os.W_OK):
-        console.print(f"[red]Error:[/red] Installation directory {install_dir} is not writable")
+        console.print(
+            f"[red]Error:[/red] Installation directory {install_dir} is not writable"
+        )
         return 1
 
     # Get absolute path to source directory
@@ -96,7 +104,9 @@ def run(
         analyze_link_path = os.path.join(install_dir, "analyze-files")
         if os.path.exists(analyze_link_path) and os.path.islink(analyze_link_path):
             os.unlink(analyze_link_path)
-        os.symlink(os.path.join(project_root, "src", "cli", "main.py"), analyze_link_path)
+        os.symlink(
+            os.path.join(project_root, "src", "cli", "main.py"), analyze_link_path
+        )
 
         # For the main CLI 'fa' command
         fa_link_path = os.path.join(install_dir, "fa")
@@ -112,8 +122,9 @@ def run(
         return 1
 
     # Check if installation was successful
-    if (os.path.islink(os.path.join(install_dir, "analyze-files")) and
-        os.path.islink(os.path.join(install_dir, "fa"))):
+    if os.path.islink(os.path.join(install_dir, "analyze-files")) and os.path.islink(
+        os.path.join(install_dir, "fa")
+    ):
         console.print("[green]Installation successful![/green]")
         console.print("The following commands are now available:")
         console.print("  - analyze-files: Legacy command for backwards compatibility")
@@ -122,7 +133,9 @@ def run(
         # Check if installation directory is in PATH
         paths = os.environ.get("PATH", "").split(os.pathsep)
         if install_dir not in paths:
-            console.print("\n[yellow]WARNING:[/yellow] Installation directory is not in your PATH.")
+            console.print(
+                "\n[yellow]WARNING:[/yellow] Installation directory is not in your PATH."
+            )
             console.print("Add the following line to your ~/.bashrc or ~/.zshrc file:")
             console.print(f'  export PATH="{install_dir}:$PATH"')
 
@@ -130,6 +143,7 @@ def run(
     else:
         console.print("[red]Installation failed.[/red]")
         return 1
+
 
 if __name__ == "__main__":
     app()

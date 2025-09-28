@@ -15,10 +15,10 @@ from src.core.artifact_guard import ARTIFACTS_ROOT
 def check_artifact_sprawl(check_dir: str = ".") -> tuple[bool, list[str]]:
     """
     Check for artifacts outside the standard structure.
-    
+
     Args:
         check_dir: Directory to check
-        
+
     Returns:
         Tuple[bool, List[str]]: (no_sprawl_found, sprawl_paths)
     """

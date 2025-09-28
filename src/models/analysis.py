@@ -14,19 +14,19 @@ of the file analyzer system, with support for:
 Usage examples:
   # Analyze a single image with FastVLM
   python model_analysis.py image.jpg --model fastvlm --mode describe
-  
+
   # Batch process a directory with FastVLM
   python model_analysis.py images/ --batch --model fastvlm --mode detect
-  
+
   # Use a specific model size
   python model_analysis.py image.jpg --model fastvlm --size 1.5b
-  
+
   # Custom prompt
   python model_analysis.py image.jpg --prompt "Describe this technical diagram"
-  
+
   # Save output to specific file
   python model_analysis.py image.jpg --output results.json
-  
+
   # Get model information
   python model_analysis.py --list-models
 """
@@ -50,103 +50,110 @@ from src.model_manager import ModelManager, create_manager
 
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
-def format_output(result: dict[str, Any], format_type: str = 'json') -> str:
+
+def format_output(result: dict[str, Any], format_type: str = "json") -> str:
     """
     Format the analysis result based on the specified format type.
-    
+
     Args:
         result: Analysis result dictionary
         format_type: Output format type (json, text, markdown)
-        
+
     Returns:
         Formatted output string
     """
-    if format_type == 'json':
+    if format_type == "json":
         return json.dumps(result, indent=2)
 
-    elif format_type == 'text':
+    elif format_type == "text":
         # Simple text format
         output = []
 
         # Add description if present
-        if 'description' in result:
+        if "description" in result:
             output.append("DESCRIPTION:")
-            output.append(result['description'])
+            output.append(result["description"])
             output.append("")
 
         # Add tags if present
-        if 'tags' in result and isinstance(result['tags'], list):
+        if "tags" in result and isinstance(result["tags"], list):
             output.append("TAGS:")
-            output.append(", ".join(result['tags']))
+            output.append(", ".join(result["tags"]))
             output.append("")
 
         # Add objects if present
-        if 'objects' in result and isinstance(result['objects'], list):
+        if "objects" in result and isinstance(result["objects"], list):
             output.append("OBJECTS DETECTED:")
-            for obj in result['objects']:
+            for obj in result["objects"]:
                 if isinstance(obj, dict):
-                    output.append(f"- {obj.get('name', 'Unknown')} ({obj.get('location', 'Unknown location')})")
+                    output.append(
+                        f"- {obj.get('name', 'Unknown')} ({obj.get('location', 'Unknown location')})"
+                    )
                 else:
                     output.append(f"- {obj}")
             output.append("")
 
         # Add text content if present
-        if 'text' in result:
+        if "text" in result:
             output.append("TEXT CONTENT:")
-            output.append(result['text'])
+            output.append(result["text"])
             output.append("")
 
         # Add metadata if present
-        if 'metadata' in result:
+        if "metadata" in result:
             output.append("METADATA:")
-            for key, value in result['metadata'].items():
+            for key, value in result["metadata"].items():
                 output.append(f"- {key}: {value}")
 
         return "\n".join(output)
 
-    elif format_type == 'markdown':
+    elif format_type == "markdown":
         # Markdown format
         output = ["# Model Analysis Result", ""]
 
         # Add description if present
-        if 'description' in result:
+        if "description" in result:
             output.append("## Description")
-            output.append(result['description'])
+            output.append(result["description"])
             output.append("")
 
         # Add tags if present
-        if 'tags' in result and isinstance(result['tags'], list):
+        if "tags" in result and isinstance(result["tags"], list):
             output.append("## Tags")
-            tags_str = ", ".join([f"`{tag}`" for tag in result['tags']])
+            tags_str = ", ".join([f"`{tag}`" for tag in result["tags"]])
             output.append(tags_str)
             output.append("")
 
         # Add objects if present
-        if 'objects' in result and isinstance(result['objects'], list):
+        if "objects" in result and isinstance(result["objects"], list):
             output.append("## Objects Detected")
-            for obj in result['objects']:
+            for obj in result["objects"]:
                 if isinstance(obj, dict):
-                    output.append(f"- **{obj.get('name', 'Unknown')}**: {obj.get('location', 'Unknown location')}")
+                    output.append(
+                        f"- **{obj.get('name', 'Unknown')}**: {obj.get('location', 'Unknown location')}"
+                    )
                 else:
                     output.append(f"- {obj}")
             output.append("")
 
         # Add text content if present
-        if 'text' in result:
+        if "text" in result:
             output.append("## Text Content")
             output.append("```")
-            output.append(result['text'])
+            output.append(result["text"])
             output.append("```")
             output.append("")
 
         # Add metadata if present
-        if 'metadata' in result:
+        if "metadata" in result:
             output.append("## Metadata")
             output.append("```json")
-            output.append(json.dumps(result['metadata'], indent=2))
+            output.append(json.dumps(result["metadata"], indent=2))
             output.append("```")
 
         return "\n".join(output)
@@ -154,10 +161,11 @@ def format_output(result: dict[str, Any], format_type: str = 'json') -> str:
     # Default to raw string representation
     return str(result)
 
+
 def list_available_models(manager: ModelManager):
     """
     List all available models with their details.
-    
+
     Args:
         manager: Model manager instance
     """
@@ -177,43 +185,63 @@ def list_available_models(manager: ModelManager):
     print("  - detect: Object detection with locations")
     print("  - document: Text extraction and document type identification")
 
+
 def main():
     """Main entry point for the model analysis CLI tool."""
     parser = argparse.ArgumentParser(description="Model Analysis Tool")
 
     # Allow operating with no file argument for listing models
-    parser.add_argument("file", nargs='?', help="File or directory to analyze")
+    parser.add_argument("file", nargs="?", help="File or directory to analyze")
 
     # General options
     parser.add_argument("--model", default="fastvlm", help="Model to use")
     parser.add_argument("--size", help="Model size variant")
-    parser.add_argument("--mode", default="describe",
-                       choices=["describe", "detect", "document"],
-                       help="Analysis mode")
+    parser.add_argument(
+        "--mode",
+        default="describe",
+        choices=["describe", "detect", "document"],
+        help="Analysis mode",
+    )
 
     # Batch processing options
-    parser.add_argument("--batch", action="store_true",
-                       help="Process directory in batch mode")
-    parser.add_argument("--max-files", type=int, default=10,
-                       help="Maximum files to process in batch mode")
-    parser.add_argument("--sequential", action="store_true",
-                       help="Process files sequentially (batch mode only)")
+    parser.add_argument(
+        "--batch", action="store_true", help="Process directory in batch mode"
+    )
+    parser.add_argument(
+        "--max-files",
+        type=int,
+        default=10,
+        help="Maximum files to process in batch mode",
+    )
+    parser.add_argument(
+        "--sequential",
+        action="store_true",
+        help="Process files sequentially (batch mode only)",
+    )
 
     # Output options
     parser.add_argument("--output", help="Output file or directory")
-    parser.add_argument("--format", choices=["json", "text", "markdown"],
-                       default="json", help="Output format")
+    parser.add_argument(
+        "--format",
+        choices=["json", "text", "markdown"],
+        default="json",
+        help="Output format",
+    )
 
     # Advanced options
     parser.add_argument("--prompt", help="Custom prompt for analysis")
-    parser.add_argument("--model-type", choices=["vision", "text"],
-                       default="vision", help="Type of model to use")
+    parser.add_argument(
+        "--model-type",
+        choices=["vision", "text"],
+        default="vision",
+        help="Type of model to use",
+    )
 
     # Utility commands
-    parser.add_argument("--list-models", action="store_true",
-                       help="List available models and exit")
-    parser.add_argument("--verbose", action="store_true",
-                       help="Enable verbose logging")
+    parser.add_argument(
+        "--list-models", action="store_true", help="List available models and exit"
+    )
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
 
@@ -261,7 +289,7 @@ def main():
                 output_dir=args.output,
                 max_files=args.max_files,
                 prompt=args.prompt,
-                parallel=not args.sequential
+                parallel=not args.sequential,
             )
 
             # Print summary
@@ -290,7 +318,7 @@ def main():
                 model_size=args.size,
                 mode=args.mode,
                 output_path=args.output,
-                prompt=args.prompt
+                prompt=args.prompt,
             )
 
             # Format and print result
@@ -309,8 +337,10 @@ def main():
         print(f"Error during analysis: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

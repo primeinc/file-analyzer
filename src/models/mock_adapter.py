@@ -24,8 +24,11 @@ from typing import Any
 
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class MockModelAdapter:
     """Mock model adapter for testing purposes."""
@@ -33,7 +36,7 @@ class MockModelAdapter:
     def __init__(self, model_type: str = "mock", model_size: str = "small", **kwargs):
         """
         Initialize the mock model adapter.
-        
+
         Args:
             model_type: Type of model to simulate
             model_size: Size of model to simulate
@@ -44,19 +47,24 @@ class MockModelAdapter:
         self.config = kwargs
         logger.info(f"Initialized {model_type} mock model adapter ({model_size})")
 
-    def predict(self, input_path: str, prompt: str | None = None,
-               output_path: str | None = None, mode: str = "describe",
-               **kwargs) -> dict[str, Any]:
+    def predict(
+        self,
+        input_path: str,
+        prompt: str | None = None,
+        output_path: str | None = None,
+        mode: str = "describe",
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         Run prediction with the mock model.
-        
+
         Args:
             input_path: Path to input file
             prompt: Optional prompt to guide generation
             output_path: Optional path to save output
             mode: Analysis mode (describe, detect, document)
             **kwargs: Additional parameters
-            
+
         Returns:
             Dictionary with prediction results
         """
@@ -88,7 +96,7 @@ class MockModelAdapter:
             "execution_time": execution_time,
             "timestamp": datetime.now().isoformat(),
             "mode": mode,
-            "mock": True
+            "mock": True,
         }
 
         # Add prompt if provided
@@ -98,7 +106,7 @@ class MockModelAdapter:
         # Save result if output path is provided
         if output_path:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 json.dump(result, f, indent=2)
             logger.info(f"Saved result to {output_path}")
 
@@ -107,7 +115,7 @@ class MockModelAdapter:
     def get_info(self) -> dict[str, Any]:
         """
         Get information about this model adapter.
-        
+
         Returns:
             Dictionary with model information
         """
@@ -117,18 +125,20 @@ class MockModelAdapter:
             "size": self.model_size,
             "description": "Mock model adapter for testing purposes",
             "capabilities": ["describe", "detect", "document"],
-            "mock": True
+            "mock": True,
         }
 
-    def _generate_description(self, file_name: str, file_ext: str, prompt: str | None = None) -> dict[str, Any]:
+    def _generate_description(
+        self, file_name: str, file_ext: str, prompt: str | None = None
+    ) -> dict[str, Any]:
         """
         Generate a mock image description.
-        
+
         Args:
             file_name: Name of the input file
             file_ext: File extension
             prompt: Optional prompt to guide generation
-            
+
         Returns:
             Dictionary with description and tags
         """
@@ -141,14 +151,29 @@ class MockModelAdapter:
             descriptions = [
                 f"This image shows a {random.choice(['landscape', 'portrait', 'still life', 'abstract composition'])} with {random.choice(['vibrant', 'muted', 'contrast-heavy', 'pastel'])} colors.",
                 f"The photograph {file_name} captures a {random.choice(['natural', 'urban', 'indoor', 'outdoor'])} scene with {random.choice(['people', 'animals', 'buildings', 'natural elements'])}.",
-                f"A {random.choice(['detailed', 'minimalist', 'high-contrast', 'colorful'])} image depicting {random.choice(['everyday life', 'nature', 'technology', 'art'])}."
+                f"A {random.choice(['detailed', 'minimalist', 'high-contrast', 'colorful'])} image depicting {random.choice(['everyday life', 'nature', 'technology', 'art'])}.",
             ]
 
             # Generate appropriate tags
             tag_sets = [
-                ["photo", "image", file_ext[1:], random.choice(["color", "blackandwhite"])],
-                ["visual", "picture", "photography", random.choice(["highresolution", "lowresolution"])],
-                ["snapshot", "digital", random.choice(["landscape", "portrait"]), "media"]
+                [
+                    "photo",
+                    "image",
+                    file_ext[1:],
+                    random.choice(["color", "blackandwhite"]),
+                ],
+                [
+                    "visual",
+                    "picture",
+                    "photography",
+                    random.choice(["highresolution", "lowresolution"]),
+                ],
+                [
+                    "snapshot",
+                    "digital",
+                    random.choice(["landscape", "portrait"]),
+                    "media",
+                ],
             ]
 
             # Choose a random description and tags
@@ -163,20 +188,19 @@ class MockModelAdapter:
             description = f"This appears to be a {file_ext[1:]} file named '{file_name}', not an image. Image analysis cannot be performed on non-image files."
             tags = ["error", "non-image", file_ext[1:], "unsupported"]
 
-        return {
-            "description": description,
-            "tags": tags
-        }
+        return {"description": description, "tags": tags}
 
-    def _generate_detection(self, file_name: str, file_ext: str, prompt: str | None = None) -> dict[str, Any]:
+    def _generate_detection(
+        self, file_name: str, file_ext: str, prompt: str | None = None
+    ) -> dict[str, Any]:
         """
         Generate mock object detection results.
-        
+
         Args:
             file_name: Name of the input file
             file_ext: File extension
             prompt: Optional prompt to guide generation
-            
+
         Returns:
             Dictionary with detected objects and scene description
         """
@@ -196,7 +220,7 @@ class MockModelAdapter:
                 {"name": "book", "location": "bottom left", "confidence": 0.72},
                 {"name": "cup", "location": "top right", "confidence": 0.84},
                 {"name": "car", "location": "foreground", "confidence": 0.91},
-                {"name": "tree", "location": "background", "confidence": 0.89}
+                {"name": "tree", "location": "background", "confidence": 0.89},
             ]
 
             # Select random number of objects
@@ -212,20 +236,19 @@ class MockModelAdapter:
             objects = []
             description = f"This appears to be a {file_ext[1:]} file named '{file_name}', not an image. Object detection cannot be performed on non-image files."
 
-        return {
-            "objects": objects,
-            "description": description
-        }
+        return {"objects": objects, "description": description}
 
-    def _generate_document(self, file_name: str, file_ext: str, prompt: str | None = None) -> dict[str, Any]:
+    def _generate_document(
+        self, file_name: str, file_ext: str, prompt: str | None = None
+    ) -> dict[str, Any]:
         """
         Generate mock document analysis results.
-        
+
         Args:
             file_name: Name of the input file
             file_ext: File extension
             prompt: Optional prompt to guide generation
-            
+
         Returns:
             Dictionary with extracted text and document type
         """
@@ -237,13 +260,21 @@ class MockModelAdapter:
 
         if is_image or is_document:
             # Generate mock document content
-            document_types = ["invoice", "report", "letter", "form", "article", "receipt", "memo"]
+            document_types = [
+                "invoice",
+                "report",
+                "letter",
+                "form",
+                "article",
+                "receipt",
+                "memo",
+            ]
             document_type = random.choice(document_types)
 
             # Create text content based on document type
             if document_type == "invoice":
                 text = f"""INVOICE #{random.randint(1000, 9999)}
-Date: {datetime.now().strftime('%Y-%m-%d')}
+Date: {datetime.now().strftime("%Y-%m-%d")}
 Customer: Sample Company Inc.
 
 Item 1: Product A  $29.99
@@ -283,21 +314,20 @@ This concludes the mock document analysis.
             document_type = "unknown"
             text = f"This appears to be a {file_ext[1:]} file named '{file_name}'. Document analysis is best performed on document or image files."
 
-        return {
-            "text": text,
-            "document_type": document_type
-        }
+        return {"text": text, "document_type": document_type}
 
 
-def create_adapter(model_type: str = "mock", model_size: str = "small", **kwargs) -> MockModelAdapter:
+def create_adapter(
+    model_type: str = "mock", model_size: str = "small", **kwargs
+) -> MockModelAdapter:
     """
     Create a mock model adapter instance.
-    
+
     Args:
         model_type: Type of model to simulate
         model_size: Size of model to simulate
         **kwargs: Additional parameters
-        
+
     Returns:
         MockModelAdapter instance
     """
@@ -310,11 +340,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Mock Model Adapter")
     parser.add_argument("--file", required=True, help="Input file path")
-    parser.add_argument("--mode", default="describe", choices=["describe", "detect", "document"],
-                       help="Analysis mode")
+    parser.add_argument(
+        "--mode",
+        default="describe",
+        choices=["describe", "detect", "document"],
+        help="Analysis mode",
+    )
     parser.add_argument("--output", help="Output file path")
-    parser.add_argument("--size", default="small", choices=["small", "medium", "large"],
-                       help="Mock model size")
+    parser.add_argument(
+        "--size",
+        default="small",
+        choices=["small", "medium", "large"],
+        help="Mock model size",
+    )
 
     args = parser.parse_args()
 

@@ -20,14 +20,14 @@ class TestJSONProcessing:
 
     def test_json_extraction_from_malformed_text(self):
         """Test extracting JSON from model output with extra text."""
-        malformed_text = '''
+        malformed_text = """
         Here's my analysis:
         {
             "description": "A red apple",
             "tags": ["fruit", "red", "apple"]
         }
         I hope this helps!
-        '''
+        """
 
         result = JSONValidator.extract_json_from_text(malformed_text)
         assert result["description"] == "A red apple"
@@ -40,7 +40,7 @@ class TestJSONProcessing:
         valid_data = {
             "description": "Test image",
             "tags": ["test", "image"],
-            "metadata": {"model": "test"}
+            "metadata": {"model": "test"},
         }
 
         result = validator.validate_json_structure(valid_data, ["description", "tags"])
@@ -48,7 +48,9 @@ class TestJSONProcessing:
 
         # Test missing required field
         invalid_data = {"tags": ["test"]}
-        result = validator.validate_json_structure(invalid_data, ["description", "tags"])
+        result = validator.validate_json_structure(
+            invalid_data, ["description", "tags"]
+        )
         assert result is False
 
 
@@ -130,21 +132,20 @@ class TestArtifactDiscipline:
             assert test_file.read_text() == "test content"
 
 
-
 class TestRealIntegration:
     """Integration tests that actually test integration."""
 
     def test_end_to_end_json_processing(self):
         """Test complete JSON processing pipeline."""
         # Simulate real model output with issues
-        messy_output = '''
+        messy_output = """
         Looking at this image, I can see:
         {
             "description": "A beautiful sunset over mountains",
             "tags": ["sunset", "mountains", "landscape", "image", "photo", "shooting"]
         }
         The colors are amazing!
-        '''
+        """
 
         # Extract JSON
         extracted = JSONValidator.extract_json_from_text(messy_output)
@@ -158,14 +159,12 @@ class TestRealIntegration:
 
         # Generate filename
         filename = generate_intelligent_filename(
-            extracted["description"],
-            "original.jpg",
-            ".jpg"
+            extracted["description"], "original.jpg", ".jpg"
         )
         assert filename.endswith(".jpg")
         assert "sunset" in filename.lower() or "mountain" in filename.lower()
 
-    @patch('src.models.fastvlm.adapter.create_adapter')
+    @patch("src.models.fastvlm.adapter.create_adapter")
     def test_cli_to_analysis_pipeline(self, mock_adapter):
         """Test minimal CLI to analysis pipeline."""
         # Mock only the expensive model call, test everything else
@@ -173,7 +172,7 @@ class TestRealIntegration:
         mock_instance.predict.return_value = {
             "description": "A test image showing a duck",
             "tags": ["duck", "test", "image"],
-            "metadata": {"model": "fastvlm_1.5b", "execution_time": 1.0}
+            "metadata": {"model": "fastvlm_1.5b", "execution_time": 1.0},
         }
         mock_adapter.return_value = mock_instance
 
@@ -183,7 +182,7 @@ class TestRealIntegration:
         analysis_data = {
             "description": "A test image showing a duck",
             "tags": ["duck", "test", "image"],
-            "metadata": {"model": "fastvlm_1.5b", "execution_time": 1.0}
+            "metadata": {"model": "fastvlm_1.5b", "execution_time": 1.0},
         }
 
         # Test text output

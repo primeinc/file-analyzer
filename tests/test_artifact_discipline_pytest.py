@@ -46,13 +46,17 @@ class TestCanonicalPathCreation:
 
             # Check manifest file exists
             manifest_path = os.path.join(path, "manifest.json")
-            assert os.path.exists(manifest_path), f"Manifest {manifest_path} should exist"
+            assert os.path.exists(manifest_path), (
+                f"Manifest {manifest_path} should exist"
+            )
 
             # Create a file in the canonical path
             test_file = os.path.join(path, "test.txt")
             with open(test_file, "w") as f:
                 f.write(f"Test content for {artifact_type}")
-            assert validate_artifact_path(test_file), f"File path {test_file} should be valid"
+            assert validate_artifact_path(test_file), (
+                f"File path {test_file} should be valid"
+            )
 
     def test_invalid_artifact_type(self):
         """Test creating a path with an invalid artifact type."""
@@ -62,19 +66,23 @@ class TestCanonicalPathCreation:
     def test_canonical_path_format(self):
         """Test that canonical paths follow the expected format."""
         path = get_canonical_artifact_path("test", "pytest_format")
-        
+
         # Convert Path object to string for testing
         path_str = str(path)
 
         # Path should be in artifacts/test/
-        assert path_str.startswith(os.path.join(ARTIFACTS_ROOT, "test")), "Path should be in artifacts/test/"
+        assert path_str.startswith(os.path.join(ARTIFACTS_ROOT, "test")), (
+            "Path should be in artifacts/test/"
+        )
 
         # Path should contain the context
         assert "pytest_format" in path_str, "Path should contain the context"
 
         # Path should contain git commit and other identifiers
         parts = os.path.basename(path_str).split("_")
-        assert len(parts) >= 5, "Path should have at least 5 parts separated by underscores"
+        assert len(parts) >= 5, (
+            "Path should have at least 5 parts separated by underscores"
+        )
 
         # Last part should be a timestamp (format has changed in new version)
         timestamp = parts[-1]
@@ -89,7 +97,9 @@ class TestPathValidation:
         """Test validation of valid paths."""
         # Canonical artifact paths
         for artifact_type in ARTIFACT_TYPES:
-            path = get_canonical_artifact_path(artifact_type, f"pytest_valid_{artifact_type}")
+            path = get_canonical_artifact_path(
+                artifact_type, f"pytest_valid_{artifact_type}"
+            )
             assert validate_artifact_path(path)
 
             # File in canonical path
@@ -101,22 +111,38 @@ class TestPathValidation:
         # Project structure paths should be valid
         for structure_dir in ["src", "tools", "tests"]:
             path = os.path.join(project_root, structure_dir)
-            assert validate_artifact_path(path), f"Project structure path {structure_dir} should be valid"
+            assert validate_artifact_path(path), (
+                f"Project structure path {structure_dir} should be valid"
+            )
 
         # Root directory files should be valid
         for root_file in ["README.md", "setup.py", "requirements.txt"]:
             file_path = os.path.join(project_root, root_file)
-            assert validate_artifact_path(file_path), f"Project root file {root_file} should be valid"
+            assert validate_artifact_path(file_path), (
+                f"Project root file {root_file} should be valid"
+            )
 
     def test_invalid_paths(self):
         """Test validation of invalid paths."""
         # System temporary directories
         assert not validate_artifact_path("/tmp/test.txt")
         assert not validate_artifact_path("/var/tmp/test.txt")
-        assert not validate_artifact_path(os.path.join(tempfile.gettempdir(), "test.txt"))
+        assert not validate_artifact_path(
+            os.path.join(tempfile.gettempdir(), "test.txt")
+        )
 
         # System directories
-        for system_dir in ["/dev", "/proc", "/sys", "/var", "/etc", "/usr", "/lib", "/opt", "/bin"]:
+        for system_dir in [
+            "/dev",
+            "/proc",
+            "/sys",
+            "/var",
+            "/etc",
+            "/usr",
+            "/lib",
+            "/opt",
+            "/bin",
+        ]:
             path = os.path.join(system_dir, "test.txt")
             assert not validate_artifact_path(path)
 
@@ -178,7 +204,9 @@ class TestPathGuard:
 
             # Legacy pattern in project root - this should fail
             with pytest.raises(ValueError):
-                invalid_path = os.path.join(project_root, "test_output_123", "invalid_file.txt")
+                invalid_path = os.path.join(
+                    project_root, "test_output_123", "invalid_file.txt"
+                )
                 os.makedirs(os.path.dirname(invalid_path), exist_ok=True)
                 with open(invalid_path, "w") as f:
                     f.write("This should fail")

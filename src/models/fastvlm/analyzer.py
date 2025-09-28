@@ -18,11 +18,13 @@ from pathlib import Path
 # Import error handler
 try:
     from src.models.fastvlm.errors import FastVLMErrorHandler
+
     ERROR_HANDLER_AVAILABLE = True
 except ImportError:
     # For backward compatibility, check various import paths
     try:
         from fastvlm_errors import FastVLMErrorHandler
+
         ERROR_HANDLER_AVAILABLE = True
     except ImportError:
         # Create a minimal error handler class if not available
@@ -49,6 +51,7 @@ except ImportError:
 # Determine if MLX and FastVLM are available
 try:
     import mlx
+
     MLX_AVAILABLE = True
 except ImportError:
     MLX_AVAILABLE = False
@@ -61,7 +64,11 @@ if project_root not in sys.path:
 
 # Check if we've downloaded the ml-fastvlm repository
 # Get the actual project root by looking for the root directory
-actual_project_root = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+actual_project_root = os.path.abspath(
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+)
 
 # Standardized location in libs directory
 ML_FASTVLM_PATH = Path(actual_project_root) / "libs" / "ml-fastvlm"
@@ -73,7 +80,10 @@ else:
         Path(actual_project_root) / "ml-fastvlm",  # Old root location
         Path(project_root) / "ml-fastvlm",  # Old models location
         Path(__file__).parent / "ml-fastvlm",  # Old tools location
-        Path(os.path.expanduser("~")) / ".local" / "share" / "fastvlm"  # User-level installation
+        Path(os.path.expanduser("~"))
+        / ".local"
+        / "share"
+        / "fastvlm",  # User-level installation
     ]
 
     for path in fallback_paths:
@@ -81,13 +91,16 @@ else:
             ML_FASTVLM_PATH = path
             sys.path.append(str(ML_FASTVLM_PATH))
             import logging
+
             logger = logging.getLogger(__name__)
             logger.debug(f"Found ml-fastvlm at fallback location: {path}")
             break
     else:
         # Suppress warning in CLI usage but keep it for debugging
         if os.environ.get("FA_DEBUG", "").lower() in ("1", "true", "yes"):
-            print(f"Warning: ml-fastvlm directory not found at {actual_project_root}/libs/ml-fastvlm or any fallback locations")
+            print(
+                f"Warning: ml-fastvlm directory not found at {actual_project_root}/libs/ml-fastvlm or any fallback locations"
+            )
         ML_FASTVLM_PATH = None
 
 # Import from our vision analyzer module
@@ -99,13 +112,15 @@ class FastVLMAnalyzer:
 
     def __init__(self, model_path=None, checkpoint_dir=None):
         """Initialize the FastVLM analyzer.
-        
+
         Args:
             model_path: Path to the FastVLM model
             checkpoint_dir: Directory containing FastVLM checkpoints
         """
         self.model_path = model_path
-        self.checkpoint_dir = checkpoint_dir or (ML_FASTVLM_PATH / "checkpoints" if ML_FASTVLM_PATH else None)
+        self.checkpoint_dir = checkpoint_dir or (
+            ML_FASTVLM_PATH / "checkpoints" if ML_FASTVLM_PATH else None
+        )
         self.model_loaded = False
         self.vision_analyzer = None
 
@@ -114,7 +129,7 @@ class FastVLMAnalyzer:
             issues = FastVLMErrorHandler.check_environment()
             if issues:
                 for issue in issues:
-                    if issue['severity'] == 'error':
+                    if issue["severity"] == "error":
                         print(f"ERROR: {issue['message']}")
                         print(f"Solution: {issue['solution']}")
                     else:
@@ -123,7 +138,9 @@ class FastVLMAnalyzer:
 
         # Check if MLX is available
         if not MLX_AVAILABLE:
-            print("MLX framework not available. FastVLM requires MLX for Apple Silicon optimization.")
+            print(
+                "MLX framework not available. FastVLM requires MLX for Apple Silicon optimization."
+            )
             return
 
         # Set up vision analyzer with FastVLM configuration
@@ -131,7 +148,7 @@ class FastVLMAnalyzer:
             "model": "fastvlm",
             "model_path": self.model_path,
             "output_format": "json",
-            "description_mode": "detailed"
+            "description_mode": "detailed",
         }
 
         self.vision_analyzer = VisionAnalyzer(vision_config)
@@ -143,7 +160,7 @@ class FastVLMAnalyzer:
             # Verify model files if error handler is available
             if ERROR_HANDLER_AVAILABLE:
                 check_result = FastVLMErrorHandler.check_model_files(self.model_path)
-                if check_result['status'] != 'success':
+                if check_result["status"] != "success":
                     print(f"WARNING: {check_result['message']}")
                     print(f"Solution: {check_result['solution']}")
             return True
@@ -152,7 +169,9 @@ class FastVLMAnalyzer:
             # Look for appropriate model directories (extracted models)
             model_dirs = list(Path(self.checkpoint_dir).glob("llava-fastvithd_*"))
             if model_dirs:
-                print(f"Found FastVLM model directories: {[m.name for m in model_dirs]}")
+                print(
+                    f"Found FastVLM model directories: {[m.name for m in model_dirs]}"
+                )
                 # Prefer 1.5B model if available
                 for model_dir in model_dirs:
                     if "1.5b_stage3" in str(model_dir):
@@ -169,12 +188,12 @@ class FastVLMAnalyzer:
 
     def analyze_image(self, image_path, prompt=None, mode="describe"):
         """Analyze an image using FastVLM.
-        
+
         Args:
             image_path: Path to the image file
             prompt: Optional custom prompt
             mode: Analysis mode - describe, detect, or document
-            
+
         Returns:
             Analysis result
         """
@@ -200,7 +219,7 @@ class FastVLMAnalyzer:
                 "timestamp": datetime.now().isoformat(),
                 "model": "FastVLM",
                 "image_path": image_path,
-                "mode": mode
+                "mode": mode,
             }
 
             # Format output based on type
@@ -235,19 +254,23 @@ class FastVLMAnalyzer:
         import subprocess
 
         # Check if the model path is a zip file or a directory
-        if Path(self.model_path).suffix == '.zip':
+        if Path(self.model_path).suffix == ".zip":
             print(f"Model is a zip file: {self.model_path}")
             print("Using temporary directory for extraction...")
 
             # Check if the equivalent extracted directory exists without .zip
-            extracted_dir_path = str(Path(self.model_path).with_suffix(''))
-            if Path(extracted_dir_path).is_dir() and any(Path(extracted_dir_path).iterdir()):
+            extracted_dir_path = str(Path(self.model_path).with_suffix(""))
+            if Path(extracted_dir_path).is_dir() and any(
+                Path(extracted_dir_path).iterdir()
+            ):
                 print(f"Found extracted model directory at {extracted_dir_path}")
                 model_path = extracted_dir_path
                 self.model_path = extracted_dir_path
             else:
                 # Make a simple text response since actual extraction requires setup_fastvlm.sh
-                print("Extracted model not found. Please run setup_fastvlm.sh to extract the model.")
+                print(
+                    "Extracted model not found. Please run setup_fastvlm.sh to extract the model."
+                )
                 return {
                     "result": "Model is in ZIP format. For testing purposes, this is a simulated response.\n\nThe image appears to show a landscape scene. It contains natural elements with good composition and lighting.",
                     "metadata": {
@@ -256,8 +279,8 @@ class FastVLMAnalyzer:
                         "model": "FastVLM (Simulated)",
                         "image_path": image_path,
                         "prompt": prompt,
-                        "note": "Model in zip format - extraction required via setup_fastvlm.sh"
-                    }
+                        "note": "Model in zip format - extraction required via setup_fastvlm.sh",
+                    },
                 }
 
         # Regular model handling
@@ -270,9 +293,12 @@ class FastVLMAnalyzer:
         cmd = [
             sys.executable,
             str(predict_script),
-            "--model-path", str(model_path),
-            "--image-file", str(image_path),
-            "--prompt", prompt or "Describe the image."
+            "--model-path",
+            str(model_path),
+            "--image-file",
+            str(image_path),
+            "--prompt",
+            prompt or "Describe the image.",
         ]
 
         try:
@@ -289,12 +315,12 @@ class FastVLMAnalyzer:
                     "timestamp": datetime.now().isoformat(),
                     "model": "FastVLM",
                     "image_path": image_path,
-                    "prompt": prompt
-                }
+                    "prompt": prompt,
+                },
             }
         except subprocess.SubprocessError as e:
             error_msg = f"Error running FastVLM predict.py: {e}"
-            stderr_output = e.stderr if hasattr(e, 'stderr') else ""
+            stderr_output = e.stderr if hasattr(e, "stderr") else ""
             print(error_msg)
             if stderr_output:
                 print(f"Error output: {stderr_output}")
@@ -324,19 +350,31 @@ class FastVLMAnalyzer:
 
         return self.vision_analyzer.batch_analyze(image_dir, output_dir, mode)
 
+
 # Main function for standalone usage
 def main():
     parser = argparse.ArgumentParser(description="FastVLM Image Analyzer")
     parser.add_argument("--image", help="Path to image file or directory")
     parser.add_argument("--model", help="Path to FastVLM model")
-    parser.add_argument("--checkpoint-dir", help="Directory containing FastVLM checkpoints")
-    parser.add_argument("--mode", choices=["describe", "detect", "document"], default="describe",
-                        help="Analysis mode")
+    parser.add_argument(
+        "--checkpoint-dir", help="Directory containing FastVLM checkpoints"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["describe", "detect", "document"],
+        default="describe",
+        help="Analysis mode",
+    )
     parser.add_argument("--prompt", help="Custom prompt for image analysis")
     parser.add_argument("--output", help="Output file or directory")
-    parser.add_argument("--batch", action="store_true", help="Process directory in batch mode")
-    parser.add_argument("--direct", action="store_true",
-                       help="Use direct predict.py script from ml-fastvlm")
+    parser.add_argument(
+        "--batch", action="store_true", help="Process directory in batch mode"
+    )
+    parser.add_argument(
+        "--direct",
+        action="store_true",
+        help="Use direct predict.py script from ml-fastvlm",
+    )
 
     args = parser.parse_args()
 
@@ -350,7 +388,10 @@ def main():
 
     if args.batch and os.path.isdir(args.image):
         # Batch process directory
-        output_dir = args.output or f"fastvlm_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        output_dir = (
+            args.output
+            or f"fastvlm_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
         results = analyzer.batch_analyze(args.image, output_dir, args.mode)
 
         if results:
@@ -366,7 +407,7 @@ def main():
 
         if result:
             if args.output:
-                with open(args.output, 'w') as f:
+                with open(args.output, "w") as f:
                     if isinstance(result, dict):
                         json.dump(result, f, indent=2)
                     else:
@@ -379,6 +420,7 @@ def main():
                     print(result)
         else:
             print("Analysis failed.")
+
 
 # Standalone execution
 if __name__ == "__main__":

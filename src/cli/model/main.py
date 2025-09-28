@@ -33,7 +33,9 @@ from rich.table import Table
 def get_console():
     """Get console for output - import here to avoid circular imports."""
     from src.cli.main import console
+
     return console
+
 
 # Import artifact_guard utilities
 
@@ -46,30 +48,31 @@ MODEL_INFO = {
         "name": "llava-fastvithd_0.5b_stage3",
         "size_mb": 580,
         "url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_0.5b_stage3.zip",
-        "md5": "5ee58683b47c8ac1cf68ced7dd48b7c3"
+        "md5": "5ee58683b47c8ac1cf68ced7dd48b7c3",
     },
     "1.5b": {
         "name": "llava-fastvithd_1.5b_stage3",
         "size_mb": 1720,
         "url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_1.5b_stage3.zip",
-        "md5": "5c6235e7a68cdcf9bd079deed9716d8b"
+        "md5": "5c6235e7a68cdcf9bd079deed9716d8b",
     },
     "7b": {
         "name": "llava-fastvithd_7b_stage3",
         "size_mb": 7500,
         "url": "https://ml-site.cdn-apple.com/datasets/fastvlm/llava-fastvithd_7b_stage3.zip",
-        "md5": "f6cff9f3f157f3799c83972dafb496dd"  # Updated MD5 based on actual download
-    }
+        "md5": "f6cff9f3f157f3799c83972dafb496dd",  # Updated MD5 based on actual download
+    },
 }
+
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for model commands and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -80,47 +83,54 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
 
+
 @app.callback()
 def callback():
     """
     Manage FastVLM models.
-    
+
     The model command provides utilities for managing FastVLM models:
     - List available models
     - Download models by size
     - Check model integrity
     """
 
+
 def get_project_root():
     """
     Get the project root directory.
-    
+
     Returns:
         Path: Path to the project root
     """
     # Check for libs/ml-fastvlm directory relative to the current file
-    src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    src_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     return os.path.dirname(src_dir)
+
 
 def get_model_dir():
     """
     Get the path to the models directory.
-    
+
     Returns:
         Path: Path to the models directory
     """
     # Use the USER_MODEL_DIR from config instead of project directory
     # Import user model directory from config
     from src.models.config import USER_MODEL_DIR
+
     return USER_MODEL_DIR
+
 
 def calculate_md5(file_path):
     """
     Calculate MD5 hash of a file.
-    
+
     Args:
         file_path: Path to the file
-        
+
     Returns:
         str: MD5 hash of the file
     """
@@ -130,16 +140,17 @@ def calculate_md5(file_path):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
+
 def download_file(url, dest_path, desc=None, min_size_bytes=1000000):
     """
     Download a file with progress monitoring.
-    
+
     Args:
         url: URL to download
         dest_path: Path to save the file
         desc: Description of the file being downloaded
         min_size_bytes: Minimum expected file size (default 1MB)
-        
+
     Returns:
         bool: True if download succeeded, False otherwise
     """
@@ -153,14 +164,17 @@ def download_file(url, dest_path, desc=None, min_size_bytes=1000000):
             BarColumn(),
             DownloadColumn(),
             TransferSpeedColumn(),
-            console=console
+            console=console,
         ) as progress:
             desc = desc or f"Downloading {os.path.basename(dest_path)}"
             task = progress.add_task(f"[green]{desc}", total=1.0)
 
             # Implement a custom urlretrieve with progress reporting - no timeout for large files
-            with urllib.request.urlopen(url) as response, open(dest_path, 'wb') as out_file:
-                content_length = response.headers.get('Content-Length')
+            with (
+                urllib.request.urlopen(url) as response,
+                open(dest_path, "wb") as out_file,
+            ):
+                content_length = response.headers.get("Content-Length")
                 total = int(content_length) if content_length else None
 
                 if total is None:
@@ -184,11 +198,15 @@ def download_file(url, dest_path, desc=None, min_size_bytes=1000000):
             file_size = os.path.getsize(dest_path)
             if file_size < min_size_bytes:
                 console = get_console()
-                console.print(f"[red]Downloaded file is too small ({file_size} bytes).[/red]")
+                console.print(
+                    f"[red]Downloaded file is too small ({file_size} bytes).[/red]"
+                )
 
                 # Check if it's a 1-byte file (common with Apple CDN redirect issues)
                 if file_size <= 1:
-                    console.print("[red]Apple CDN often returns 1-byte files for redirects or auth issues.[/red]")
+                    console.print(
+                        "[red]Apple CDN often returns 1-byte files for redirects or auth issues.[/red]"
+                    )
                     os.remove(dest_path)
                     return False
 
@@ -207,14 +225,15 @@ def download_file(url, dest_path, desc=None, min_size_bytes=1000000):
             os.remove(dest_path)
         return False
 
+
 def extract_zip(zip_path, extract_dir):
     """
     Extract a ZIP file with progress monitoring.
-    
+
     Args:
         zip_path: Path to the ZIP file
         extract_dir: Directory to extract to
-        
+
     Returns:
         bool: True if extraction succeeded, False otherwise
     """
@@ -223,7 +242,7 @@ def extract_zip(zip_path, extract_dir):
         os.makedirs(extract_dir, exist_ok=True)
 
         # Count number of files in the ZIP
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
             # Analyze zip structure first
             namelist = zip_ref.namelist()
 
@@ -234,10 +253,10 @@ def extract_zip(zip_path, extract_dir):
             # Analyze structure - identify the main folder structure
             for name in namelist:
                 # Skip macOS metadata files
-                if name.startswith('__MACOSX/') or name == '__MACOSX/':
+                if name.startswith("__MACOSX/") or name == "__MACOSX/":
                     continue
 
-                parts = name.split('/')
+                parts = name.split("/")
                 if len(parts) > 1:
                     top_level_dirs.add(parts[0])
                 else:
@@ -250,36 +269,51 @@ def extract_zip(zip_path, extract_dir):
             main_dir = list(top_level_dirs)[0] if nested_structure else None
 
             console = get_console()
-            console.print(f"[yellow]ZIP structure analysis: {'nested under ' + main_dir if nested_structure else 'multiple top-level items'}[/yellow]")
+            console.print(
+                f"[yellow]ZIP structure analysis: {'nested under ' + main_dir if nested_structure else 'multiple top-level items'}[/yellow]"
+            )
 
             # If we have a nested structure where all files are inside a single top dir with the same name as our target,
             # extract with path modification to avoid double nesting
-            if nested_structure and main_dir and main_dir == os.path.basename(extract_dir):
-                console.print(f"[yellow]Detected single nested directory matching target: {main_dir}[/yellow]")
-                console.print("[yellow]Extracting directly to target to avoid double nesting[/yellow]")
+            if (
+                nested_structure
+                and main_dir
+                and main_dir == os.path.basename(extract_dir)
+            ):
+                console.print(
+                    f"[yellow]Detected single nested directory matching target: {main_dir}[/yellow]"
+                )
+                console.print(
+                    "[yellow]Extracting directly to target to avoid double nesting[/yellow]"
+                )
 
                 # Extract with path modification to remove the top-level directory
                 with Progress(
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(),
                     TaskProgressColumn(),
-                    console=console
+                    console=console,
                 ) as progress:
-                    total_files = sum(1 for name in namelist if not name.startswith('__MACOSX/'))
-                    task = progress.add_task(f"[green]Extracting {os.path.basename(zip_path)}", total=total_files)
+                    total_files = sum(
+                        1 for name in namelist if not name.startswith("__MACOSX/")
+                    )
+                    task = progress.add_task(
+                        f"[green]Extracting {os.path.basename(zip_path)}",
+                        total=total_files,
+                    )
                     processed = 0
 
                     for i, member in enumerate(namelist):
                         # Skip macOS metadata
-                        if member.startswith('__MACOSX/'):
+                        if member.startswith("__MACOSX/"):
                             continue
 
                         # Skip directories themselves
-                        if member.endswith('/'):
+                        if member.endswith("/"):
                             continue
 
                         # Get path components
-                        parts = member.split('/')
+                        parts = member.split("/")
 
                         # Remove the first component (the nested directory)
                         if len(parts) > 1:
@@ -290,7 +324,10 @@ def extract_zip(zip_path, extract_dir):
                             os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
                             # Extract the file directly to the target path
-                            with zip_ref.open(member) as source, open(target_path, 'wb') as target:
+                            with (
+                                zip_ref.open(member) as source,
+                                open(target_path, "wb") as target,
+                            ):
                                 shutil.copyfileobj(source, target)
 
                             processed += 1
@@ -301,26 +338,36 @@ def extract_zip(zip_path, extract_dir):
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(),
                     TaskProgressColumn(),
-                    console=console
+                    console=console,
                 ) as progress:
-                    task = progress.add_task(f"[green]Extracting {os.path.basename(zip_path)}", total=len(namelist))
+                    task = progress.add_task(
+                        f"[green]Extracting {os.path.basename(zip_path)}",
+                        total=len(namelist),
+                    )
 
                     # Extract each file
                     for i, file in enumerate(namelist):
                         zip_ref.extract(file, extract_dir)
-                        progress.update(task, completed=i+1)
+                        progress.update(task, completed=i + 1)
 
                 # After extraction, check if we need to clean up __MACOSX directories
-                macosx_dir = os.path.join(extract_dir, '__MACOSX')
+                macosx_dir = os.path.join(extract_dir, "__MACOSX")
                 if os.path.exists(macosx_dir):
-                    console.print(f"[yellow]Removing macOS metadata directory: {macosx_dir}[/yellow]")
+                    console.print(
+                        f"[yellow]Removing macOS metadata directory: {macosx_dir}[/yellow]"
+                    )
                     shutil.rmtree(macosx_dir)
 
             # Show what we've got after extraction
-            top_level_items = [item for item in os.listdir(extract_dir)
-                              if not item.startswith('.') and not item == '__MACOSX']
+            top_level_items = [
+                item
+                for item in os.listdir(extract_dir)
+                if not item.startswith(".") and not item == "__MACOSX"
+            ]
             console.print(f"[yellow]Extracted to {extract_dir}[/yellow]")
-            console.print(f"[yellow]Top-level items: {', '.join(top_level_items)}[/yellow]")
+            console.print(
+                f"[yellow]Top-level items: {', '.join(top_level_items)}[/yellow]"
+            )
 
         return True
     except Exception as e:
@@ -328,6 +375,7 @@ def extract_zip(zip_path, extract_dir):
         console.print(f"[red]Error during extraction:[/red] {e}")
         console.print(f"[red]Error details: {e.__class__.__name__!s}[/red]")
         return False
+
 
 @app.command("list")
 def list_models(
@@ -393,6 +441,7 @@ def list_models(
         logger.error(f"Error listing models: {e!s}")
         return 1
 
+
 @app.command("download")
 def download_model_cmd(
     sizes: list[str] = typer.Argument(
@@ -413,7 +462,7 @@ def download_model_cmd(
 ):
     """
     Download FastVLM models.
-    
+
     Examples:
         fa model download             # Download default 1.5b model
         fa model download 0.5b 7b     # Download 0.5b and 7b models
@@ -444,10 +493,14 @@ def download_model_cmd(
             if sizes is None or len(sizes) == 0:
                 # Default to 1.5b if no arguments provided
                 models_to_download = ["1.5b"]
-                console.print("[yellow]No model size specified, defaulting to 1.5b[/yellow]")
+                console.print(
+                    "[yellow]No model size specified, defaulting to 1.5b[/yellow]"
+                )
 
         # Show summary of what will be downloaded
-        console.print(f"[bold]Models to download: {', '.join(models_to_download)}[/bold]")
+        console.print(
+            f"[bold]Models to download: {', '.join(models_to_download)}[/bold]"
+        )
 
         # Get model directory and ensure it exists
         model_dir = get_model_dir()
@@ -477,19 +530,31 @@ def download_model_cmd(
                 model_valid = False
                 min_size_bytes = 100000000  # 100MB - models should be much larger
 
-                if os.path.exists(safetensors_file) and os.path.getsize(safetensors_file) > min_size_bytes:
-                    console.print(f"[green]Found valid model at {safetensors_file}[/green]")
+                if (
+                    os.path.exists(safetensors_file)
+                    and os.path.getsize(safetensors_file) > min_size_bytes
+                ):
+                    console.print(
+                        f"[green]Found valid model at {safetensors_file}[/green]"
+                    )
                     model_valid = True
-                elif os.path.exists(nested_path) and os.path.getsize(nested_path) > min_size_bytes:
+                elif (
+                    os.path.exists(nested_path)
+                    and os.path.getsize(nested_path) > min_size_bytes
+                ):
                     console.print(f"[green]Found valid model at {nested_path}[/green]")
                     model_valid = True
 
                 if model_valid:
-                    console.print(f"[yellow]Model {model_name} is already installed. Skipping.[/yellow]")
+                    console.print(
+                        f"[yellow]Model {model_name} is already installed. Skipping.[/yellow]"
+                    )
                     success_count += 1
                     continue
                 else:
-                    console.print("[yellow]Found existing model directory but it appears incomplete or corrupted. Re-downloading.[/yellow]")
+                    console.print(
+                        "[yellow]Found existing model directory but it appears incomplete or corrupted. Re-downloading.[/yellow]"
+                    )
 
             # Create a temporary file for the download
             with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
@@ -502,29 +567,45 @@ def download_model_cmd(
                 for check_dir in [model_dir, "/tmp", os.path.expanduser("~/Downloads")]:
                     # Look for the zip or the extracted directory
                     zip_path = os.path.join(check_dir, f"{model_name}.zip")
-                    if os.path.exists(zip_path) and os.path.getsize(zip_path) > 1000000:  # >1MB
-                        console.print(f"[yellow]Found existing zip at {zip_path}[/yellow]")
+                    if (
+                        os.path.exists(zip_path) and os.path.getsize(zip_path) > 1000000
+                    ):  # >1MB
+                        console.print(
+                            f"[yellow]Found existing zip at {zip_path}[/yellow]"
+                        )
                         shutil.copy(zip_path, tmp_path)
 
                         # Verify the existing download
-                        console.print("[bold]Verifying existing download integrity...[/bold]")
+                        console.print(
+                            "[bold]Verifying existing download integrity...[/bold]"
+                        )
                         actual_md5 = calculate_md5(tmp_path)
                         if actual_md5 == model_md5:
-                            console.print("[green]Existing download verified successfully.[/green]")
+                            console.print(
+                                "[green]Existing download verified successfully.[/green]"
+                            )
                             already_exists = True
                             break
                         else:
-                            console.print("[yellow]Existing download verification failed. Will download fresh copy.[/yellow]")
+                            console.print(
+                                "[yellow]Existing download verification failed. Will download fresh copy.[/yellow]"
+                            )
 
                 # Download the model if needed
                 if not already_exists:
-                    console.print(f"[bold]Downloading model {model_name} ({info['size_mb']} MB)...[/bold]")
-                    console.print("This may take a while depending on your internet connection.")
+                    console.print(
+                        f"[bold]Downloading model {model_name} ({info['size_mb']} MB)...[/bold]"
+                    )
+                    console.print(
+                        "This may take a while depending on your internet connection."
+                    )
 
                     # Download the model
                     desc = f"Downloading {model_name} ({size})"
                     if not download_file(model_url, tmp_path, desc):
-                        console.print(f"[red]Failed to download model {model_name}.[/red]")
+                        console.print(
+                            f"[red]Failed to download model {model_name}.[/red]"
+                        )
                         fail_count += 1
                         continue
 
@@ -537,19 +618,31 @@ def download_model_cmd(
                         console.print(f"Actual:   {actual_md5}")
 
                         # Proceed with extraction anyway but warn the user
-                        console.print("[yellow]MD5 checksum mismatch could indicate a model update or corruption.[/yellow]")
-                        console.print("[yellow]Model files will still be extracted for inspection.[/yellow]")
+                        console.print(
+                            "[yellow]MD5 checksum mismatch could indicate a model update or corruption.[/yellow]"
+                        )
+                        console.print(
+                            "[yellow]Model files will still be extracted for inspection.[/yellow]"
+                        )
 
                         # Save the MD5 hash for future reference
-                        md5_file = os.path.join(model_dir, f"{model_name}_actual_md5.txt")
+                        md5_file = os.path.join(
+                            model_dir, f"{model_name}_actual_md5.txt"
+                        )
                         with open(md5_file, "w") as f:
-                            f.write(f"Expected: {model_md5}\nActual: {actual_md5}\nSize: {os.path.getsize(tmp_path)} bytes\nDate: {datetime.now().isoformat()}")
+                            f.write(
+                                f"Expected: {model_md5}\nActual: {actual_md5}\nSize: {os.path.getsize(tmp_path)} bytes\nDate: {datetime.now().isoformat()}"
+                            )
 
-                        console.print(f"[yellow]Saved actual MD5 to {md5_file} for reference[/yellow]")
+                        console.print(
+                            f"[yellow]Saved actual MD5 to {md5_file} for reference[/yellow]"
+                        )
 
                 # Remove existing model directory if it exists
                 if os.path.exists(model_path):
-                    console.print("[yellow]Removing existing model directory...[/yellow]")
+                    console.print(
+                        "[yellow]Removing existing model directory...[/yellow]"
+                    )
                     shutil.rmtree(model_path)
 
                 # Ensure the model path exists
@@ -573,19 +666,25 @@ def download_model_cmd(
                     os.path.join(model_path, model_name, "model.safetensors"),
                     # Sharded format with index
                     os.path.join(model_path, "model.safetensors.index.json"),
-                    os.path.join(model_path, model_name, "model.safetensors.index.json")
+                    os.path.join(
+                        model_path, model_name, "model.safetensors.index.json"
+                    ),
                 ]
 
                 # Sharded model patterns
                 sharded_patterns = [
                     os.path.join(model_path, "model-00001-of-*.safetensors"),
-                    os.path.join(model_path, model_name, "model-00001-of-*.safetensors")
+                    os.path.join(
+                        model_path, model_name, "model-00001-of-*.safetensors"
+                    ),
                 ]
 
                 # Check for primary model files
                 for check_path in primary_model_files:
                     if os.path.exists(check_path):
-                        console.print(f"[green]Found model file at: {check_path}[/green]")
+                        console.print(
+                            f"[green]Found model file at: {check_path}[/green]"
+                        )
                         found_model_file = True
                         break
 
@@ -593,9 +692,12 @@ def download_model_cmd(
                 if not found_model_file:
                     for pattern in sharded_patterns:
                         import glob
+
                         matches = glob.glob(pattern)
                         if matches:
-                            console.print(f"[green]Found sharded model files matching: {pattern}[/green]")
+                            console.print(
+                                f"[green]Found sharded model files matching: {pattern}[/green]"
+                            )
                             console.print(f"[green]First shard: {matches[0]}[/green]")
                             found_model_file = True
                             break
@@ -604,12 +706,14 @@ def download_model_cmd(
                 config_files_present = False
                 config_file_paths = [
                     os.path.join(model_path, "config.json"),
-                    os.path.join(model_path, model_name, "config.json")
+                    os.path.join(model_path, model_name, "config.json"),
                 ]
 
                 for config_path in config_file_paths:
                     if os.path.exists(config_path):
-                        console.print(f"[green]Found config file: {config_path}[/green]")
+                        console.print(
+                            f"[green]Found config file: {config_path}[/green]"
+                        )
                         config_files_present = True
                         break
 
@@ -617,12 +721,14 @@ def download_model_cmd(
                 tokenizer_files_present = False
                 tokenizer_file_paths = [
                     os.path.join(model_path, "tokenizer_config.json"),
-                    os.path.join(model_path, model_name, "tokenizer_config.json")
+                    os.path.join(model_path, model_name, "tokenizer_config.json"),
                 ]
 
                 for tokenizer_path in tokenizer_file_paths:
                     if os.path.exists(tokenizer_path):
-                        console.print(f"[green]Found tokenizer config: {tokenizer_path}[/green]")
+                        console.print(
+                            f"[green]Found tokenizer config: {tokenizer_path}[/green]"
+                        )
                         tokenizer_files_present = True
                         break
 
@@ -631,33 +737,49 @@ def download_model_cmd(
                     # The 7b model uses a sharded format with 4 parts
                     sharded_format = True
                     for i in range(1, 5):
-                        shard_file = os.path.join(model_path, f"model-0000{i}-of-00004.safetensors")
+                        shard_file = os.path.join(
+                            model_path, f"model-0000{i}-of-00004.safetensors"
+                        )
                         if not os.path.exists(shard_file):
                             sharded_format = False
                             break
 
                     if sharded_format:
-                        console.print("[green]Found all 4 shards of the 7b model[/green]")
+                        console.print(
+                            "[green]Found all 4 shards of the 7b model[/green]"
+                        )
                         found_model_file = True
 
                 # If we have either model files or both config and tokenizer, consider it a success
-                if found_model_file and (config_files_present or tokenizer_files_present):
+                if found_model_file and (
+                    config_files_present or tokenizer_files_present
+                ):
                     console.print("[green]Model verification successful[/green]")
                     valid_model = True
                 elif found_model_file:
-                    console.print("[yellow]Found model files but missing some config files - model may still work[/yellow]")
+                    console.print(
+                        "[yellow]Found model files but missing some config files - model may still work[/yellow]"
+                    )
                     valid_model = True
                 else:
-                    console.print("[red]Model extraction appears incomplete. Missing expected files.[/red]")
+                    console.print(
+                        "[red]Model extraction appears incomplete. Missing expected files.[/red]"
+                    )
                     valid_model = False
 
                 if not valid_model:
-                    console.print(f"[yellow]Keeping downloaded files at {model_path} for manual inspection.[/yellow]")
-                    console.print("[yellow]You may want to check the contents and structure of this directory.[/yellow]")
+                    console.print(
+                        f"[yellow]Keeping downloaded files at {model_path} for manual inspection.[/yellow]"
+                    )
+                    console.print(
+                        "[yellow]You may want to check the contents and structure of this directory.[/yellow]"
+                    )
                     fail_count += 1
                     continue
 
-                console.print(f"[green]Successfully downloaded and installed model {model_name} ({size}).[/green]")
+                console.print(
+                    f"[green]Successfully downloaded and installed model {model_name} ({size}).[/green]"
+                )
                 success_count += 1
 
             finally:
@@ -681,6 +803,7 @@ def download_model_cmd(
         console.print(f"[red]Error downloading model:[/red] {e!s}")
         logger.error(f"Error downloading model: {e!s}")
         return 1
+
 
 if __name__ == "__main__":
     app()

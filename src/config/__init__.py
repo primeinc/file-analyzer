@@ -31,10 +31,10 @@ from .settings import AppSettings, ModelSettings, PathSettings, settings
 
 __all__ = [
     "AppSettings",
-    "ConfigManager", 
+    "ConfigManager",
     "ModelSettings",
     "PathManager",
     "PathSettings",
     "paths",
-    "settings"
+    "settings",
 ]

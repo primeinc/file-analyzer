@@ -40,6 +40,7 @@ from src.models.fastvlm.analyzer import FastVLMAnalyzer
 # Check if PIL is available
 try:
     from PIL import Image
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
@@ -54,14 +55,15 @@ app = typer.Typer(help="Benchmark model performance")
 # Add samples subcommand
 app.add_typer(samples_app, name="samples")
 
+
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for benchmark commands and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -72,21 +74,23 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
 
+
 @app.callback()
 def callback():
     """
     Perform model benchmark operations.
-    
+
     Benchmark commands allow testing model performance on different datasets.
     """
+
 
 def download_test_images(output_dir=None):
     """
     Download sample test images of different types if not available.
-    
+
     Args:
         output_dir: Directory to save images. If None, uses canonical artifact path
-        
+
     Returns:
         List of paths to downloaded or existing images
     """
@@ -95,23 +99,23 @@ def download_test_images(output_dir=None):
         {
             "url": "https://github.com/apple/ml-fastvlm/raw/main/docs/fastvlm-emoji.gif",
             "filename": "emoji.gif",
-            "description": "Emoji stickers on hands"
+            "description": "Emoji stickers on hands",
         },
         {
             "url": "https://github.com/apple/ml-fastvlm/raw/main/docs/fastvlm-counting.gif",
             "filename": "counting.gif",
-            "description": "Counting fingers"
+            "description": "Counting fingers",
         },
         {
             "url": "https://github.com/apple/ml-fastvlm/raw/main/docs/fastvlm-handwriting.gif",
             "filename": "handwriting.gif",
-            "description": "Handwritten text"
+            "description": "Handwritten text",
         },
         {
             "url": "https://raw.githubusercontent.com/apple/ml-fastvlm/main/docs/acc_vs_latency_qwen-2.png",
             "filename": "chart.png",
-            "description": "Accuracy vs latency chart"
-        }
+            "description": "Accuracy vs latency chart",
+        },
     ]
 
     # Create canonical artifact path for test images
@@ -130,9 +134,11 @@ def download_test_images(output_dir=None):
         BarColumn(),
         TaskProgressColumn(),
         TimeElapsedColumn(),
-        console=console
+        console=console,
     ) as progress:
-        overall_task = progress.add_task("[green]Downloading images...", total=len(test_images))
+        overall_task = progress.add_task(
+            "[green]Downloading images...", total=len(test_images)
+        )
 
         for i, image_info in enumerate(test_images):
             # Set output path for this image
@@ -141,25 +147,33 @@ def download_test_images(output_dir=None):
 
             # Skip if file already exists
             if os.path.exists(file_path):
-                progress.update(overall_task, advance=1, description=f"[green]Using existing {image_info['filename']} ({i+1}/{len(test_images)})")
+                progress.update(
+                    overall_task,
+                    advance=1,
+                    description=f"[green]Using existing {image_info['filename']} ({i + 1}/{len(test_images)})",
+                )
                 continue
 
             try:
                 # Download image
-                task_desc = f"[green]Downloading {image_info['filename']} ({i+1}/{len(test_images)})"
+                task_desc = f"[green]Downloading {image_info['filename']} ({i + 1}/{len(test_images)})"
                 progress.update(overall_task, description=task_desc)
 
                 # Use urllib to download the file
                 import urllib.request
+
                 urllib.request.urlretrieve(image_info["url"], file_path)
 
                 # Update progress
                 progress.update(overall_task, advance=1)
 
             except Exception as e:
-                console.print(f"[red]Error downloading {image_info['filename']}:[/red] {e!s}")
+                console.print(
+                    f"[red]Error downloading {image_info['filename']}:[/red] {e!s}"
+                )
 
     return downloaded_paths
+
 
 # Import shared utilities
 from src.cli.benchmark.utils import find_test_images as find_test_images_util
@@ -179,11 +193,14 @@ def find_test_images():
 
     # If still no images found, download sample images
     if not image_list:
-        console.print("[yellow]No test images found. Downloading sample images...[/yellow]")
+        console.print(
+            "[yellow]No test images found. Downloading sample images...[/yellow]"
+        )
         downloaded_paths = download_test_images()
         image_list = [Path(p) for p in downloaded_paths if os.path.exists(p)]
 
     return image_list
+
 
 # Import additional shared utilities
 from src.cli.benchmark.utils import format_size, get_image_info
@@ -192,12 +209,12 @@ from src.cli.benchmark.utils import format_size, get_image_info
 def run_benchmark(analyzer, images, output_file=None):
     """
     Run benchmark on provided images and collect metrics.
-    
+
     Args:
         analyzer: FastVLMAnalyzer instance
         images: List of image paths to benchmark
         output_file: Path to save benchmark results (if None, uses canonical path)
-        
+
     Returns:
         Dict with benchmark results
     """
@@ -207,7 +224,9 @@ def run_benchmark(analyzer, images, output_file=None):
 
     # Create results directory using canonical artifact paths
     if output_file is None:
-        output_dir = get_canonical_artifact_path("benchmark", f"fastvlm_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        output_dir = get_canonical_artifact_path(
+            "benchmark", f"fastvlm_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
         output_file = os.path.join(output_dir, "benchmark_results.json")
     else:
         output_dir = os.path.dirname(output_file)
@@ -217,7 +236,9 @@ def run_benchmark(analyzer, images, output_file=None):
 
     # Check if we can run the benchmark
     if not PIL_AVAILABLE:
-        console.print("[red]Error:[/red] PIL/Pillow library is required for benchmarking")
+        console.print(
+            "[red]Error:[/red] PIL/Pillow library is required for benchmarking"
+        )
         return {}
 
     # Print benchmark settings
@@ -235,12 +256,9 @@ def run_benchmark(analyzer, images, output_file=None):
     results = {
         "timestamp": datetime.now().isoformat(),
         "model_info": model_info,
-        "system_info": {
-            "os": sys.platform,
-            "python": sys.version
-        },
+        "system_info": {"os": sys.platform, "python": sys.version},
         "images": {},
-        "summary": {}
+        "summary": {},
     }
 
     # Lists to track metrics
@@ -255,15 +273,20 @@ def run_benchmark(analyzer, images, output_file=None):
         BarColumn(),
         TaskProgressColumn(),
         TimeElapsedColumn(),
-        console=console
+        console=console,
     ) as progress:
-        benchmark_task = progress.add_task("[green]Running benchmark...", total=len(images))
+        benchmark_task = progress.add_task(
+            "[green]Running benchmark...", total=len(images)
+        )
 
         for i, image_path in enumerate(images):
             try:
                 # Update progress description
                 image_name = image_path.name
-                progress.update(benchmark_task, description=f"[green]Processing {image_name} ({i+1}/{len(images)})")
+                progress.update(
+                    benchmark_task,
+                    description=f"[green]Processing {image_name} ({i + 1}/{len(images)})",
+                )
 
                 # Get image info
                 image_info = get_image_info(image_path)
@@ -278,7 +301,11 @@ def run_benchmark(analyzer, images, output_file=None):
                 ttft = result.get("time_to_first_token", 0)
                 total_processing_time = result.get("total_processing_time", 0)
                 tokens = result.get("total_tokens", 0)
-                token_rate = tokens / total_processing_time if total_processing_time > 0 and tokens > 0 else 0
+                token_rate = (
+                    tokens / total_processing_time
+                    if total_processing_time > 0 and tokens > 0
+                    else 0
+                )
 
                 # Store metrics
                 load_times.append(load_time)
@@ -295,7 +322,7 @@ def run_benchmark(analyzer, images, output_file=None):
                     "total_processing_time": total_processing_time,
                     "total_tokens": tokens,
                     "token_rate": token_rate,
-                    "response": result.get("response", "")
+                    "response": result.get("response", ""),
                 }
 
                 # Update progress
@@ -313,46 +340,57 @@ def run_benchmark(analyzer, images, output_file=None):
                 "mean": statistics.mean(load_times),
                 "median": statistics.median(load_times),
                 "min": min(load_times),
-                "max": max(load_times)
+                "max": max(load_times),
             },
             "time_to_first_token": {
                 "mean": statistics.mean(ttft_times),
                 "median": statistics.median(ttft_times),
                 "min": min(ttft_times),
-                "max": max(ttft_times)
+                "max": max(ttft_times),
             },
             "total_processing_time": {
                 "mean": statistics.mean(total_times),
                 "median": statistics.median(total_times),
                 "min": min(total_times),
-                "max": max(total_times)
+                "max": max(total_times),
             },
             "token_rate": {
                 "mean": statistics.mean(token_rates),
                 "median": statistics.median(token_rates),
                 "min": min(token_rates),
-                "max": max(token_rates)
-            }
+                "max": max(token_rates),
+            },
         }
 
     # Print summary
     if results["summary"]:
         console.print("\n[bold]Benchmark Summary:[/bold]")
-        console.print(f"Images processed: [green]{results['summary']['image_count']}[/green]")
-        console.print(f"Average loading time: [green]{results['summary']['load_time']['mean']:.4f}s[/green]")
-        console.print(f"Average time to first token: [green]{results['summary']['time_to_first_token']['mean']:.4f}s[/green]")
-        console.print(f"Average processing time: [green]{results['summary']['total_processing_time']['mean']:.4f}s[/green]")
-        console.print(f"Average token rate: [green]{results['summary']['token_rate']['mean']:.2f} tokens/s[/green]")
+        console.print(
+            f"Images processed: [green]{results['summary']['image_count']}[/green]"
+        )
+        console.print(
+            f"Average loading time: [green]{results['summary']['load_time']['mean']:.4f}s[/green]"
+        )
+        console.print(
+            f"Average time to first token: [green]{results['summary']['time_to_first_token']['mean']:.4f}s[/green]"
+        )
+        console.print(
+            f"Average processing time: [green]{results['summary']['total_processing_time']['mean']:.4f}s[/green]"
+        )
+        console.print(
+            f"Average token rate: [green]{results['summary']['token_rate']['mean']:.2f} tokens/s[/green]"
+        )
 
     # Save results to file
     try:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(results, f, indent=2)
         console.print(f"\nResults saved to: [bold]{output_file}[/bold]")
     except Exception as e:
         console.print(f"[red]Error saving results:[/red] {e!s}")
 
     return results
+
 
 @app.command("run")
 def run(
@@ -377,7 +415,7 @@ def run(
 ):
     """
     Run FastVLM benchmark tests.
-    
+
     Benchmarks the performance of FastVLM on different image types
     and records metrics like time-to-first-token and processing speed.
     """
@@ -397,14 +435,24 @@ def run(
                 for ext in [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"]:
                     images.extend(list(image_dir.glob(f"*{ext}")))
                 if images:
-                    console.print(f"[green]Using {len(images)} images from provided canonical artifact path[/green]")
+                    console.print(
+                        f"[green]Using {len(images)} images from provided canonical artifact path[/green]"
+                    )
                 else:
-                    console.print("[yellow]No images found in provided directory. Searching canonical artifact paths...[/yellow]")
+                    console.print(
+                        "[yellow]No images found in provided directory. Searching canonical artifact paths...[/yellow]"
+                    )
                     images = find_test_images()
             else:
-                console.print(f"[yellow]Warning: Provided image directory {images_dir} is not a canonical artifact path[/yellow]")
-                console.print("[yellow]Consider moving images to canonical artifact paths[/yellow]")
-                console.print("[yellow]Searching canonical artifact paths instead...[/yellow]")
+                console.print(
+                    f"[yellow]Warning: Provided image directory {images_dir} is not a canonical artifact path[/yellow]"
+                )
+                console.print(
+                    "[yellow]Consider moving images to canonical artifact paths[/yellow]"
+                )
+                console.print(
+                    "[yellow]Searching canonical artifact paths instead...[/yellow]"
+                )
                 images = find_test_images()
         else:
             images = find_test_images()
@@ -418,6 +466,7 @@ def run(
         console.print(f"[red]Error running benchmark:[/red] {e!s}")
         logger.error(f"Error running benchmark: {e!s}")
         return 1
+
 
 @app.command("images")
 def images(
@@ -436,7 +485,7 @@ def images(
 ):
     """
     Manage benchmark test images.
-    
+
     Lists available test images or downloads sample images for benchmarking.
     """
     # Get configured logger
@@ -446,7 +495,9 @@ def images(
         if download:
             # Download test images
             downloaded_paths = download_test_images(output_dir)
-            console.print(f"[green]Downloaded {len(downloaded_paths)} test images[/green]")
+            console.print(
+                f"[green]Downloaded {len(downloaded_paths)} test images[/green]"
+            )
 
             # Print image list
             table = Table(title="Downloaded Test Images")
@@ -467,7 +518,9 @@ def images(
 
             if not images:
                 console.print("[yellow]No test images found[/yellow]")
-                console.print("Use 'fa benchmark images --download' to download sample images")
+                console.print(
+                    "Use 'fa benchmark images --download' to download sample images"
+                )
                 return 0
 
             # Print image list
@@ -483,7 +536,7 @@ def images(
                     image.name,
                     str(image),
                     info.get("size", "Unknown"),
-                    info.get("dimensions", "Unknown")
+                    info.get("dimensions", "Unknown"),
                 )
 
             console.print(table)
@@ -494,6 +547,7 @@ def images(
         console.print(f"[red]Error managing benchmark images:[/red] {e!s}")
         logger.error(f"Error managing benchmark images: {e!s}")
         return 1
+
 
 if __name__ == "__main__":
     app()

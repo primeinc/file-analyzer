@@ -13,7 +13,8 @@ import unittest
 
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
 
 class TestFastVLMJSONParsing(unittest.TestCase):
     """Test FastVLM JSON parsing with real model outputs."""
@@ -88,7 +89,11 @@ class TestFastVLMJSONParsing(unittest.TestCase):
 
             # Should have fewer "shark" entries after repair
             if "shark" in tag_counts:
-                self.assertLess(tag_counts["shark"], 50, "JSON repair should reduce repetitive entries")
+                self.assertLess(
+                    tag_counts["shark"],
+                    50,
+                    "JSON repair should reduce repetitive entries",
+                )
 
         except ImportError:
             self.skipTest("json-repair package not available")
@@ -96,11 +101,7 @@ class TestFastVLMJSONParsing(unittest.TestCase):
     def test_plain_text_conversion_to_json(self):
         """Test converting plain text output to structured JSON."""
         # This is what we need to implement for handling plain text
-        expected_structure = {
-            "description": str,
-            "tags": list,
-            "metadata": dict
-        }
+        expected_structure = {"description": str, "tags": list, "metadata": dict}
 
         # For now, just test that we can extract basic info
         self.assertIn("yellow duck", self.plain_text_output.lower())
@@ -118,10 +119,13 @@ class TestFastVLMJSONParsing(unittest.TestCase):
             except json.JSONDecodeError as e:
                 try:
                     from json_repair import repair_json
+
                     repaired_json = repair_json(output)
                     return json.loads(repaired_json)
                 except Exception as repair_error:
-                    raise RuntimeError(f"Failed to parse model output as JSON: {e}. JSON repair also failed: {repair_error}")
+                    raise RuntimeError(
+                        f"Failed to parse model output as JSON: {e}. JSON repair also failed: {repair_error}"
+                    )
 
         # Test valid JSON
         result = parse_model_output(self.valid_json_256_tokens)
@@ -153,7 +157,11 @@ class TestFastVLMJSONParsing(unittest.TestCase):
 
         # This test documents that 256 tokens is the sweet spot
         recommended_token_limit = 256
-        self.assertEqual(recommended_token_limit, 256, "256 tokens produces clean JSON without repetition")
+        self.assertEqual(
+            recommended_token_limit,
+            256,
+            "256 tokens produces clean JSON without repetition",
+        )
 
     def _is_valid_json(self, text):
         """Helper method to check if text is valid JSON."""
@@ -162,6 +170,7 @@ class TestFastVLMJSONParsing(unittest.TestCase):
             return True
         except json.JSONDecodeError:
             return False
+
 
 if __name__ == "__main__":
     unittest.main()

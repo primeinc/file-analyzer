@@ -37,23 +37,25 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import artifact path management
+# Import configuration system
+from src.config.manager import ConfigManager
+from src.config.paths import PathManager
 from src.core.artifact_guard import (
     PathGuard,
     get_canonical_artifact_path,
     validate_artifact_path,
 )
 
-# Import configuration system
-from src.config.manager import ConfigManager
-from src.config.paths import PathManager
-
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Try to import PIL for image preprocessing
 try:
     from PIL import Image
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
@@ -64,19 +66,19 @@ VISION_MODELS = {
         "name": "FastVLM",
         "description": "Apple's native vision model (fastest option)",
         "install_cmd": "pip install mlx mlx-vlm Pillow",
-        "check_cmd": "python -c \"import mlx.vlm\"",
+        "check_cmd": 'python -c "import mlx.vlm"',
         "bin": "mlx_vlm",
         "model_options": {
             "default": "libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
             "small": "libs/ml-fastvlm/checkpoints/llava-fastvithd_0.5b_stage3",
             "medium": "libs/ml-fastvlm/checkpoints/llava-fastvithd_1.5b_stage3",
-            "large": "libs/ml-fastvlm/checkpoints/llava-fastvithd_7b_stage3"
+            "large": "libs/ml-fastvlm/checkpoints/llava-fastvithd_7b_stage3",
         },
         "resolution": {
             "default": "512x512",
             "text": "768x768",  # Better for document analysis
-            "objects": "384x384" # Sufficient for object detection
-        }
+            "objects": "384x384",  # Sufficient for object detection
+        },
     },
     "bakllava": {
         "name": "BakLLaVA",
@@ -85,31 +87,30 @@ VISION_MODELS = {
         "bin": "llama-cpp",
         "model_options": {
             "default": "BakLLaVA-1-Q4_K_M.gguf",
-            "clip": "BakLLaVA-1-clip-model.gguf"
-        }
+            "clip": "BakLLaVA-1-clip-model.gguf",
+        },
     },
     "qwen2vl": {
         "name": "Qwen2-VL",
         "description": "Document analysis specialist",
         "install_cmd": "pip install mlx-vlm",
-        "check_cmd": "python -c \"import mlx.vlm\"",
+        "check_cmd": 'python -c "import mlx.vlm"',
         "bin": "mlx_vlm",
-        "model_options": {
-            "default": "Qwen2-VL-7B-Instruct-4bit"
-        }
-    }
+        "model_options": {"default": "Qwen2-VL-7B-Instruct-4bit"},
+    },
 }
 
 # Default configuration - now managed by ConfigManager
 # Legacy support maintained for existing code
 DEFAULT_VISION_CONFIG = {
     "model": "fastvlm",
-    "model_size": "1.5b", 
+    "model_size": "1.5b",
     "mode": "describe",
     "resolution": "512x512",
     "output_format": "json",
-    "max_images": 10
+    "max_images": 10,
 }
+
 
 class VisionAnalyzer:
     """Class for analyzing images using vision language models."""
@@ -119,10 +120,10 @@ class VisionAnalyzer:
         # Use ConfigManager for centralized configuration
         self.config_manager = ConfigManager()
         self.path_manager = PathManager()
-        
+
         # Legacy config support - merge with ConfigManager
         self.legacy_config = config or {}
-        
+
         # Get model name from config or environment
         self.model_name = self._get_config_value("model", "fastvlm")
         self.model_info = VISION_MODELS.get(self.model_name, VISION_MODELS["fastvlm"])
@@ -140,7 +141,7 @@ class VisionAnalyzer:
 
     def _determine_model_size(self):
         """Determine the model size/variant based on model name and path.
-        
+
         Returns:
             str: Model size/variant (e.g., "0.5B", "1.5B", "7B") or empty string if unknown
         """
@@ -158,62 +159,64 @@ class VisionAnalyzer:
 
         # Add logic for other models as needed
         return ""
-        
+
     def _get_config_value(self, key, default=None):
         """Get configuration value with legacy config and environment variable support."""
         # First check environment variables for specific vision config
         if key == "model":
-            env_value = os.getenv('FA_MODEL_VISION_DEFAULT')
+            env_value = os.getenv("FA_MODEL_VISION_DEFAULT")
             if env_value:
                 return env_value
         elif key == "model_size":
-            env_value = os.getenv('FA_MODEL_SIZE')
+            env_value = os.getenv("FA_MODEL_SIZE")
             if env_value:
                 return env_value
         elif key == "model_path":
-            env_value = os.getenv('FA_MODEL_VISION_PATH')
+            env_value = os.getenv("FA_MODEL_VISION_PATH")
             if env_value:
                 return env_value
-                
+
         # Then check ConfigManager
         config_key = f"vision.{key}" if not key.startswith("vision.") else key
         value = self.config_manager.get(config_key, None)
         if value is not None:
             return value
-            
+
         # Then check legacy config
         if key in self.legacy_config:
             return self.legacy_config[key]
-            
+
         return default
-        
+
     def _get_model_path(self):
         """Get model path with priority: env vars > config > defaults."""
         # Check environment variables first
-        env_path = os.getenv('FA_MODEL_VISION_PATH')
+        env_path = os.getenv("FA_MODEL_VISION_PATH")
         if env_path:
             return env_path
-            
+
         # Then check configuration
         config_path = self._get_config_value("model_path")
         if config_path:
             # Use PathManager to resolve the path
-            resolved_path = self.path_manager.get_model_path(self.model_name, config_path)
+            resolved_path = self.path_manager.get_model_path(
+                self.model_name, config_path
+            )
             if resolved_path:
                 return resolved_path
             return config_path
-            
+
         # Use defaults from model info
         if self.model_name in VISION_MODELS:
             model_info = VISION_MODELS[self.model_name]
             if "model_options" in model_info:
                 return model_info["model_options"]["default"]
-                
+
         return ""
 
     def get_model_display_name(self):
         """Get a display name for the model including size information if available.
-        
+
         Returns:
             str: Model name with size information (e.g., "FastVLM 1.5B")
         """
@@ -232,8 +235,13 @@ class VisionAnalyzer:
             check_cmd = model_info.get("check_cmd")
             if check_cmd:
                 try:
-                    subprocess.run(check_cmd, shell=True, check=True,
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    subprocess.run(
+                        check_cmd,
+                        shell=True,
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
                     return True
                 except subprocess.CalledProcessError:
                     return False
@@ -259,8 +267,9 @@ class VisionAnalyzer:
     def run_command(self, command, shell=False):
         """Run a command and return its output."""
         try:
-            result = subprocess.run(command, shell=shell, check=True,
-                                  capture_output=True, text=True)
+            result = subprocess.run(
+                command, shell=shell, check=True, capture_output=True, text=True
+            )
             return result.stdout
         except subprocess.CalledProcessError as e:
             print(f"Error executing command: {' '.join(str(c) for c in command)}")
@@ -268,18 +277,20 @@ class VisionAnalyzer:
             print(f"Error output: {e.stderr}")
             return None
         except Exception as e:
-            print(f"Unexpected error running command: {' '.join(str(c) for c in command)}")
+            print(
+                f"Unexpected error running command: {' '.join(str(c) for c in command)}"
+            )
             print(f"Error: {e!s}")
             return None
 
     def preprocess_image(self, image_path, mode="describe"):
         """
         Preprocess an image for optimal performance with vision models.
-        
+
         Args:
             image_path: Path to the image file
             mode: Analysis mode to determine optimal preprocessing
-            
+
         Returns:
             Path to preprocessed image (or original if preprocessing not available)
         """
@@ -289,19 +300,24 @@ class VisionAnalyzer:
         # Check if this image has already been preprocessed to avoid duplicate preprocessing
         # Images in our canonical temp directory with our prefix are already preprocessed
         canonical_tmp_dir = get_canonical_artifact_path("tmp", "preprocessed_images")
-        if "fastvlm_temp_" in os.path.basename(image_path) and canonical_tmp_dir in image_path:
+        if (
+            "fastvlm_temp_" in os.path.basename(image_path)
+            and canonical_tmp_dir in image_path
+        ):
             print("Image already preprocessed, skipping duplicate preprocessing")
             return image_path
 
         if not PIL_AVAILABLE:
             # Skip preprocessing if PIL is not available
-            print("⚠️ WARNING: PIL not available, skipping preprocessing. RAW IMAGE WILL BE USED!")
+            print(
+                "⚠️ WARNING: PIL not available, skipping preprocessing. RAW IMAGE WILL BE USED!"
+            )
             return image_path
 
         try:
             # Get original image size for comparison
             orig_size = os.path.getsize(image_path)
-            print(f"Original image size: {orig_size/1024:.1f}KB")
+            print(f"Original image size: {orig_size / 1024:.1f}KB")
 
             # Get resolution based on mode
             resolution = self.resolution
@@ -330,7 +346,9 @@ class VisionAnalyzer:
             # ALWAYS PROCESS THE IMAGE regardless of current size
             # Images should be normalized even if already at target resolution
             # This ensures consistent performance across different image sources
-            print("ALWAYS PROCESSING: Image will be normalized to target resolution regardless of current size")
+            print(
+                "ALWAYS PROCESSING: Image will be normalized to target resolution regardless of current size"
+            )
 
             # Preserve aspect ratio when scaling
             if orig_width > orig_height:
@@ -340,26 +358,34 @@ class VisionAnalyzer:
                 new_height = height
                 new_width = int(orig_width * (height / orig_height))
 
-            print(f"New dimensions with preserved aspect ratio: {new_width}x{new_height}")
+            print(
+                f"New dimensions with preserved aspect ratio: {new_width}x{new_height}"
+            )
 
             # Resize image
             resized_img = img.resize((new_width, new_height), Image.LANCZOS)
 
             # Create a new image with the target size and paste resized image
             new_img = Image.new("RGB", (width, height), (0, 0, 0))
-            new_img.paste(resized_img, ((width - new_width) // 2, (height - new_height) // 2))
+            new_img.paste(
+                resized_img, ((width - new_width) // 2, (height - new_height) // 2)
+            )
 
             # Save to a canonical artifact path instead of system temp directory
             temp_dir = get_canonical_artifact_path("tmp", "preprocessed_images")
-            temp_path = os.path.join(temp_dir, f"fastvlm_temp_{os.path.basename(image_path)}")
+            temp_path = os.path.join(
+                temp_dir, f"fastvlm_temp_{os.path.basename(image_path)}"
+            )
             # Ensure the directory exists
             os.makedirs(temp_dir, exist_ok=True)
             new_img.save(temp_path)
 
             # Log size reduction
             new_size = os.path.getsize(temp_path)
-            reduction = (1 - new_size/orig_size) * 100
-            print(f"PREPROCESSED: {orig_size/1024:.1f}KB → {new_size/1024:.1f}KB ({reduction:.1f}% reduction)")
+            reduction = (1 - new_size / orig_size) * 100
+            print(
+                f"PREPROCESSED: {orig_size / 1024:.1f}KB → {new_size / 1024:.1f}KB ({reduction:.1f}% reduction)"
+            )
 
             return temp_path
         except Exception as e:
@@ -370,12 +396,12 @@ class VisionAnalyzer:
     def analyze_image(self, image_path, prompt=None, mode="describe"):
         """
         Analyze an image using the selected vision model.
-        
+
         Args:
             image_path: Path to the image file
             prompt: Custom prompt to use for analysis (optional)
             mode: Analysis mode - describe, detect, or document
-            
+
         Returns:
             Analysis result as string or dict
         """
@@ -413,7 +439,9 @@ class VisionAnalyzer:
             start_time = time.time()
 
             model_path = self._get_model_path()
-            creativity = 0.7 if self._get_config_value("description_mode") == "creative" else 0.0
+            creativity = (
+                0.7 if self._get_config_value("description_mode") == "creative" else 0.0
+            )
             output_format = self._get_config_value("output_format", "json")
             max_retries = self._get_config_value("max_retries", 3)
 
@@ -451,7 +479,7 @@ class VisionAnalyzer:
                         processed_image_path,
                         model_path,
                         prompt=json_prompt,
-                        max_retries=max_retries
+                        max_retries=max_retries,
                     )
 
                     if json_result:
@@ -463,7 +491,9 @@ class VisionAnalyzer:
                         return json_result
 
                 except (ImportError, Exception) as e:
-                    logging.warning(f"Error using JSON-specific implementation: {e}. Falling back to standard method.")
+                    logging.warning(
+                        f"Error using JSON-specific implementation: {e}. Falling back to standard method."
+                    )
 
             # Fallback to the original implementation
             # Check for the predict.py script in the project directory first
@@ -473,33 +503,62 @@ class VisionAnalyzer:
             if os.path.exists(predict_script):
                 # Try to use the direct predict.py script
                 import subprocess
+
                 print(f"Using FastVLM predict.py script at {predict_script}")
                 cmd = [
                     sys.executable,
                     predict_script,
-                    "--model-path", model_path,
-                    "--image-file", processed_image_path,
-                    "--prompt", prompt
+                    "--model-path",
+                    model_path,
+                    "--image-file",
+                    processed_image_path,
+                    "--prompt",
+                    prompt,
                 ]
 
                 try:
-                    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, check=True
+                    )
                     result = result.stdout
                 except subprocess.SubprocessError as e:
                     logging.error(f"Error running FastVLM predict.py: {e}")
-                    if hasattr(e, 'stderr'):
+                    if hasattr(e, "stderr"):
                         logging.error(f"Error output: {e.stderr}")
                     result = None
             else:
                 # Fallback to command-line invocation
                 if mode == "describe":
-                    cmd = ["fastvlm", "describe", "--model", model_path, "--image", processed_image_path]
+                    cmd = [
+                        "fastvlm",
+                        "describe",
+                        "--model",
+                        model_path,
+                        "--image",
+                        processed_image_path,
+                    ]
                     if creativity > 0:
                         cmd.extend(["--creative", str(creativity)])
                 elif mode == "detect":
-                    cmd = ["fastvlm", "detect", "--model", model_path, "--image", processed_image_path, "--threshold", "0.6"]
+                    cmd = [
+                        "fastvlm",
+                        "detect",
+                        "--model",
+                        model_path,
+                        "--image",
+                        processed_image_path,
+                        "--threshold",
+                        "0.6",
+                    ]
                 else:  # document mode
-                    cmd = ["fastvlm", "describe", "--model", model_path, "--image", processed_image_path]
+                    cmd = [
+                        "fastvlm",
+                        "describe",
+                        "--model",
+                        model_path,
+                        "--image",
+                        processed_image_path,
+                    ]
 
                 result = self.run_command(cmd)
 
@@ -511,13 +570,16 @@ class VisionAnalyzer:
                     try:
                         # Try to format as JSON
                         import json
+
                         result_dict = json.loads(result)
-                        result_dict['metadata'] = {
-                            'analysis_time': analysis_time,
-                            'model': 'FastVLM',
-                            'mode': mode
+                        result_dict["metadata"] = {
+                            "analysis_time": analysis_time,
+                            "model": "FastVLM",
+                            "mode": mode,
                         }
-                        return result_dict  # Return as dictionary for better integration
+                        return (
+                            result_dict  # Return as dictionary for better integration
+                        )
                     except (json.JSONDecodeError, TypeError):
                         # Import the centralized JSON utilities for consistent handling
                         try:
@@ -528,29 +590,33 @@ class VisionAnalyzer:
 
                             # Use the centralized method for JSON processing
                             metadata = {
-                                'analysis_time': analysis_time,
-                                'model': 'FastVLM',
-                                'mode': mode
+                                "analysis_time": analysis_time,
+                                "model": "FastVLM",
+                                "mode": mode,
                             }
 
                             # Process the output with consistent utilities
-                            return process_model_output(result, mode=mode, metadata=metadata)
+                            return process_model_output(
+                                result, mode=mode, metadata=metadata
+                            )
 
                         except ImportError:
                             # Fallback if utilities not available (should not happen)
                             # Log the issue so it gets noticed
-                            logging.error("Failed to import centralized JSON utilities!")
+                            logging.error(
+                                "Failed to import centralized JSON utilities!"
+                            )
 
                             # Return formatted response with error flag
                             return {
                                 "text": result,
                                 "metadata": {
-                                    'analysis_time': analysis_time,
-                                    'model': 'FastVLM',
-                                    'mode': mode,
-                                    'json_parsing_failed': True,
-                                    'missing_json_utils': True
-                                }
+                                    "analysis_time": analysis_time,
+                                    "model": "FastVLM",
+                                    "mode": mode,
+                                    "json_parsing_failed": True,
+                                    "missing_json_utils": True,
+                                },
                             }
                 else:
                     # Return text format with metrics
@@ -558,17 +624,25 @@ class VisionAnalyzer:
 
         # BakLLaVA analysis
         elif model_name == "bakllava":
-            model_path = self._get_model_path() or self.model_info["model_options"]["default"]
-            mmproj_path = self._get_config_value("mmproj_path") or self.model_info["model_options"]["clip"]
+            model_path = (
+                self._get_model_path() or self.model_info["model_options"]["default"]
+            )
+            mmproj_path = (
+                self._get_config_value("mmproj_path")
+                or self.model_info["model_options"]["clip"]
+            )
 
             # Check if using Fuzzy-Search implementation
             if os.path.exists("./realtime-bakllava/server"):
                 # Start server mode (background process)
                 server_cmd = [
                     "./realtime-bakllava/server",
-                    "-m", model_path,
-                    "--mmproj", mmproj_path,
-                    "-ngl", "1"
+                    "-m",
+                    model_path,
+                    "--mmproj",
+                    mmproj_path,
+                    "-ngl",
+                    "1",
                 ]
                 # This would need a more complex implementation with server/client mode
                 print("BakLLaVA server mode not yet implemented")
@@ -578,23 +652,35 @@ class VisionAnalyzer:
                 llama_path = shutil.which("llama-cpp") or "./llama.cpp/main"
                 cmd = [
                     llama_path,
-                    "-m", model_path,
-                    "--mmproj", mmproj_path,
-                    "-ngl", "1",
-                    "--image", image_path,
-                    "--prompt", prompt
+                    "-m",
+                    model_path,
+                    "--mmproj",
+                    mmproj_path,
+                    "-ngl",
+                    "1",
+                    "--image",
+                    image_path,
+                    "--prompt",
+                    prompt,
                 ]
                 result = self.run_command(cmd)
 
         # Qwen2-VL analysis
         elif model_name == "qwen2vl":
-            model_path = self._get_model_path() or self.model_info["model_options"]["default"]
+            model_path = (
+                self._get_model_path() or self.model_info["model_options"]["default"]
+            )
 
             cmd = [
-                "python", "-m", "mlx_vlm.cli",
-                "--model", model_path,
-                "--image", image_path,
-                "--prompt", prompt
+                "python",
+                "-m",
+                "mlx_vlm.cli",
+                "--model",
+                model_path,
+                "--image",
+                image_path,
+                "--prompt",
+                prompt,
             ]
             result = self.run_command(cmd)
 
@@ -613,15 +699,15 @@ class VisionAnalyzer:
                         "metadata": {
                             "model": self.model_name,
                             "mode": mode,
-                            "json_parsing_failed": True
-                        }
+                            "json_parsing_failed": True,
+                        },
                     }
             # If already a dict, ensure it has metadata
             elif isinstance(result, dict) and "metadata" not in result:
                 result["metadata"] = {
                     "model": self.model_name,
                     "mode": mode,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 }
 
         return result
@@ -629,23 +715,31 @@ class VisionAnalyzer:
     def _batch_process_fastvlm(self, processed_images, output_dir, mode):
         """
         Specialized batch processing method for FastVLM models.
-        
+
         Args:
             processed_images: Dict mapping original paths to preprocessed image paths
             output_dir: Directory to save results
             mode: Analysis mode
-            
+
         Returns:
             Dict mapping image paths to analysis results
         """
         results = {}
-        ml_fastvlm_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "libs", "ml-fastvlm")
+        ml_fastvlm_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "libs",
+            "ml-fastvlm",
+        )
 
         # Validate output_dir is a canonical artifact path
         if not validate_artifact_path(output_dir):
-            print(f"Warning: Output directory {output_dir} is not a canonical artifact path")
+            print(
+                f"Warning: Output directory {output_dir} is not a canonical artifact path"
+            )
             print("Creating canonical artifact path for batch processing")
-            output_dir = get_canonical_artifact_path("vision", f"batch_{self.model_name}_{mode}")
+            output_dir = get_canonical_artifact_path(
+                "vision", f"batch_{self.model_name}_{mode}"
+            )
             print(f"Using canonical artifact path: {output_dir}")
 
         # Check if we can use the batch processing capability
@@ -659,7 +753,7 @@ class VisionAnalyzer:
                 temp_dir = get_canonical_artifact_path("tmp", "fastvlm_batch_list")
                 temp_list = os.path.join(temp_dir, "image_list.txt")
 
-                with open(temp_list, 'w') as f:
+                with open(temp_list, "w") as f:
                     for orig_path, proc_path in processed_images.items():
                         f.write(f"{proc_path}\n")
 
@@ -670,10 +764,14 @@ class VisionAnalyzer:
                 cmd = [
                     sys.executable,
                     os.path.join(ml_fastvlm_dir, "batch_predict.py"),
-                    "--model-path", model_path,
-                    "--image-list", temp_list,
-                    "--output-dir", output_dir,
-                    "--prompt", self._get_prompt_for_mode(mode)
+                    "--model-path",
+                    model_path,
+                    "--image-list",
+                    temp_list,
+                    "--output-dir",
+                    output_dir,
+                    "--prompt",
+                    self._get_prompt_for_mode(mode),
                 ]
 
                 print("Running FastVLM batch processing...")
@@ -683,7 +781,9 @@ class VisionAnalyzer:
                 with PathGuard(output_dir):
                     for orig_path in processed_images.keys():
                         base_name = os.path.basename(orig_path)
-                        result_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_result.txt")
+                        result_file = os.path.join(
+                            output_dir, f"{os.path.splitext(base_name)[0]}_result.txt"
+                        )
                         if os.path.exists(result_file):
                             with open(result_file) as f:
                                 results[orig_path] = f.read()
@@ -703,9 +803,15 @@ class VisionAnalyzer:
 
                     # Save individual result
                     base_name = os.path.basename(orig_path)
-                    file_ext = ".json" if self.config.get("output_format") == "json" else ".txt"
-                    output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}{file_ext}")
-                    with open(output_file, 'w') as f:
+                    file_ext = (
+                        ".json"
+                        if self.config.get("output_format") == "json"
+                        else ".txt"
+                    )
+                    output_file = os.path.join(
+                        output_dir, f"{os.path.splitext(base_name)[0]}_{mode}{file_ext}"
+                    )
+                    with open(output_file, "w") as f:
                         if isinstance(result, dict):
                             # Handle dict result properly for JSON format
                             json.dump(result, f, indent=2)
@@ -728,12 +834,12 @@ class VisionAnalyzer:
     def batch_analyze(self, image_dir, output_dir=None, mode="describe"):
         """
         Batch analyze all images in a directory.
-        
+
         Args:
             image_dir: Directory containing images
             output_dir: Directory to save results (if None, uses canonical artifact path)
             mode: Analysis mode - describe, detect, or document
-            
+
         Returns:
             Dict mapping image paths to analysis results
         """
@@ -744,13 +850,19 @@ class VisionAnalyzer:
         # Use canonical artifact path if output_dir is not specified
         if output_dir is None:
             # Create a canonical artifact directory
-            output_dir = get_canonical_artifact_path("vision", f"{self.model_name}_{mode}")
+            output_dir = get_canonical_artifact_path(
+                "vision", f"{self.model_name}_{mode}"
+            )
             print(f"Using canonical artifact path: {output_dir}")
         else:
             # Validate the provided output directory
             if not validate_artifact_path(output_dir):
-                print(f"Warning: Output directory {output_dir} is not a canonical artifact path")
-                print("Consider using get_canonical_artifact_path() from src.core.artifact_guard")
+                print(
+                    f"Warning: Output directory {output_dir} is not a canonical artifact path"
+                )
+                print(
+                    "Consider using get_canonical_artifact_path() from src.core.artifact_guard"
+                )
 
             # Create output directory if it doesn't exist
             Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -776,6 +888,7 @@ class VisionAnalyzer:
 
         # First preprocess all images in parallel
         from concurrent.futures import ThreadPoolExecutor
+
         max_workers = self._get_config_value("max_threads", os.cpu_count() or 4)
 
         # Define preprocessing function
@@ -785,19 +898,27 @@ class VisionAnalyzer:
         print(f"Preprocessing {len(image_files)} images using {max_workers} threads...")
         processed_images = {}
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            for orig_path, proc_path in executor.map(preprocess_batch_image, image_files):
+            for orig_path, proc_path in executor.map(
+                preprocess_batch_image, image_files
+            ):
                 processed_images[orig_path] = proc_path
 
         # Use PathGuard to ensure all output file operations respect artifact discipline
         with PathGuard(output_dir):
             # FastVLM batch processing
-            if self.model_name == "fastvlm" and self._get_config_value("batch_processing", False):
+            if self.model_name == "fastvlm" and self._get_config_value(
+                "batch_processing", False
+            ):
                 model_path = self._get_model_path()
                 cmd = [
-                    "fastvlm", "batch",
-                    "--model", model_path,
-                    "--input_dir", image_dir,
-                    "--output_dir", output_dir
+                    "fastvlm",
+                    "batch",
+                    "--model",
+                    model_path,
+                    "--input_dir",
+                    image_dir,
+                    "--output_dir",
+                    output_dir,
                 ]
                 self.run_command(cmd)
 
@@ -805,7 +926,9 @@ class VisionAnalyzer:
                 results = {}
                 for image_file in image_files:
                     base_name = os.path.basename(image_file)
-                    output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}.txt")
+                    output_file = os.path.join(
+                        output_dir, f"{os.path.splitext(base_name)[0]}.txt"
+                    )
                     if os.path.exists(output_file):
                         with open(output_file) as f:
                             results[image_file] = f.read()
@@ -818,7 +941,9 @@ class VisionAnalyzer:
             # Check if we're using FastVLM for more efficient batch processing
             if self.model_name == "fastvlm" and hasattr(self, "_batch_process_fastvlm"):
                 # Use specialized batch processing for FastVLM
-                results = self._batch_process_fastvlm(processed_images, output_dir, mode)
+                results = self._batch_process_fastvlm(
+                    processed_images, output_dir, mode
+                )
             else:
                 # Process each image individually
                 for image_file, processed_image in processed_images.items():
@@ -829,10 +954,17 @@ class VisionAnalyzer:
 
                         # Save individual result
                         base_name = os.path.basename(image_file)
-                        file_ext = ".json" if self._get_config_value("output_format") == "json" else ".txt"
-                        output_file = os.path.join(output_dir, f"{os.path.splitext(base_name)[0]}_{mode}{file_ext}")
+                        file_ext = (
+                            ".json"
+                            if self._get_config_value("output_format") == "json"
+                            else ".txt"
+                        )
+                        output_file = os.path.join(
+                            output_dir,
+                            f"{os.path.splitext(base_name)[0]}_{mode}{file_ext}",
+                        )
 
-                        with open(output_file, 'w') as f:
+                        with open(output_file, "w") as f:
                             if isinstance(result, dict):
                                 # Handle dict result properly for JSON format
                                 json.dump(result, f, indent=2)
@@ -845,23 +977,27 @@ class VisionAnalyzer:
     def save_results(self, results, output_file=None):
         """
         Save analysis results to a file.
-        
+
         Args:
             results: Results dictionary to save
             output_file: Path to save results (if None, uses canonical artifact path)
-            
+
         Returns:
             Path to the saved results file
         """
         if not results:
             return None
 
-        output_format = self._get_config_value("output_format", "json")  # Default to JSON
+        output_format = self._get_config_value(
+            "output_format", "json"
+        )  # Default to JSON
 
         # Use canonical artifact path if output_file is not specified
         if output_file is None:
             # Create a canonical artifact directory
-            artifact_dir = get_canonical_artifact_path("vision", f"{self.model_name}_results")
+            artifact_dir = get_canonical_artifact_path(
+                "vision", f"{self.model_name}_results"
+            )
 
             # Determine appropriate file name based on format
             if output_format == "json":
@@ -875,8 +1011,12 @@ class VisionAnalyzer:
         else:
             # Validate the provided output file
             if not validate_artifact_path(output_file):
-                print(f"Warning: Output file {output_file} is not in a canonical artifact path")
-                print("Consider using get_canonical_artifact_path() from src.core.artifact_guard")
+                print(
+                    f"Warning: Output file {output_file} is not in a canonical artifact path"
+                )
+                print(
+                    "Consider using get_canonical_artifact_path() from src.core.artifact_guard"
+                )
 
             # Convert to Path object for easier extension handling
             output_file = Path(output_file)
@@ -884,7 +1024,9 @@ class VisionAnalyzer:
             # Ensure the file extension matches the format
             if output_format == "json" and not str(output_file).endswith(".json"):
                 output_file = output_file.with_suffix(".json")
-            elif output_format == "markdown" and not str(output_file).endswith((".md", ".markdown")):
+            elif output_format == "markdown" and not str(output_file).endswith(
+                (".md", ".markdown")
+            ):
                 output_file = output_file.with_suffix(".md")
 
         # Ensure directory exists
@@ -906,7 +1048,7 @@ class VisionAnalyzer:
 
                 clean_results = clean_for_json(results)
 
-                with open(output_file, 'w') as f:
+                with open(output_file, "w") as f:
                     json.dump(clean_results, f, indent=2)
 
                 # Validate the output file is valid JSON
@@ -915,10 +1057,12 @@ class VisionAnalyzer:
                         json.load(f)
                     logging.info(f"Successfully saved valid JSON to {output_file}")
                 except json.JSONDecodeError as e:
-                    logging.error(f"Error: Generated invalid JSON in {output_file}: {e}")
+                    logging.error(
+                        f"Error: Generated invalid JSON in {output_file}: {e}"
+                    )
 
             elif output_format == "markdown":
-                with open(output_file, 'w') as f:
+                with open(output_file, "w") as f:
                     f.write("# Vision Analysis Results\n\n")
                     f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                     f.write(f"Model: {self.model_info['name']}\n\n")
@@ -941,7 +1085,9 @@ class VisionAnalyzer:
                                     f.write(f"- {tag}\n")
                                 f.write("\n")
 
-                            if "objects" in result and isinstance(result["objects"], list):
+                            if "objects" in result and isinstance(
+                                result["objects"], list
+                            ):
                                 f.write("### Objects Detected\n\n")
                                 for obj in result["objects"]:
                                     if isinstance(obj, dict) and "name" in obj:
@@ -975,10 +1121,12 @@ class VisionAnalyzer:
                     # Add a summary section
                     f.write("## Summary\n\n")
                     f.write(f"- Total images analyzed: {len(results)}\n")
-                    f.write(f"- Analysis mode: {self._get_config_value('mode', 'describe')}\n")
+                    f.write(
+                        f"- Analysis mode: {self._get_config_value('mode', 'describe')}\n"
+                    )
 
             else:  # text format (default fallback)
-                with open(output_file, 'w') as f:
+                with open(output_file, "w") as f:
                     for image_path, result in results.items():
                         f.write(f"=== {image_path} ===\n")
                         if isinstance(result, dict):
@@ -993,20 +1141,43 @@ class VisionAnalyzer:
 
         return str(output_file)
 
+
 # Simple example usage if run directly
 if __name__ == "__main__":
     import argparse
     import json
 
     parser = argparse.ArgumentParser(description="Vision Model Analysis")
-    parser.add_argument("--image", required=True, help="Path to image file or directory")
-    parser.add_argument("--model", default="fastvlm", choices=VISION_MODELS.keys(), help="Vision model to use")
-    parser.add_argument("--mode", default="describe", choices=["describe", "detect", "document"], help="Analysis mode")
-    parser.add_argument("--output", help="Output file or directory (defaults to canonical artifact path)")
-    parser.add_argument("--batch", action="store_true", help="Process directory in batch mode")
+    parser.add_argument(
+        "--image", required=True, help="Path to image file or directory"
+    )
+    parser.add_argument(
+        "--model",
+        default="fastvlm",
+        choices=VISION_MODELS.keys(),
+        help="Vision model to use",
+    )
+    parser.add_argument(
+        "--mode",
+        default="describe",
+        choices=["describe", "detect", "document"],
+        help="Analysis mode",
+    )
+    parser.add_argument(
+        "--output",
+        help="Output file or directory (defaults to canonical artifact path)",
+    )
+    parser.add_argument(
+        "--batch", action="store_true", help="Process directory in batch mode"
+    )
     parser.add_argument("--prompt", help="Custom prompt for analysis")
     parser.add_argument("--model-path", help="Path to model weights")
-    parser.add_argument("--format", choices=["text", "json", "markdown"], default="text", help="Output format")
+    parser.add_argument(
+        "--format",
+        choices=["text", "json", "markdown"],
+        default="text",
+        help="Output format",
+    )
 
     args = parser.parse_args()
 
@@ -1014,9 +1185,9 @@ if __name__ == "__main__":
     legacy_config = {
         "model": args.model,
         "batch_processing": args.batch,
-        "output_format": args.format
+        "output_format": args.format,
     }
-    
+
     if args.model_path:
         legacy_config["model_path"] = args.model_path
 
@@ -1028,12 +1199,16 @@ if __name__ == "__main__":
         if args.output:
             # If explicit output directory is provided, use it
             if not validate_artifact_path(args.output):
-                print(f"Warning: Output directory {args.output} is not a canonical artifact path")
+                print(
+                    f"Warning: Output directory {args.output} is not a canonical artifact path"
+                )
                 print("Consider using automatic canonical paths by omitting --output")
             output_dir = args.output
         else:
             # Create a canonical artifact directory for batch results
-            output_dir = get_canonical_artifact_path("vision", f"batch_{args.model}_{args.mode}")
+            output_dir = get_canonical_artifact_path(
+                "vision", f"batch_{args.model}_{args.mode}"
+            )
             print(f"Using canonical artifact path: {output_dir}")
 
         # Perform batch analysis
@@ -1047,12 +1222,16 @@ if __name__ == "__main__":
             if args.output:
                 # If explicit output file is provided, validate and use it
                 if not validate_artifact_path(args.output):
-                    print(f"Warning: Output file {args.output} is not in a canonical artifact path")
-                    print("Consider using automatic canonical paths by omitting --output")
+                    print(
+                        f"Warning: Output file {args.output} is not in a canonical artifact path"
+                    )
+                    print(
+                        "Consider using automatic canonical paths by omitting --output"
+                    )
 
                 # Use PathGuard to protect file operations
                 with PathGuard(os.path.dirname(args.output)):
-                    with open(args.output, 'w') as f:
+                    with open(args.output, "w") as f:
                         if isinstance(result, dict):
                             # Handle dict result properly for JSON format
                             json.dump(result, f, indent=2)
@@ -1062,7 +1241,9 @@ if __name__ == "__main__":
                 print(f"Analysis saved to {args.output}")
             else:
                 # Use canonical artifact path for the output
-                artifact_dir = get_canonical_artifact_path("vision", f"single_{args.model}_{args.mode}")
+                artifact_dir = get_canonical_artifact_path(
+                    "vision", f"single_{args.model}_{args.mode}"
+                )
                 output_file = os.path.join(artifact_dir, "result")
 
                 # Determine file extension based on format
@@ -1075,7 +1256,7 @@ if __name__ == "__main__":
 
                 # Save results using PathGuard
                 with PathGuard(artifact_dir):
-                    with open(output_file, 'w') as f:
+                    with open(output_file, "w") as f:
                         if isinstance(result, dict) and args.format == "json":
                             # Handle dict result properly for JSON format
                             json.dump(result, f, indent=2)
@@ -1091,7 +1272,11 @@ if __name__ == "__main__":
                         if isinstance(result, dict):
                             print(json.dumps(result, indent=2))
                         else:
-                            result_dict = json.loads(result) if isinstance(result, str) else {"text": str(result)}
+                            result_dict = (
+                                json.loads(result)
+                                if isinstance(result, str)
+                                else {"text": str(result)}
+                            )
                             print(json.dumps(result_dict, indent=2))
                     except (json.JSONDecodeError, TypeError):
                         print(result)

@@ -26,6 +26,9 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
+# Import configuration system
+from src.config.manager import ConfigManager
+
 # Import artifact discipline components
 from src.core.artifact_guard import (
     PathGuard,
@@ -36,13 +39,13 @@ from src.core.artifact_guard import (
 # Import model analysis components
 from src.models.analyzer import ModelAnalyzer
 
-# Import configuration system
-from src.config.manager import ConfigManager
-from src.config.paths import PathManager
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class FileAnalyzer:
     """Main class for the file analyzer system."""
@@ -51,69 +54,81 @@ class FileAnalyzer:
         """Initialize the file analyzer with optional configuration."""
         # Use ConfigManager for centralized configuration
         self.config_manager = ConfigManager()
-        
+
         # Legacy config support - merge with ConfigManager
         if config:
             # If legacy config is provided, use it as overrides
             self.legacy_config = config
         else:
             self.legacy_config = {}
-            
+
         self.results = {}
         self.model_analyzer = ModelAnalyzer(self._get_merged_config())
 
         # Set file extensions from config for filtering
-        image_extensions = self.config_manager.get('file_extensions.images')
+        image_extensions = self.config_manager.get("file_extensions.images")
         if image_extensions:
             self.image_extensions = set(image_extensions)
         else:
-            self.image_extensions = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"}
+            self.image_extensions = {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".tif",
+                ".tiff",
+                ".bmp",
+                ".gif",
+            }
 
         # Include/exclude patterns for file filtering
-        self.include_patterns = self.config_manager.get('analysis.default_include_patterns', [])
-        self.exclude_patterns = self.config_manager.get('analysis.default_exclude_patterns', [])
-        
+        self.include_patterns = self.config_manager.get(
+            "analysis.default_include_patterns", []
+        )
+        self.exclude_patterns = self.config_manager.get(
+            "analysis.default_exclude_patterns", []
+        )
+
     def _get_config_value(self, key, default=None):
         """Get configuration value with legacy config fallback."""
         # First check ConfigManager
         value = self.config_manager.get(key, None)
         if value is not None:
             return value
-            
+
         # Then check legacy config using dot notation
         legacy_value = self._get_legacy_config_value(key, default)
         return legacy_value
-        
+
     def _get_legacy_config_value(self, key, default):
         """Get value from legacy config using dot notation."""
-        keys = key.split('.')
+        keys = key.split(".")
         value = self.legacy_config
-        
+
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
                 return default
-                
+
         return value if value is not None else default
-        
+
     def _get_merged_config(self):
         """Get merged configuration for legacy components."""
         # Start with ConfigManager data
         merged = {}
-        
+
         # Add vision config
         vision_config = {
-            'model': self.config_manager.get('vision.default_model', 'fastvlm'),
-            'model_size': self.config_manager.get('vision.model_size'),
-            'mode': self.config_manager.get('vision.default_mode', 'describe')
+            "model": self.config_manager.get("vision.default_model", "fastvlm"),
+            "model_size": self.config_manager.get("vision.model_size"),
+            "mode": self.config_manager.get("vision.default_mode", "describe"),
         }
-        merged['vision'] = vision_config
-        
+        merged["vision"] = vision_config
+
         # Overlay legacy config
         if self.legacy_config:
             merged.update(self.legacy_config)
-            
+
         return merged
 
     def analyze(self, path, options):
@@ -136,39 +151,39 @@ class FileAnalyzer:
         self.results["errors"] = []  # Track all errors encountered
 
         # Update include/exclude patterns if provided in options
-        if options.get('include_patterns'):
-            self.include_patterns = options.get('include_patterns')
-        if options.get('exclude_patterns'):
-            self.exclude_patterns = options.get('exclude_patterns')
+        if options.get("include_patterns"):
+            self.include_patterns = options.get("include_patterns")
+        if options.get("exclude_patterns"):
+            self.exclude_patterns = options.get("exclude_patterns")
 
         # Use PathGuard to enforce artifact discipline
         with PathGuard(artifact_dir):
             # Individual analysis components
-            if options.get('metadata'):
+            if options.get("metadata"):
                 self._extract_metadata(path, artifact_dir)
 
-            if options.get('duplicates'):
+            if options.get("duplicates"):
                 self._find_duplicates(path, artifact_dir)
 
-            if options.get('ocr'):
+            if options.get("ocr"):
                 self._perform_ocr(path, artifact_dir)
 
-            if options.get('virus'):
+            if options.get("virus"):
                 self._scan_malware(path, artifact_dir)
 
-            if options.get('search'):
-                self._search_content(path, options.get('search_text', ''), artifact_dir)
+            if options.get("search"):
+                self._search_content(path, options.get("search_text", ""), artifact_dir)
 
-            if options.get('binary'):
+            if options.get("binary"):
                 self._analyze_binary(path, artifact_dir)
 
-            if options.get('vision') or options.get('model'):
+            if options.get("vision") or options.get("model"):
                 self._analyze_models(
                     path,
-                    options.get('model_type', 'vision'),
-                    options.get('model_name', 'fastvlm'),
-                    options.get('model_mode', 'describe'),
-                    artifact_dir
+                    options.get("model_type", "vision"),
+                    options.get("model_name", "fastvlm"),
+                    options.get("model_mode", "describe"),
+                    artifact_dir,
                 )
 
             # Write summary of all analyses
@@ -181,11 +196,15 @@ class FileAnalyzer:
         file_path_str = str(file_path)
 
         # If we have include patterns, file must match at least one
-        if self.include_patterns and not any(fnmatch.fnmatch(file_path_str, pattern) for pattern in self.include_patterns):
+        if self.include_patterns and not any(
+            fnmatch.fnmatch(file_path_str, pattern) for pattern in self.include_patterns
+        ):
             return False
 
         # If file matches any exclude pattern, skip it
-        if any(fnmatch.fnmatch(file_path_str, pattern) for pattern in self.exclude_patterns):
+        if any(
+            fnmatch.fnmatch(file_path_str, pattern) for pattern in self.exclude_patterns
+        ):
             return False
 
         return True
@@ -208,16 +227,16 @@ class FileAnalyzer:
 
             logging.info(f"Found {len(files_to_process)} files to process")
 
-        # Limit the number of files to process
-            max_files = self._get_config_value('analysis.max_metadata_files', 50)
+            # Limit the number of files to process
+            max_files = self._get_config_value("analysis.max_metadata_files", 50)
             if len(files_to_process) > max_files:
                 logging.info(f"Limiting to {max_files} files")
                 files_to_process = files_to_process[:max_files]
 
             # Process collected files directly
             if files_to_process:
-            # Get exiftool options from config
-                exiftool_options = self._get_config_value('tools.exiftool.options', [])
+                # Get exiftool options from config
+                exiftool_options = self._get_config_value("tools.exiftool.options", [])
                 command = ["exiftool", "-json"]
 
                 # Check if -json is already in the config options to avoid duplication
@@ -229,17 +248,17 @@ class FileAnalyzer:
                     command.append(str(file_path))
             else:
                 logging.info("No matching files found")
-                self.results['metadata'] = {"status": "skipped"}
+                self.results["metadata"] = {"status": "skipped"}
                 return None
         else:
             # If it's a single file, just process it directly
             if not self._should_process_file(path):
                 logging.info("File excluded by pattern")
-                self.results['metadata'] = {"status": "skipped"}
+                self.results["metadata"] = {"status": "skipped"}
                 return None
 
             # Get exiftool options from config
-            exiftool_options = self._get_config_value('tools.exiftool.options', [])
+            exiftool_options = self._get_config_value("tools.exiftool.options", [])
             command = ["exiftool", "-json"]
 
             # Check if -json is already in the config options to avoid duplication
@@ -258,9 +277,9 @@ class FileAnalyzer:
 
             if not output:
                 logging.error("Command returned no output")
-                self.results['metadata'] = {
+                self.results["metadata"] = {
                     "status": "error",
-                    "message": "Command returned no output"
+                    "message": "Command returned no output",
                 }
                 return None
 
@@ -273,7 +292,7 @@ class FileAnalyzer:
                 except json.JSONDecodeError:
                     # If direct parsing fails, try to find and extract valid JSON
                     # Look for various possible JSON starts (array or object)
-                    for start_char, end_char in [('{', '}'), ('[', ']')]:
+                    for start_char, end_char in [("{", "}"), ("[", "]")]:
                         json_start = output.find(start_char)
                         if json_start >= 0:
                             # Found potential JSON start, now find matching end
@@ -288,7 +307,7 @@ class FileAnalyzer:
                                 if in_string:
                                     if escape_next:
                                         escape_next = False
-                                    elif char == '\\':
+                                    elif char == "\\":
                                         escape_next = True
                                     elif char == '"':
                                         in_string = False
@@ -312,8 +331,10 @@ class FileAnalyzer:
                                     continue  # Try next pattern
 
                     # If all attempts failed, raise exception
-                    if 'metadata' not in locals():
-                        raise json.JSONDecodeError("No valid JSON structure found", output, 0)
+                    if "metadata" not in locals():
+                        raise json.JSONDecodeError(
+                            "No valid JSON structure found", output, 0
+                        )
             except json.JSONDecodeError as e:
                 # If full parsing fails, try to get partial output
                 logging.error(f"JSON decode error: {e!s}")
@@ -325,10 +346,10 @@ class FileAnalyzer:
 
                 logging.info(f"Wrote raw output to {debug_file} for debugging")
 
-                self.results['metadata'] = {
+                self.results["metadata"] = {
                     "status": "error",
                     "message": f"JSON decode error: {e!s}",
-                    "debug_file": str(debug_file)
+                    "debug_file": str(debug_file),
                 }
                 return None
 
@@ -339,10 +360,10 @@ class FileAnalyzer:
             logging.info(f"Metadata extraction complete ({len(metadata)} items)")
             logging.info(f"Metadata saved to {output_file}")
 
-            self.results['metadata'] = {
+            self.results["metadata"] = {
                 "status": "success",
                 "file": str(output_file),
-                "count": len(metadata)
+                "count": len(metadata),
             }
             return metadata
 
@@ -351,17 +372,17 @@ class FileAnalyzer:
             logging.error(f"Return code: {e.returncode}")
             logging.error(f"Error output: {e.stderr}")
 
-            self.results['metadata'] = {
+            self.results["metadata"] = {
                 "status": "error",
-                "message": f"Command failed with code {e.returncode}: {e.stderr}"
+                "message": f"Command failed with code {e.returncode}: {e.stderr}",
             }
             return None
         except Exception as e:
             logging.error(f"Unexpected error: {e!s}")
 
-            self.results['metadata'] = {
+            self.results["metadata"] = {
                 "status": "error",
-                "message": f"Unexpected error: {e!s}"
+                "message": f"Unexpected error: {e!s}",
             }
             return None
 
@@ -371,7 +392,10 @@ class FileAnalyzer:
 
         if not os.path.isdir(path):
             logging.info("Duplicate finding only works on directories.")
-            self.results['duplicates'] = {"status": "skipped", "message": "Not a directory"}
+            self.results["duplicates"] = {
+                "status": "skipped",
+                "message": "Not a directory",
+            }
             return None
 
         results_file = os.path.join(artifact_dir, "duplicates.txt")
@@ -384,16 +408,16 @@ class FileAnalyzer:
 
             if os.path.exists(results_file):
                 logging.info(f"Duplicate analysis saved to {results_file}")
-                self.results['duplicates'] = {
+                self.results["duplicates"] = {
                     "status": "success",
-                    "file": str(results_file)
+                    "file": str(results_file),
                 }
                 return results_file
             else:
                 logging.error("Command did not create the expected output file")
-                self.results['duplicates'] = {
+                self.results["duplicates"] = {
                     "status": "error",
-                    "message": "Command did not create the expected output file"
+                    "message": "Command did not create the expected output file",
                 }
                 return None
 
@@ -402,17 +426,17 @@ class FileAnalyzer:
             logging.error(f"Return code: {e.returncode}")
             logging.error(f"Error output: {e.stderr}")
 
-            self.results['duplicates'] = {
+            self.results["duplicates"] = {
                 "status": "error",
-                "message": f"Command failed with code {e.returncode}: {e.stderr}"
+                "message": f"Command failed with code {e.returncode}: {e.stderr}",
             }
             return None
         except Exception as e:
             logging.error(f"Unexpected error: {e!s}")
 
-            self.results['duplicates'] = {
+            self.results["duplicates"] = {
                 "status": "error",
-                "message": f"Unexpected error: {e!s}"
+                "message": f"Unexpected error: {e!s}",
             }
             return None
 
@@ -422,8 +446,10 @@ class FileAnalyzer:
 
         # Get list of image files
         image_files = []
-        image_exts = self._get_config_value("file_extensions.images", 
-                                          [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"])
+        image_exts = self._get_config_value(
+            "file_extensions.images",
+            [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"],
+        )
 
         # Collect image files to process
         if os.path.isdir(path):
@@ -433,20 +459,28 @@ class FileAnalyzer:
                     file_ext = os.path.splitext(file_path)[1].lower()
                     if file_ext in image_exts and self._should_process_file(file_path):
                         image_files.append(file_path)
-        elif os.path.splitext(path)[1].lower() in image_exts and self._should_process_file(path):
+        elif os.path.splitext(path)[
+            1
+        ].lower() in image_exts and self._should_process_file(path):
             image_files.append(path)
         else:
             logging.info("No images to process")
-            self.results['ocr'] = {"status": "skipped", "message": "No images to process"}
+            self.results["ocr"] = {
+                "status": "skipped",
+                "message": "No images to process",
+            }
             return None
 
         if not image_files:
             logging.info("No image files found")
-            self.results['ocr'] = {"status": "skipped", "message": "No image files found"}
+            self.results["ocr"] = {
+                "status": "skipped",
+                "message": "No image files found",
+            }
             return None
 
         # Limit the number of images to process
-        max_images = self._get_config_value('analysis.max_ocr_images', 50)
+        max_images = self._get_config_value("analysis.max_ocr_images", 50)
         if len(image_files) > max_images:
             logging.info(f"Limiting OCR to {max_images} images")
             image_files = image_files[:max_images]
@@ -456,7 +490,9 @@ class FileAnalyzer:
         os.makedirs(ocr_output_dir, exist_ok=True)
 
         # Set up thread pool for parallel processing
-        max_workers = self._get_config_value('analysis.max_threads', os.cpu_count() or 4)
+        max_workers = self._get_config_value(
+            "analysis.max_threads", os.cpu_count() or 4
+        )
         logging.info(f"Using {max_workers} threads for OCR processing")
 
         # Function to process a single image with OCR
@@ -468,10 +504,16 @@ class FileAnalyzer:
                 output_file = os.path.join(ocr_output_dir, f"{base_name}_ocr.txt")
 
                 # Run tesseract OCR on the image
-                ocr_command = ["tesseract", str(image_path), os.path.splitext(output_file)[0]]
+                ocr_command = [
+                    "tesseract",
+                    str(image_path),
+                    os.path.splitext(output_file)[0],
+                ]
 
                 # Add any tesseract options from config
-                tesseract_options = self._get_config_value('tools.tesseract.options', [])
+                tesseract_options = self._get_config_value(
+                    "tools.tesseract.options", []
+                )
                 ocr_command.extend(tesseract_options)
 
                 subprocess.run(ocr_command, check=True, capture_output=True, text=True)
@@ -483,15 +525,11 @@ class FileAnalyzer:
                     "image": str(image_path),
                     "text": text,
                     "output_file": output_file,
-                    "status": "success"
+                    "status": "success",
                 }
             except Exception as e:
                 logging.error(f"Error processing image {image_path}: {e!s}")
-                return {
-                    "image": str(image_path),
-                    "error": str(e),
-                    "status": "error"
-                }
+                return {"image": str(image_path), "error": str(e), "status": "error"}
 
         # Process images in parallel
         results = []
@@ -499,7 +537,9 @@ class FileAnalyzer:
         failed = 0
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_image = {executor.submit(process_image_ocr, img): img for img in image_files}
+            future_to_image = {
+                executor.submit(process_image_ocr, img): img for img in image_files
+            }
             for future in future_to_image:
                 try:
                     result = future.result()
@@ -516,13 +556,15 @@ class FileAnalyzer:
         json_output_file = os.path.join(artifact_dir, "ocr_results.json")
         safe_write(json_output_file, json.dumps(results, indent=2))
 
-        logging.info(f"OCR processing complete: {successful} successful, {failed} failed")
-        self.results['ocr'] = {
+        logging.info(
+            f"OCR processing complete: {successful} successful, {failed} failed"
+        )
+        self.results["ocr"] = {
             "status": "success",
             "file": str(json_output_file),
             "total": len(results),
             "successful": successful,
-            "failed": failed
+            "failed": failed,
         }
 
         return results
@@ -535,7 +577,7 @@ class FileAnalyzer:
         output_file = os.path.join(artifact_dir, "malware_scan.txt")
 
         # Build command with options from config
-        clamscan_options = self._get_config_value('tools.clamscan.options', ["-r"])
+        clamscan_options = self._get_config_value("tools.clamscan.options", ["-r"])
         command = ["clamscan"]
         command.extend(clamscan_options)
         command.append(str(path))
@@ -552,7 +594,7 @@ class FileAnalyzer:
             scan_summary = {}
 
             # Try to extract lines like "Infected files: 0" from the output
-            summary_pattern = r'(Infected files|Scanned files|Data scanned|Time):\s+([\d.]+)\s*([A-Za-z]*)'
+            summary_pattern = r"(Infected files|Scanned files|Data scanned|Time):\s+([\d.]+)\s*([A-Za-z]*)"
             for match in re.finditer(summary_pattern, output):
                 key, value, unit = match.groups()
                 if unit:  # If there's a unit like MB or seconds
@@ -561,15 +603,18 @@ class FileAnalyzer:
                     scan_summary[key] = value
 
             # Record the results
-            if "Infected files" in scan_summary and scan_summary["Infected files"] != "0":
+            if (
+                "Infected files" in scan_summary
+                and scan_summary["Infected files"] != "0"
+            ):
                 status = "threat_detected"
             else:
                 status = "clean"
 
-            self.results['virus'] = {
+            self.results["virus"] = {
                 "status": status,
                 "file": str(output_file),
-                "summary": scan_summary
+                "summary": scan_summary,
             }
 
             logging.info(f"Malware scan complete. Status: {status}")
@@ -584,7 +629,7 @@ class FileAnalyzer:
 
                 # Try to parse summary information
                 scan_summary = {}
-                summary_pattern = r'(Infected files|Scanned files|Data scanned|Time):\s+([\d.]+)\s*([A-Za-z]*)'
+                summary_pattern = r"(Infected files|Scanned files|Data scanned|Time):\s+([\d.]+)\s*([A-Za-z]*)"
                 for match in re.finditer(summary_pattern, output):
                     key, value, unit = match.groups()
                     if unit:  # If there's a unit like MB or seconds
@@ -592,10 +637,10 @@ class FileAnalyzer:
                     else:
                         scan_summary[key] = value
 
-                self.results['virus'] = {
+                self.results["virus"] = {
                     "status": "threat_detected",
                     "file": str(output_file),
-                    "summary": scan_summary
+                    "summary": scan_summary,
                 }
 
                 logging.info("Malware scan complete. Threats detected.")
@@ -606,17 +651,17 @@ class FileAnalyzer:
                 logging.error(f"Return code: {e.returncode}")
                 logging.error(f"Error output: {e.stderr}")
 
-                self.results['virus'] = {
+                self.results["virus"] = {
                     "status": "error",
-                    "message": f"Command failed with code {e.returncode}: {e.stderr}"
+                    "message": f"Command failed with code {e.returncode}: {e.stderr}",
                 }
                 return None
         except Exception as e:
             logging.error(f"Unexpected error: {e!s}")
 
-            self.results['virus'] = {
+            self.results["virus"] = {
                 "status": "error",
-                "message": f"Unexpected error: {e!s}"
+                "message": f"Unexpected error: {e!s}",
             }
             return None
 
@@ -626,15 +671,20 @@ class FileAnalyzer:
 
         if not search_text:
             logging.warning("No search text provided")
-            self.results['search'] = {"status": "skipped", "message": "No search text provided"}
+            self.results["search"] = {
+                "status": "skipped",
+                "message": "No search text provided",
+            }
             return None
 
         # Sanitize the search text for filename use
-        safe_search_text = re.sub(r'[\\/*?:"<>|]', '_', search_text)
+        safe_search_text = re.sub(r'[\\/*?:"<>|]', "_", search_text)
         output_file = os.path.join(artifact_dir, f"search_{safe_search_text}.txt")
 
         # Build ripgrep command with options from config
-        ripgrep_options = self._get_config_value('tools.ripgrep.options', ["-i", "-n", "--color", "never"])
+        ripgrep_options = self._get_config_value(
+            "tools.ripgrep.options", ["-i", "-n", "--color", "never"]
+        )
         command = ["rg"]
         command.extend(ripgrep_options)
 
@@ -659,13 +709,13 @@ class FileAnalyzer:
             safe_write(output_file, output)
 
             # Count the number of matches
-            match_count = len(output.strip().split('\n')) if output.strip() else 0
+            match_count = len(output.strip().split("\n")) if output.strip() else 0
 
-            self.results['search'] = {
+            self.results["search"] = {
                 "status": "success",
                 "file": str(output_file),
                 "pattern": search_text,
-                "matches": match_count
+                "matches": match_count,
             }
 
             logging.info(f"Search complete. Found {match_count} matches.")
@@ -674,11 +724,11 @@ class FileAnalyzer:
         except subprocess.CalledProcessError as e:
             # Note: ripgrep returns 1 when no matches found (not an error)
             if e.returncode == 1 and e.stderr == "":
-                self.results['search'] = {
+                self.results["search"] = {
                     "status": "success",
                     "file": str(output_file),
                     "pattern": search_text,
-                    "matches": 0
+                    "matches": 0,
                 }
 
                 # Create an empty output file
@@ -692,17 +742,17 @@ class FileAnalyzer:
                 logging.error(f"Return code: {e.returncode}")
                 logging.error(f"Error output: {e.stderr}")
 
-                self.results['search'] = {
+                self.results["search"] = {
                     "status": "error",
-                    "message": f"Command failed with code {e.returncode}: {e.stderr}"
+                    "message": f"Command failed with code {e.returncode}: {e.stderr}",
                 }
                 return None
         except Exception as e:
             logging.error(f"Unexpected error: {e!s}")
 
-            self.results['search'] = {
+            self.results["search"] = {
                 "status": "error",
-                "message": f"Unexpected error: {e!s}"
+                "message": f"Unexpected error: {e!s}",
             }
             return None
 
@@ -713,13 +763,16 @@ class FileAnalyzer:
         # Binwalk only works on files, not directories
         if os.path.isdir(path):
             logging.info("Binary analysis only works on individual files.")
-            self.results['binary'] = {"status": "skipped", "message": "Not a file"}
+            self.results["binary"] = {"status": "skipped", "message": "Not a file"}
             return None
 
         # Skip files that don't match include patterns or match exclude patterns
         if not self._should_process_file(path):
             logging.info("File excluded by pattern")
-            self.results['binary'] = {"status": "skipped", "message": "File excluded by pattern"}
+            self.results["binary"] = {
+                "status": "skipped",
+                "message": "File excluded by pattern",
+            }
             return None
 
         # Create output file
@@ -727,7 +780,9 @@ class FileAnalyzer:
         output_file = os.path.join(artifact_dir, f"binary_analysis_{filename}.txt")
 
         # Build binwalk command with options from config
-        binwalk_options = self._get_config_value('tools.binwalk.options', ["-B", "-e", "-M"])
+        binwalk_options = self._get_config_value(
+            "tools.binwalk.options", ["-B", "-e", "-M"]
+        )
         command = ["binwalk"]
         command.extend(binwalk_options)
         command.append(str(path))
@@ -746,13 +801,15 @@ class FileAnalyzer:
                 # This indicates binwalk found something
                 interesting_data_found = True
 
-            self.results['binary'] = {
+            self.results["binary"] = {
                 "status": "success",
                 "file": str(output_file),
-                "interesting_data": interesting_data_found
+                "interesting_data": interesting_data_found,
             }
 
-            logging.info(f"Binary analysis complete. Data found: {interesting_data_found}")
+            logging.info(
+                f"Binary analysis complete. Data found: {interesting_data_found}"
+            )
             return output_file
 
         except subprocess.CalledProcessError as e:
@@ -760,24 +817,24 @@ class FileAnalyzer:
             logging.error(f"Return code: {e.returncode}")
             logging.error(f"Error output: {e.stderr}")
 
-            self.results['binary'] = {
+            self.results["binary"] = {
                 "status": "error",
-                "message": f"Command failed with code {e.returncode}: {e.stderr}"
+                "message": f"Command failed with code {e.returncode}: {e.stderr}",
             }
             return None
         except Exception as e:
             logging.error(f"Unexpected error: {e!s}")
 
-            self.results['binary'] = {
+            self.results["binary"] = {
                 "status": "error",
-                "message": f"Unexpected error: {e!s}"
+                "message": f"Unexpected error: {e!s}",
             }
             return None
 
     def _analyze_models(self, path, model_type, model_name, model_mode, artifact_dir):
         """
         Analyze files with AI models using the ModelAnalyzer.
-        
+
         Args:
             path: Path to file or directory to analyze
             model_type: Type of model to use (vision, text, etc.)
@@ -793,14 +850,18 @@ class FileAnalyzer:
         # Output path within artifact directory
         output_path = None
         if is_directory:
-            output_path = os.path.join(artifact_dir, f"{model_type}_{model_name}_{model_mode}")
+            output_path = os.path.join(
+                artifact_dir, f"{model_type}_{model_name}_{model_mode}"
+            )
             os.makedirs(output_path, exist_ok=True)
         else:
             file_base = os.path.splitext(os.path.basename(path))[0]
-            output_path = os.path.join(artifact_dir, f"{file_base}_{model_name}_{model_mode}.json")
+            output_path = os.path.join(
+                artifact_dir, f"{file_base}_{model_name}_{model_mode}.json"
+            )
 
         # Get model size from config if available
-        model_size = self._get_config_value('vision.model_size', None)
+        model_size = self._get_config_value("vision.model_size", None)
 
         try:
             # Run analysis
@@ -812,19 +873,19 @@ class FileAnalyzer:
                     model_name=model_name,
                     model_size=model_size,
                     mode=model_mode,
-                    output_dir=output_path
+                    output_dir=output_path,
                 )
 
                 # Store summary in results
                 summary = self.model_analyzer.get_summary()
                 self.results[model_type] = {
-                    'status': 'success',
-                    'model': model_name,
-                    'mode': model_mode,
-                    'files_processed': len(batch_results),
-                    'successful': summary['successful'],
-                    'failed': summary['failed'],
-                    'output_dir': output_path
+                    "status": "success",
+                    "model": model_name,
+                    "mode": model_mode,
+                    "files_processed": len(batch_results),
+                    "successful": summary["successful"],
+                    "failed": summary["failed"],
+                    "output_dir": output_path,
                 }
             else:
                 # Single file processing
@@ -834,36 +895,41 @@ class FileAnalyzer:
                     model_name=model_name,
                     model_size=model_size,
                     mode=model_mode,
-                    output_path=output_path
+                    output_path=output_path,
                 )
 
                 # Store result in results
                 self.results[model_type] = {
-                    'status': 'success' if 'error' not in result else 'error',
-                    'model': model_name,
-                    'mode': model_mode,
-                    'output_path': output_path,
-                    'results': [{"json_result": result}] if 'error' not in result else None
+                    "status": "success" if "error" not in result else "error",
+                    "model": model_name,
+                    "mode": model_mode,
+                    "output_path": output_path,
+                    "results": [{"json_result": result}]
+                    if "error" not in result
+                    else None,
                 }
 
                 # If there was an error in the result, capture it
-                if 'error' in result:
-                    self.results[model_type]['error'] = result['error']
+                if "error" in result:
+                    self.results[model_type]["error"] = result["error"]
 
         except Exception as e:
             import traceback
+
             logger = logging.getLogger("src.core.analyzer")
             logger.exception("Model analysis failed")
 
             # Capture full error details including traceback
             error_details = {
-                'status': 'error',
-                'error': str(e),
-                'error_type': type(e).__name__,
-                'model': model_name,
-                'mode': model_mode,
-                'output_path': output_path if output_path and os.path.exists(output_path) else None,
-                'traceback': traceback.format_exc()
+                "status": "error",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "model": model_name,
+                "mode": model_mode,
+                "output_path": output_path
+                if output_path and os.path.exists(output_path)
+                else None,
+                "traceback": traceback.format_exc(),
             }
 
             # Store error details in results
@@ -880,53 +946,82 @@ class FileAnalyzer:
         summary_data = self.results.copy()
 
         # Add timestamp and analysis metadata
-        summary_data['_metadata'] = {
-            'analysis_time': datetime.now().isoformat(),
-            'artifact_dir': artifact_dir,
-            'total_analyses': len([k for k in self.results.keys() if k != '_metadata'])
+        summary_data["_metadata"] = {
+            "analysis_time": datetime.now().isoformat(),
+            "artifact_dir": artifact_dir,
+            "total_analyses": len([k for k in self.results.keys() if k != "_metadata"]),
         }
 
         safe_write(summary_file, json.dumps(summary_data, indent=2))
         logging.debug(f"Summary written to {summary_file}")
+
 
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="File Analysis System")
 
     # Required arguments
-    parser.add_argument("path", nargs="?", help="Path to analyze (file or directory)",
-                      default=".")
+    parser.add_argument(
+        "path", nargs="?", help="Path to analyze (file or directory)", default="."
+    )
 
     # Analysis options
     parser.add_argument("-a", "--all", action="store_true", help="Run all analyses")
-    parser.add_argument("-m", "--metadata", action="store_true", help="Extract metadata")
-    parser.add_argument("-d", "--duplicates", action="store_true", help="Find duplicates")
-    parser.add_argument("-o", "--ocr", action="store_true", help="Perform OCR on images")
+    parser.add_argument(
+        "-m", "--metadata", action="store_true", help="Extract metadata"
+    )
+    parser.add_argument(
+        "-d", "--duplicates", action="store_true", help="Find duplicates"
+    )
+    parser.add_argument(
+        "-o", "--ocr", action="store_true", help="Perform OCR on images"
+    )
     parser.add_argument("-v", "--virus", action="store_true", help="Scan for malware")
     parser.add_argument("-s", "--search", metavar="TEXT", help="Search content")
-    parser.add_argument("-b", "--binary", action="store_true", help="Analyze binary files")
-    parser.add_argument("-V", "--vision", action="store_true", help="Analyze images with AI vision models")
+    parser.add_argument(
+        "-b", "--binary", action="store_true", help="Analyze binary files"
+    )
+    parser.add_argument(
+        "-V",
+        "--vision",
+        action="store_true",
+        help="Analyze images with AI vision models",
+    )
 
     # Model analysis options
     parser.add_argument("--model", help="Specify model to use for analysis")
-    parser.add_argument("--model-type", choices=["vision", "text"], default="vision",
-                      help="Type of model to use")
+    parser.add_argument(
+        "--model-type",
+        choices=["vision", "text"],
+        default="vision",
+        help="Type of model to use",
+    )
     parser.add_argument("--model-size", help="Size/variant of the model to use")
 
     # Output options
     parser.add_argument("-r", "--results", metavar="DIR", help="Output directory")
 
     # Verification option
-    parser.add_argument("--verify", action="store_true",
-                      help="Verify installation and dependencies")
+    parser.add_argument(
+        "--verify", action="store_true", help="Verify installation and dependencies"
+    )
 
     # Vision options
-    parser.add_argument("--vision-model", choices=["fastvlm", "bakllava", "qwen2vl"],
-                      default="fastvlm", help="Vision model to use")
-    parser.add_argument("--vision-mode", choices=["describe", "detect", "document"],
-                      default="describe", help="Vision analysis mode")
+    parser.add_argument(
+        "--vision-model",
+        choices=["fastvlm", "bakllava", "qwen2vl"],
+        default="fastvlm",
+        help="Vision model to use",
+    )
+    parser.add_argument(
+        "--vision-mode",
+        choices=["describe", "detect", "document"],
+        default="describe",
+        help="Vision analysis mode",
+    )
 
     return parser.parse_args()
+
 
 def verify_installation():
     """Verify the installation and dependencies."""
@@ -937,11 +1032,12 @@ def verify_installation():
         "system": {},
         "core_dependencies": {},
         "external_tools": {},
-        "vision_models": {}
+        "vision_models": {},
     }
 
     # System information
     import platform
+
     verification["system"]["os"] = platform.system()
     verification["system"]["version"] = platform.version()
     verification["system"]["python"] = platform.python_version()
@@ -949,6 +1045,7 @@ def verify_installation():
     # Check core dependencies
     try:
         import PIL
+
         verification["core_dependencies"]["pillow"] = str(PIL.__version__)
     except ImportError:
         verification["core_dependencies"]["pillow"] = "Not installed"
@@ -959,7 +1056,9 @@ def verify_installation():
         try:
             result = subprocess.run(["which", tool], capture_output=True, text=True)
             if result.returncode == 0:
-                verification["external_tools"][tool] = "Installed: " + result.stdout.strip()
+                verification["external_tools"][tool] = (
+                    "Installed: " + result.stdout.strip()
+                )
             else:
                 verification["external_tools"][tool] = "Not found"
         except Exception:
@@ -969,6 +1068,7 @@ def verify_installation():
     try:
         # Import without initialization to avoid loading models
         from src.model_manager import create_manager
+
         manager = create_manager()
         for model_name in manager.adapters:
             verification["vision_models"][model_name] = "Available"
@@ -995,6 +1095,7 @@ def verify_installation():
     print("\nVerification complete.")
     return verification
 
+
 def main():
     """Entry point for the file analyzer."""
     args = parse_args()
@@ -1006,27 +1107,27 @@ def main():
 
     # Create options dictionary from arguments
     options = {
-        'metadata': args.metadata or args.all,
-        'duplicates': args.duplicates or args.all,
-        'ocr': args.ocr or args.all,
-        'virus': args.virus or args.all,
-        'search': args.search is not None or args.all,
-        'search_text': args.search or '',
-        'binary': args.binary or args.all,
-        'vision': args.vision or args.all,
-        'model': args.model is not None,
-        'model_type': args.model_type,
-        'model_name': args.model or args.vision_model,
-        'model_mode': args.vision_mode,
-        'results_dir': args.results
+        "metadata": args.metadata or args.all,
+        "duplicates": args.duplicates or args.all,
+        "ocr": args.ocr or args.all,
+        "virus": args.virus or args.all,
+        "search": args.search is not None or args.all,
+        "search_text": args.search or "",
+        "binary": args.binary or args.all,
+        "vision": args.vision or args.all,
+        "model": args.model is not None,
+        "model_type": args.model_type,
+        "model_name": args.model or args.vision_model,
+        "model_mode": args.vision_mode,
+        "results_dir": args.results,
     }
 
     # Create configuration dictionary
     config = {
-        'vision': {
-            'model': args.vision_model,
-            'model_size': args.model_size,
-            'mode': args.vision_mode
+        "vision": {
+            "model": args.vision_model,
+            "model_size": args.model_size,
+            "mode": args.vision_mode,
         }
     }
 
@@ -1036,6 +1137,7 @@ def main():
 
     # Return success
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

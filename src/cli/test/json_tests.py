@@ -22,13 +22,13 @@ from src.models.fastvlm import json as fastvlm_json
 def run_test(context: dict[str, Any]) -> dict[str, Any]:
     """
     Run FastVLM JSON output validation tests.
-    
+
     This test verifies the JSON output from the FastVLM model,
     including various modes and prompt customization.
-    
+
     Args:
         context: Test context dictionary
-        
+
     Returns:
         Dictionary with test results
     """
@@ -89,7 +89,7 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                 "Layer 3 Merge.png",
                 "Untitled_4x.png",
                 "Untitled (27).png",
-                "test.jpg"
+                "test.jpg",
             ]
 
             # Look for test images in the test data directory
@@ -104,7 +104,7 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                 from PIL import Image, ImageDraw
 
                 # Create a simple test image
-                img = Image.new('RGB', (500, 300), color=(73, 109, 137))
+                img = Image.new("RGB", (500, 300), color=(73, 109, 137))
                 d = ImageDraw.Draw(img)
 
                 # Add some text to the image
@@ -127,7 +127,7 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
         results["test_images"] = {
             "status": "ok" if test_images else "error",
             "message": f"Found {len(test_images)} test images",
-            "images": test_images
+            "images": test_images,
         }
 
         if not test_images:
@@ -136,20 +136,20 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                 "success": False,
                 "message": "No test images found",
                 "errors": errors,
-                "output_dir": output_dir
+                "output_dir": output_dir,
             }
     except Exception as e:
         logger.error(f"Error finding test images: {e}")
         results["test_images"] = {
             "status": "error",
-            "message": f"Error finding test images: {e!s}"
+            "message": f"Error finding test images: {e!s}",
         }
         errors.append(f"Error finding test images: {e!s}")
         return {
             "success": False,
             "message": f"Error finding test images: {e!s}",
             "errors": errors,
-            "output_dir": output_dir
+            "output_dir": output_dir,
         }
 
     # Select a primary test image for individual tests
@@ -170,27 +170,27 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                 primary_test_image,
                 output_file=output_file,
                 model_size=model_size,
-                use_mock=use_mock
+                use_mock=use_mock,
             )
 
             results["basic_json"] = {
                 "status": "ok",
                 "message": "Basic JSON output test completed",
                 "output_file": output_file,
-                "result": result
+                "result": result,
             }
         except Exception as e:
             logger.info(f"Info: Missing model (expected in test environment): {e}")
             results["basic_json"] = {
                 "status": "warning",
-                "message": f"Missing model (expected in test environment): {e!s}"
+                "message": f"Missing model (expected in test environment): {e!s}",
             }
             errors.append(f"Basic JSON test failed: {e!s}")
     except Exception as e:
         logger.error(f"Error in basic JSON test: {e}")
         results["basic_json"] = {
             "status": "error",
-            "message": f"Error in basic JSON test: {e!s}"
+            "message": f"Error in basic JSON test: {e!s}",
         }
         errors.append(f"Basic JSON test failed: {e!s}")
 
@@ -209,33 +209,35 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                 output_file=output_file,
                 prompt=custom_prompt,
                 model_size=model_size,
-                use_mock=use_mock
+                use_mock=use_mock,
             )
 
             results["custom_prompt"] = {
                 "status": "ok",
                 "message": "Custom prompt test completed",
                 "output_file": output_file,
-                "result": result
+                "result": result,
             }
         except Exception as e:
             logger.info(f"Info: Missing model (expected in test environment): {e}")
             results["custom_prompt"] = {
                 "status": "warning",
-                "message": f"Missing model (expected in test environment): {e!s}"
+                "message": f"Missing model (expected in test environment): {e!s}",
             }
             errors.append(f"Custom prompt test failed: {e!s}")
     except Exception as e:
         logger.error(f"Error in custom prompt test: {e}")
         results["custom_prompt"] = {
             "status": "error",
-            "message": f"Error in custom prompt test: {e!s}"
+            "message": f"Error in custom prompt test: {e!s}",
         }
         errors.append(f"Custom prompt test failed: {e!s}")
 
     # Test 3: Test vision_analyzer integration
     if console:
-        console.print("[blue]3. Testing vision_analyzer integration with JSON format...[/blue]")
+        console.print(
+            "[blue]3. Testing vision_analyzer integration with JSON format...[/blue]"
+        )
 
     try:
         output_file = os.path.join(output_dir, "vision_analyzer.json")
@@ -247,10 +249,14 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
 
             # Create command-line args
             cli_args = [
-                "--image", primary_test_image,
-                "--output", output_file,
-                "--format", "json",
-                "--model-size", model_size
+                "--image",
+                primary_test_image,
+                "--output",
+                output_file,
+                "--format",
+                "json",
+                "--model-size",
+                model_size,
             ]
 
             # Only add --mock if it's requested (following standard boolean flag patterns)
@@ -267,27 +273,29 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                     "status": "ok",
                     "message": "Vision analyzer integration test completed",
                     "output_file": output_file,
-                    "result": result
+                    "result": result,
                 }
             except Exception as e:
                 # Note: In testing contexts, this might be expected if model is unavailable
-                logger.info(f"Vision analyzer executed (success or expected model missing): {e}")
+                logger.info(
+                    f"Vision analyzer executed (success or expected model missing): {e}"
+                )
                 results["vision_analyzer"] = {
                     "status": "warning",
-                    "message": f"Vision analyzer executed with model unavailable: {e!s}"
+                    "message": f"Vision analyzer executed with model unavailable: {e!s}",
                 }
         except Exception as e:
             logger.error(f"Error with vision analyzer args: {e}")
             results["vision_analyzer"] = {
                 "status": "warning",
-                "message": f"Error setting up vision analyzer test: {e!s}"
+                "message": f"Error setting up vision analyzer test: {e!s}",
             }
             errors.append(f"Vision analyzer integration failed: {e!s}")
     except Exception as e:
         logger.error(f"Error in vision analyzer test: {e}")
         results["vision_analyzer"] = {
             "status": "error",
-            "message": f"Error in vision analyzer test: {e!s}"
+            "message": f"Error in vision analyzer test: {e!s}",
         }
         errors.append(f"Vision analyzer test failed: {e!s}")
 
@@ -315,35 +323,35 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                     output_file=output_file,
                     quiet=True,
                     model_size=model_size,
-                    use_mock=use_mock
+                    use_mock=use_mock,
                 )
 
-                batch_results.append({
-                    "image": img_path,
-                    "output": output_file,
-                    "success": True
-                })
+                batch_results.append(
+                    {"image": img_path, "output": output_file, "success": True}
+                )
             except Exception as e:
                 logger.info(f"Info: Expected failure in test environment: {e}")
-                batch_results.append({
-                    "image": img_path,
-                    "output": output_file,
-                    "success": False,
-                    "error": str(e)
-                })
+                batch_results.append(
+                    {
+                        "image": img_path,
+                        "output": output_file,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
 
         # Save batch results
         results["batch_processing"] = {
             "status": "ok",
             "message": f"Batch processing test completed with {len(batch_results)} images",
             "batch_dir": batch_dir,
-            "results": batch_results
+            "results": batch_results,
         }
     except Exception as e:
         logger.error(f"Error in batch processing test: {e}")
         results["batch_processing"] = {
             "status": "error",
-            "message": f"Error in batch processing test: {e!s}"
+            "message": f"Error in batch processing test: {e!s}",
         }
         errors.append(f"Batch processing test failed: {e!s}")
 
@@ -358,17 +366,19 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
         json_files = []
         for root, _, files in os.walk(output_dir):
             for file in files:
-                if file.endswith('.json'):
+                if file.endswith(".json"):
                     json_files.append(os.path.join(root, file))
 
         if not json_files:
             logger.warning("No JSON files found for validation")
             if console:
-                console.print("  No JSON files found (expected in test environment without models)")
+                console.print(
+                    "  No JSON files found (expected in test environment without models)"
+                )
 
             results["json_validation"] = {
                 "status": "warning",
-                "message": "No JSON files found for validation"
+                "message": "No JSON files found for validation",
             }
         else:
             # Validate each JSON file
@@ -379,7 +389,7 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                 validation_result = {
                     "file": json_file,
                     "valid": False,
-                    "has_required_fields": False
+                    "has_required_fields": False,
                 }
 
                 try:
@@ -395,20 +405,24 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                             console.print("  ✓ Valid JSON")
 
                         # First, check for basic required fields
-                        if 'description' in json_data and 'tags' in json_data:
+                        if "description" in json_data and "tags" in json_data:
                             validation_result["has_required_fields"] = True
                             if console:
                                 console.print("  ✓ Has required fields")
                         else:
                             if console:
-                                console.print("  ✗ Missing required fields (acceptable for testing)")
+                                console.print(
+                                    "  ✗ Missing required fields (acceptable for testing)"
+                                )
 
                         # Now, try to validate against the schema if jsonschema is available
                         try:
                             import jsonschema
 
                             # Get the schema path from config
-                            schema_path = context["config"].get_schema_path("fastvlm", "v1.0")
+                            schema_path = context["config"].get_schema_path(
+                                "fastvlm", "v1.0"
+                            )
 
                             if schema_path and os.path.exists(schema_path):
                                 # Load the schema
@@ -421,18 +435,26 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
                                     validation_result["schema_valid"] = True
                                     if console:
                                         console.print("  ✓ Valid against schema")
-                                except jsonschema.exceptions.ValidationError as schema_error:
+                                except (
+                                    jsonschema.exceptions.ValidationError
+                                ) as schema_error:
                                     validation_result["schema_valid"] = False
-                                    validation_result["schema_error"] = str(schema_error)
+                                    validation_result["schema_error"] = str(
+                                        schema_error
+                                    )
                                     if console:
-                                        console.print("  ✗ Schema validation error (acceptable for testing)")
+                                        console.print(
+                                            "  ✗ Schema validation error (acceptable for testing)"
+                                        )
                             else:
                                 if console:
                                     console.print("  ⚠ Schema not found for validation")
                         except ImportError:
                             # jsonschema not available, skip schema validation
                             if console and verbose:
-                                console.print("  ⚠ jsonschema package not available, skipping schema validation")
+                                console.print(
+                                    "  ⚠ jsonschema package not available, skipping schema validation"
+                                )
                     else:
                         validation_result["error"] = "File not found"
                 except json.JSONDecodeError as e:
@@ -448,13 +470,13 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
             results["json_validation"] = {
                 "status": "ok",
                 "message": f"Validated {len(json_validation_results)} JSON files",
-                "results": json_validation_results
+                "results": json_validation_results,
             }
     except Exception as e:
         logger.error(f"Error in JSON validation test: {e}")
         results["json_validation"] = {
             "status": "error",
-            "message": f"Error in JSON validation test: {e!s}"
+            "message": f"Error in JSON validation test: {e!s}",
         }
         errors.append(f"JSON validation test failed: {e!s}")
 
@@ -473,21 +495,24 @@ def run_test(context: dict[str, Any]) -> dict[str, Any]:
         "output_dir": output_dir,
         "success": len(errors) == 0,
         "errors": errors,
-        "results": results
+        "results": results,
     }
 
     # Write test results to file
     results_file = os.path.join(output_dir, "test_results.json")
-    with open(results_file, 'w') as f:
+    with open(results_file, "w") as f:
         json.dump(test_results, f, indent=2)
 
     # Return success status
     return {
         "success": len(errors) == 0,
-        "message": "All tests completed successfully" if len(errors) == 0 else f"{len(errors)} tests failed",
+        "message": "All tests completed successfully"
+        if len(errors) == 0
+        else f"{len(errors)} tests failed",
         "errors": errors,
-        "output_dir": output_dir
+        "output_dir": output_dir,
     }
+
 
 # Example test dictionary for registry
 TESTS = {
@@ -499,10 +524,12 @@ if __name__ == "__main__":
     # Simple test
     logger = logging.getLogger("file-analyzer")
     logger.setLevel(logging.INFO)
-    result = run_test({
-        "name": "json",
-        "verbose": True,
-        "use_mock": True,
-        "logger": logger,
-    })
+    result = run_test(
+        {
+            "name": "json",
+            "verbose": True,
+            "use_mock": True,
+            "logger": logger,
+        }
+    )
     print(json.dumps(result, indent=2))

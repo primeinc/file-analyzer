@@ -20,6 +20,7 @@ from src.core.vision import DEFAULT_VISION_CONFIG, VisionAnalyzer
 
 VISION_AVAILABLE = True
 
+
 def test_vision_analyzer():
     """Test the VisionAnalyzer integration"""
     print("=== Testing VisionAnalyzer Integration ===")
@@ -36,7 +37,7 @@ def test_vision_analyzer():
         # Try alternate locations
         alt_locations = [
             "test_data/images/Layer 3 Merge.png",
-            Path(__file__).parent.parent / "test_data/images/test.jpg"
+            Path(__file__).parent.parent / "test_data/images/test.jpg",
         ]
         found = False
         for loc in alt_locations:
@@ -55,6 +56,7 @@ def test_vision_analyzer():
     # Create output directory using canonical artifact path
     try:
         from src.core.artifact_guard import get_canonical_artifact_path
+
         output_dir = Path(get_canonical_artifact_path("test", "vision_integration"))
     except ImportError:
         # Fallback to a simple directory if artifact_guard is not available
@@ -85,13 +87,18 @@ def test_vision_analyzer():
 
         # Access model_path
         print("\nAccessing model_path...")
-        model_path = analyzer.config.get("model_path") or analyzer.model_info["model_options"]["default"]
+        model_path = (
+            analyzer.config.get("model_path")
+            or analyzer.model_info["model_options"]["default"]
+        )
         print(f"Model path: {model_path}")
 
         # Check dependencies
         print("\nChecking dependencies...")
         if not analyzer.check_dependencies():
-            print(f"Required dependencies for {analyzer.model_info['name']} not installed.")
+            print(
+                f"Required dependencies for {analyzer.model_info['name']} not installed."
+            )
             print(f"Run '{analyzer.model_info['install_cmd']}' to install.")
             return
 
@@ -125,6 +132,7 @@ def test_vision_analyzer():
         print(f"Error during vision test: {e!s}")
 
     print("\n=== Test Complete ===")
+
 
 if __name__ == "__main__":
     test_vision_analyzer()

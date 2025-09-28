@@ -11,6 +11,7 @@ from pathlib import Path
 PIL_AVAILABLE = False
 try:
     from PIL import Image
+
     PIL_AVAILABLE = True
 except ImportError:
     pass
@@ -22,12 +23,12 @@ from src.core.artifact_guard import get_canonical_artifact_path
 def find_test_images():
     """
     Find test images in canonical artifact paths and test_data directory.
-    
+
     Attempts multiple strategies to find suitable test images:
     1. Checks canonical benchmark test_images directory
     2. Checks test_data/images directory
     3. Downloads sample images if none found
-    
+
     Returns:
         List of Path objects pointing to test images
     """
@@ -52,18 +53,23 @@ def find_test_images():
 
     return image_list
 
+
 def format_size(path):
     """Format file size nicely"""
     size_bytes = os.path.getsize(path)
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024 or unit == 'GB':
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size_bytes < 1024 or unit == "GB":
             return f"{size_bytes:.2f} {unit}"
         size_bytes /= 1024
+
 
 def get_image_info(image_path):
     """Get image dimensions and size"""
     if not PIL_AVAILABLE:
-        return {"size": format_size(image_path), "dimensions": "Unknown (PIL not available)"}
+        return {
+            "size": format_size(image_path),
+            "dimensions": "Unknown (PIL not available)",
+        }
 
     try:
         with Image.open(image_path) as img:
@@ -71,7 +77,7 @@ def get_image_info(image_path):
             return {
                 "size": format_size(image_path),
                 "dimensions": f"{width}x{height}",
-                "format": img.format
+                "format": img.format,
             }
     except Exception as e:
         return {"size": format_size(image_path), "dimensions": f"Error: {e!s}"}

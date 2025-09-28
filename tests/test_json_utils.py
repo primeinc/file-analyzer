@@ -64,25 +64,27 @@ class TestJSONValidator(unittest.TestCase):
         self.assertEqual(result["tags"], ["animal", "pet"])
 
         # Text with escaped quotes in JSON
-        text_with_escaped_quotes = 'Here is: {"description": "A \\"quoted\\" text", "tags": ["test"]} end.'
+        text_with_escaped_quotes = (
+            'Here is: {"description": "A \\"quoted\\" text", "tags": ["test"]} end.'
+        )
         result = JSONValidator.extract_json_from_text(text_with_escaped_quotes)
         self.assertIsNotNone(result)
         self.assertEqual(result["description"], 'A "quoted" text')
 
         # Text with multiple JSON objects - should find the one with expected fields
-        text_with_multiple_json = '''
+        text_with_multiple_json = """
         First: {"random": "data"} 
         Second: {"description": "The image", "tags": ["valid"]}
         Third: {"other": "data"}
-        '''
+        """
         result = JSONValidator.extract_json_from_text(text_with_multiple_json)
         self.assertIsNotNone(result)
         self.assertEqual(result["description"], "The image")
 
         # Nested JSON objects
-        nested_json = '''
+        nested_json = """
         {"outer": {"description": "Nested object", "tags": ["nested"]}}
-        '''
+        """
         result = JSONValidator.extract_json_from_text(nested_json)
         self.assertIsNotNone(result)
         self.assertEqual(result["outer"]["description"], "Nested object")
@@ -91,19 +93,32 @@ class TestJSONValidator(unittest.TestCase):
         """Test JSON structure validation"""
         # Valid structure for describe mode
         valid_describe = {"description": "A test image", "tags": ["test", "image"]}
-        self.assertTrue(JSONValidator.validate_json_structure(valid_describe, model_type="describe"))
+        self.assertTrue(
+            JSONValidator.validate_json_structure(valid_describe, model_type="describe")
+        )
 
         # Valid structure for detect mode
-        valid_detect = {"objects": [{"name": "cat", "location": "center"}], "description": "A cat"}
-        self.assertTrue(JSONValidator.validate_json_structure(valid_detect, model_type="detect"))
+        valid_detect = {
+            "objects": [{"name": "cat", "location": "center"}],
+            "description": "A cat",
+        }
+        self.assertTrue(
+            JSONValidator.validate_json_structure(valid_detect, model_type="detect")
+        )
 
         # Valid structure for document mode
         valid_document = {"text": "Sample text", "document_type": "letter"}
-        self.assertTrue(JSONValidator.validate_json_structure(valid_document, model_type="document"))
+        self.assertTrue(
+            JSONValidator.validate_json_structure(valid_document, model_type="document")
+        )
 
         # Invalid structure - missing fields
         invalid_describe = {"description": "A test image"}  # Missing tags
-        self.assertFalse(JSONValidator.validate_json_structure(invalid_describe, model_type="describe"))
+        self.assertFalse(
+            JSONValidator.validate_json_structure(
+                invalid_describe, model_type="describe"
+            )
+        )
 
         # Invalid input types
         self.assertFalse(JSONValidator.validate_json_structure(None))
@@ -113,10 +128,18 @@ class TestJSONValidator(unittest.TestCase):
         # Custom expected fields
         custom_fields = ["field1", "field2"]
         valid_custom = {"field1": "value1", "field2": "value2", "extra": "value3"}
-        self.assertTrue(JSONValidator.validate_json_structure(valid_custom, expected_fields=custom_fields))
+        self.assertTrue(
+            JSONValidator.validate_json_structure(
+                valid_custom, expected_fields=custom_fields
+            )
+        )
 
         invalid_custom = {"field1": "value1", "extra": "value3"}  # Missing field2
-        self.assertFalse(JSONValidator.validate_json_structure(invalid_custom, expected_fields=custom_fields))
+        self.assertFalse(
+            JSONValidator.validate_json_structure(
+                invalid_custom, expected_fields=custom_fields
+            )
+        )
 
     def test_add_metadata(self):
         """Test adding metadata to JSON results"""
@@ -124,7 +147,7 @@ class TestJSONValidator(unittest.TestCase):
         json_data = {"description": "A test image", "tags": ["test", "image"]}
 
         # Add basic metadata
-        with patch('time.strftime', return_value="2023-01-01 12:00:00"):
+        with patch("time.strftime", return_value="2023-01-01 12:00:00"):
             result = JSONValidator.add_metadata(json_data)
             self.assertIsNotNone(result)
             self.assertIn("metadata", result)
@@ -139,15 +162,19 @@ class TestJSONValidator(unittest.TestCase):
             result_with_custom = JSONValidator.add_metadata(json_data, custom_metadata)
             self.assertEqual(result_with_custom["metadata"]["model"], "test_model")
             self.assertEqual(result_with_custom["metadata"]["execution_time"], 0.5)
-            self.assertEqual(result_with_custom["metadata"]["timestamp"], "2023-01-01 12:00:00")
+            self.assertEqual(
+                result_with_custom["metadata"]["timestamp"], "2023-01-01 12:00:00"
+            )
 
             # Adding to existing metadata
             json_with_metadata = {
                 "description": "A test image",
                 "tags": ["test", "image"],
-                "metadata": {"existing": "value"}
+                "metadata": {"existing": "value"},
             }
-            result_with_existing = JSONValidator.add_metadata(json_with_metadata, custom_metadata)
+            result_with_existing = JSONValidator.add_metadata(
+                json_with_metadata, custom_metadata
+            )
             self.assertEqual(result_with_existing["metadata"]["existing"], "value")
             self.assertEqual(result_with_existing["metadata"]["model"], "test_model")
 
@@ -160,7 +187,7 @@ class TestJSONValidator(unittest.TestCase):
         text = "This is a fallback text response"
 
         # Format without custom metadata
-        with patch('time.strftime', return_value="2023-01-01 12:00:00"):
+        with patch("time.strftime", return_value="2023-01-01 12:00:00"):
             result = JSONValidator.format_fallback_response(text)
             self.assertIsNotNone(result)
             self.assertEqual(result["text"], text)
@@ -169,11 +196,14 @@ class TestJSONValidator(unittest.TestCase):
 
             # With custom metadata
             custom_metadata = {"model": "test_model", "execution_time": 0.5}
-            result_with_custom = JSONValidator.format_fallback_response(text, custom_metadata)
+            result_with_custom = JSONValidator.format_fallback_response(
+                text, custom_metadata
+            )
             self.assertEqual(result_with_custom["text"], text)
             self.assertEqual(result_with_custom["metadata"]["model"], "test_model")
             self.assertEqual(result_with_custom["metadata"]["execution_time"], 0.5)
             self.assertTrue(result_with_custom["metadata"]["json_parsing_failed"])
+
 
 class TestProcessModelOutput(unittest.TestCase):
     """Test the process_model_output function"""
@@ -183,7 +213,7 @@ class TestProcessModelOutput(unittest.TestCase):
         # Valid JSON for describe mode
         valid_describe = '{"description": "A test image", "tags": ["test", "image"]}'
 
-        with patch('time.strftime', return_value="2023-01-01 12:00:00"):
+        with patch("time.strftime", return_value="2023-01-01 12:00:00"):
             result = process_model_output(valid_describe, mode="describe")
             self.assertIsNotNone(result)
             self.assertEqual(result["description"], "A test image")
@@ -209,7 +239,7 @@ class TestProcessModelOutput(unittest.TestCase):
         # Invalid JSON format
         invalid_json = '{"description": "A test image", "tags": ["test", "image]'  # Missing closing quote
 
-        with patch('time.strftime', return_value="2023-01-01 12:00:00"):
+        with patch("time.strftime", return_value="2023-01-01 12:00:00"):
             result = process_model_output(invalid_json, mode="describe")
             self.assertIsNotNone(result)
             self.assertEqual(result["text"], invalid_json)
@@ -229,14 +259,14 @@ class TestProcessModelOutput(unittest.TestCase):
         valid_json = '{"description": "A retry result", "tags": ["retry", "test"]}'
         custom_metadata = {"model": "test_model", "execution_time": 0.5}
 
-        with patch('time.strftime', return_value="2023-01-01 12:00:00"):
+        with patch("time.strftime", return_value="2023-01-01 12:00:00"):
             # Test with attempt count
             result = process_model_output(
                 valid_json,
                 mode="describe",
                 metadata=custom_metadata,
                 attempt_count=2,
-                retry_prompt="Retry prompt"
+                retry_prompt="Retry prompt",
             )
             self.assertIsNotNone(result)
             self.assertEqual(result["description"], "A retry result")
@@ -245,11 +275,14 @@ class TestProcessModelOutput(unittest.TestCase):
             self.assertEqual(result["metadata"]["attempts"], 2)
 
             # Test with extracted flag (when original isn't pure JSON)
-            text_with_json = 'The JSON result is: {"description": "A test", "tags": ["test"]}'
+            text_with_json = (
+                'The JSON result is: {"description": "A test", "tags": ["test"]}'
+            )
             result = process_model_output(text_with_json, mode="describe")
             self.assertIsNotNone(result)
             self.assertEqual(result["description"], "A test")
             self.assertTrue(result["metadata"].get("extracted", False))
+
 
 class TestJSONPrompts(unittest.TestCase):
     """Test the JSON prompt templates and selection"""
@@ -278,6 +311,7 @@ class TestJSONPrompts(unittest.TestCase):
 
         retry_prompt = get_json_prompt(mode="detect", retry_attempt=2)
         self.assertEqual(retry_prompt, JSON_PROMPT_TEMPLATES["retry"])
+
 
 if __name__ == "__main__":
     unittest.main()

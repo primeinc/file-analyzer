@@ -21,29 +21,35 @@ from src.core.analyzer import FileAnalyzer, verify_installation
 # Create Typer app for analyze subcommand
 app = typer.Typer(help="Analyze files and directories")
 
+
 # Create a class to store state across command invocations
 class AnalyzeState:
     """Class to store state for the analyze command."""
+
     def __init__(self):
         self.verification_results = {}
 
+
 # Initialize state
 state = AnalyzeState()
+
 
 # Helper function to get console - avoids circular imports
 def get_console():
     """Get console for output - import here to avoid circular imports."""
     from src.cli.main import console
+
     return console
+
 
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for analyze commands and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -53,6 +59,7 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     # Update the logging configuration based on current verbose/quiet flags
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
+
 
 @app.callback()
 def callback():
@@ -69,33 +76,35 @@ def callback():
     - AI-powered model analysis
     """
 
+
 # Context object to store shared state
 context = {
     "ci_mode": False  # Whether we're running in CI mode (disables progress bars)
 }
 
+
 # Common options dictionary template
 def create_options_dict(analysis_type, **kwargs):
     """
     Create a standard options dictionary for analyzer with the specified analysis type enabled.
-    
+
     Args:
         analysis_type: The type of analysis to enable
         **kwargs: Additional options to include
-        
+
     Returns:
         Dictionary with standard options structure and specified analysis enabled
     """
     # Create base options with all analyses disabled
     options = {
-        'metadata': False,
-        'duplicates': False,
-        'ocr': False,
-        'virus': False,
-        'search': False,
-        'binary': False,
-        'vision': False,
-        'results_dir': kwargs.get('results_dir')
+        "metadata": False,
+        "duplicates": False,
+        "ocr": False,
+        "virus": False,
+        "search": False,
+        "binary": False,
+        "vision": False,
+        "results_dir": kwargs.get("results_dir"),
     }
 
     # Enable specified analysis type
@@ -103,25 +112,24 @@ def create_options_dict(analysis_type, **kwargs):
         options[analysis_type] = True
 
     # Add optional search text if provided
-    if 'search_text' in kwargs:
-        options['search_text'] = kwargs['search_text']
+    if "search_text" in kwargs:
+        options["search_text"] = kwargs["search_text"]
 
     # Add vision model options if provided
-    if analysis_type == 'vision' or kwargs.get('enable_vision', False):
-        options['vision'] = True
-        options['model'] = True
-        options['model_type'] = "vision"
-        options['model_name'] = kwargs.get('model_name', 'fastvlm')
-        options['model_size'] = kwargs.get('model_size', '1.5b')
-        options['model_mode'] = kwargs.get('model_mode', 'describe')
+    if analysis_type == "vision" or kwargs.get("enable_vision", False):
+        options["vision"] = True
+        options["model"] = True
+        options["model_type"] = "vision"
+        options["model_name"] = kwargs.get("model_name", "fastvlm")
+        options["model_size"] = kwargs.get("model_size", "1.5b")
+        options["model_mode"] = kwargs.get("model_mode", "describe")
 
     return options
 
+
 @app.command()
 def all(
-    path: str = typer.Argument(
-        ".", help="Path to analyze (file or directory)"
-    ),
+    path: str = typer.Argument(".", help="Path to analyze (file or directory)"),
     results_dir: str | None = typer.Option(
         None, "--results", "-r", help="Output directory for results"
     ),
@@ -164,19 +172,19 @@ def all(
     }
 
     # Create options dictionary for all analysis types
-    options = create_options_dict('all', results_dir=results_dir)
+    options = create_options_dict("all", results_dir=results_dir)
 
     # Enable all analysis types
-    for key in ['metadata', 'duplicates', 'ocr', 'virus', 'search', 'binary']:
+    for key in ["metadata", "duplicates", "ocr", "virus", "search", "binary"]:
         options[key] = True
 
     # Set model options
-    options['vision'] = True
-    options['model'] = True
-    options['model_type'] = "vision"
-    options['model_name'] = "fastvlm"
-    options['model_size'] = "1.5b"
-    options['model_mode'] = "describe"
+    options["vision"] = True
+    options["model"] = True
+    options["model_type"] = "vision"
+    options["model_name"] = "fastvlm"
+    options["model_size"] = "1.5b"
+    options["model_mode"] = "describe"
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -186,7 +194,7 @@ def all(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     ) as progress:
         task = progress.add_task("[green]Running all analyses...", total=7)
 
@@ -202,20 +210,28 @@ def all(
 
     # Find a results path from the available analyses in a more robust way
     results_path = ""
-    analyses = results.get('analyses', {})
+    analyses = results.get("analyses", {})
 
     # Try to find any output file from the analyses, prioritizing in this order
-    for analysis_type in ['metadata', 'vision', 'ocr', 'duplicates', 'virus', 'search', 'binary']:
+    for analysis_type in [
+        "metadata",
+        "vision",
+        "ocr",
+        "duplicates",
+        "virus",
+        "search",
+        "binary",
+    ]:
         if analysis_type in analyses:
             analysis_result = analyses[analysis_type]
-            if 'file' in analysis_result:
-                results_path = analysis_result['file']
+            if "file" in analysis_result:
+                results_path = analysis_result["file"]
                 break
-            elif 'output_path' in analysis_result:
-                results_path = analysis_result['output_path']
+            elif "output_path" in analysis_result:
+                results_path = analysis_result["output_path"]
                 break
-            elif 'output_dir' in analysis_result:
-                results_path = analysis_result['output_dir']
+            elif "output_dir" in analysis_result:
+                results_path = analysis_result["output_dir"]
                 break
 
     if results_path:
@@ -226,11 +242,10 @@ def all(
     # Return success
     return 0
 
+
 @app.command()
 def metadata(
-    path: str = typer.Argument(
-        ".", help="Path to analyze (file or directory)"
-    ),
+    path: str = typer.Argument(".", help="Path to analyze (file or directory)"),
     results_dir: str | None = typer.Option(
         None, "--results", "-r", help="Output directory for results"
     ),
@@ -267,7 +282,7 @@ def metadata(
     }
 
     # Create options dictionary
-    options = create_options_dict('metadata', results_dir=results_dir)
+    options = create_options_dict("metadata", results_dir=results_dir)
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -279,21 +294,22 @@ def metadata(
     console = get_console()
 
     # Print summary
-    if results.get('metadata', {}).get('status') == 'success':
+    if results.get("metadata", {}).get("status") == "success":
         console.print("[green]Metadata extraction complete[/green]")
         console.print(f"Found {results['metadata'].get('count', 0)} items")
         console.print(f"Results saved to: {results['metadata'].get('file', '')}")
     else:
-        console.print(f"[red]Metadata extraction failed:[/red] {results.get('metadata', {}).get('message', 'Unknown error')}")
+        console.print(
+            f"[red]Metadata extraction failed:[/red] {results.get('metadata', {}).get('message', 'Unknown error')}"
+        )
         raise typer.Exit(code=1)
 
     return 0
 
+
 @app.command()
 def duplicates(
-    path: str = typer.Argument(
-        ".", help="Path to analyze (file or directory)"
-    ),
+    path: str = typer.Argument(".", help="Path to analyze (file or directory)"),
     results_dir: str | None = typer.Option(
         None, "--results", "-r", help="Output directory for results"
     ),
@@ -320,7 +336,7 @@ def duplicates(
     analysis_config = {}
 
     # Create options dictionary
-    options = create_options_dict('duplicates', results_dir=results_dir)
+    options = create_options_dict("duplicates", results_dir=results_dir)
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -332,20 +348,21 @@ def duplicates(
     console = get_console()
 
     # Print summary
-    if results.get('duplicates', {}).get('status') == 'success':
+    if results.get("duplicates", {}).get("status") == "success":
         console.print("[green]Duplicate analysis complete[/green]")
         console.print(f"Results saved to: {results['duplicates'].get('file', '')}")
     else:
-        console.print(f"[red]Duplicate analysis failed:[/red] {results.get('duplicates', {}).get('message', 'Unknown error')}")
+        console.print(
+            f"[red]Duplicate analysis failed:[/red] {results.get('duplicates', {}).get('message', 'Unknown error')}"
+        )
         raise typer.Exit(code=1)
 
     return 0
 
+
 @app.command()
 def ocr(
-    path: str = typer.Argument(
-        ".", help="Path to analyze (file or directory)"
-    ),
+    path: str = typer.Argument(".", help="Path to analyze (file or directory)"),
     results_dir: str | None = typer.Option(
         None, "--results", "-r", help="Output directory for results"
     ),
@@ -382,7 +399,7 @@ def ocr(
     }
 
     # Create options dictionary
-    options = create_options_dict('ocr', results_dir=results_dir)
+    options = create_options_dict("ocr", results_dir=results_dir)
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -394,22 +411,25 @@ def ocr(
     console = get_console()
 
     # Print summary
-    if results.get('ocr', {}).get('status') == 'success':
+    if results.get("ocr", {}).get("status") == "success":
         console.print("[green]OCR processing complete[/green]")
         console.print(f"Processed {results['ocr'].get('total', 0)} images")
-        console.print(f"Successful: {results['ocr'].get('successful', 0)}, Failed: {results['ocr'].get('failed', 0)}")
+        console.print(
+            f"Successful: {results['ocr'].get('successful', 0)}, Failed: {results['ocr'].get('failed', 0)}"
+        )
         console.print(f"Results saved to: {results['ocr'].get('file', '')}")
     else:
-        console.print(f"[red]OCR processing failed:[/red] {results.get('ocr', {}).get('message', 'Unknown error')}")
+        console.print(
+            f"[red]OCR processing failed:[/red] {results.get('ocr', {}).get('message', 'Unknown error')}"
+        )
         raise typer.Exit(code=1)
 
     return 0
 
+
 @app.command()
 def virus(
-    path: str = typer.Argument(
-        ".", help="Path to analyze (file or directory)"
-    ),
+    path: str = typer.Argument(".", help="Path to analyze (file or directory)"),
     results_dir: str | None = typer.Option(
         None, "--results", "-r", help="Output directory for results"
     ),
@@ -430,7 +450,7 @@ def virus(
     analysis_config = {}
 
     # Create options dictionary
-    options = create_options_dict('virus', results_dir=results_dir)
+    options = create_options_dict("virus", results_dir=results_dir)
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -442,9 +462,9 @@ def virus(
     console = get_console()
 
     # Print summary
-    status = results.get('virus', {}).get('status')
-    if status in ['clean', 'threat_detected']:
-        if status == 'clean':
+    status = results.get("virus", {}).get("status")
+    if status in ["clean", "threat_detected"]:
+        if status == "clean":
             console.print("[green]Malware scan complete: No threats found[/green]")
         else:
             console.print("[red]Malware scan complete: Threats detected![/red]")
@@ -452,24 +472,23 @@ def virus(
         console.print(f"Results saved to: {results['virus'].get('file', '')}")
 
         # Print summary information if available
-        if 'summary' in results.get('virus', {}):
+        if "summary" in results.get("virus", {}):
             console.print("\nScan Summary:")
-            for key, value in results['virus']['summary'].items():
+            for key, value in results["virus"]["summary"].items():
                 console.print(f"  {key}: {value}")
     else:
-        console.print(f"[red]Malware scan failed:[/red] {results.get('virus', {}).get('message', 'Unknown error')}")
+        console.print(
+            f"[red]Malware scan failed:[/red] {results.get('virus', {}).get('message', 'Unknown error')}"
+        )
         raise typer.Exit(code=1)
 
     return 0
 
+
 @app.command()
 def search(
-    text: str = typer.Argument(
-        ..., help="Text to search for"
-    ),
-    path: str = typer.Argument(
-        ".", help="Path to analyze (file or directory)"
-    ),
+    text: str = typer.Argument(..., help="Text to search for"),
+    path: str = typer.Argument(".", help="Path to analyze (file or directory)"),
     results_dir: str | None = typer.Option(
         None, "--results", "-r", help="Output directory for results"
     ),
@@ -499,7 +518,7 @@ def search(
     }
 
     # Create options dictionary
-    options = create_options_dict('search', results_dir=results_dir, search_text=text)
+    options = create_options_dict("search", results_dir=results_dir, search_text=text)
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -511,8 +530,8 @@ def search(
     console = get_console()
 
     # Print summary
-    if results.get('search', {}).get('status') == 'success':
-        matches = results['search'].get('matches', 0)
+    if results.get("search", {}).get("status") == "success":
+        matches = results["search"].get("matches", 0)
         if matches > 0:
             console.print(f"[green]Search complete: Found {matches} matches[/green]")
         else:
@@ -520,16 +539,17 @@ def search(
 
         console.print(f"Results saved to: {results['search'].get('file', '')}")
     else:
-        console.print(f"[red]Search failed:[/red] {results.get('search', {}).get('message', 'Unknown error')}")
+        console.print(
+            f"[red]Search failed:[/red] {results.get('search', {}).get('message', 'Unknown error')}"
+        )
         raise typer.Exit(code=1)
 
     return 0
 
+
 @app.command()
 def binary(
-    path: str = typer.Argument(
-        ..., help="Path to file to analyze"
-    ),
+    path: str = typer.Argument(..., help="Path to file to analyze"),
     results_dir: str | None = typer.Option(
         None, "--results", "-r", help="Output directory for results"
     ),
@@ -556,7 +576,7 @@ def binary(
     analysis_config = {}
 
     # Create options dictionary
-    options = create_options_dict('binary', results_dir=results_dir)
+    options = create_options_dict("binary", results_dir=results_dir)
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -568,19 +588,26 @@ def binary(
     console = get_console()
 
     # Print summary
-    if results.get('binary', {}).get('status') == 'success':
-        interesting = results['binary'].get('interesting_data', False)
+    if results.get("binary", {}).get("status") == "success":
+        interesting = results["binary"].get("interesting_data", False)
         if interesting:
-            console.print("[green]Binary analysis complete: Found interesting data[/green]")
+            console.print(
+                "[green]Binary analysis complete: Found interesting data[/green]"
+            )
         else:
-            console.print("[yellow]Binary analysis complete: No interesting data found[/yellow]")
+            console.print(
+                "[yellow]Binary analysis complete: No interesting data found[/yellow]"
+            )
 
         console.print(f"Results saved to: {results['binary'].get('file', '')}")
     else:
-        console.print(f"[red]Binary analysis failed:[/red] {results.get('binary', {}).get('message', 'Unknown error')}")
+        console.print(
+            f"[red]Binary analysis failed:[/red] {results.get('binary', {}).get('message', 'Unknown error')}"
+        )
         raise typer.Exit(code=1)
 
     return 0
+
 
 @app.command()
 def vision(
@@ -588,7 +615,10 @@ def vision(
         ..., help="Path to image or directory of images to analyze"
     ),
     model: str = typer.Option(
-        "fastvlm", "--model", "-m", help="Vision model to use (fastvlm, bakllava, qwen2vl)"
+        "fastvlm",
+        "--model",
+        "-m",
+        help="Vision model to use (fastvlm, bakllava, qwen2vl)",
     ),
     size: str = typer.Option(
         "1.5b", "--size", "-s", help="Model size (0.5b, 1.5b, 7b)"
@@ -625,16 +655,17 @@ def vision(
         "file_extensions": {
             "images": [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif"],
         },
-        "vision": {
-            "model": model,
-            "model_size": size,
-            "mode": mode
-        }
+        "vision": {"model": model, "model_size": size, "mode": mode},
     }
 
     # Create options dictionary
-    options = create_options_dict('vision', results_dir=results_dir,
-                                model_name=model, model_size=size, model_mode=mode)
+    options = create_options_dict(
+        "vision",
+        results_dir=results_dir,
+        model_name=model,
+        model_size=size,
+        model_mode=mode,
+    )
 
     # Initialize analyzer
     file_analyzer = FileAnalyzer(analysis_config)
@@ -646,20 +677,31 @@ def vision(
     console = get_console()
 
     # Print summary
-    if results.get('vision', {}).get('status') == 'success':
+    if results.get("vision", {}).get("status") == "success":
         console.print("[green]Vision analysis complete[/green]")
 
-        if 'files_processed' in results.get('vision', {}):
-            console.print(f"Processed {results['vision'].get('files_processed', 0)} files")
-            console.print(f"Successful: {results['vision'].get('successful', 0)}, Failed: {results['vision'].get('failed', 0)}")
-            console.print(f"Results saved to: {results['vision'].get('output_dir', '')}")
+        if "files_processed" in results.get("vision", {}):
+            console.print(
+                f"Processed {results['vision'].get('files_processed', 0)} files"
+            )
+            console.print(
+                f"Successful: {results['vision'].get('successful', 0)}, Failed: {results['vision'].get('failed', 0)}"
+            )
+            console.print(
+                f"Results saved to: {results['vision'].get('output_dir', '')}"
+            )
         else:
-            console.print(f"Results saved to: {results['vision'].get('output_path', '')}")
+            console.print(
+                f"Results saved to: {results['vision'].get('output_path', '')}"
+            )
     else:
-        console.print(f"[red]Vision analysis failed:[/red] {results.get('vision', {}).get('error', 'Unknown error')}")
+        console.print(
+            f"[red]Vision analysis failed:[/red] {results.get('vision', {}).get('error', 'Unknown error')}"
+        )
         raise typer.Exit(code=1)
 
     return 0
+
 
 @app.command()
 def verify(
@@ -672,7 +714,7 @@ def verify(
 ):
     """
     Verify the installation and dependencies.
-    
+
     Checks for required tools, libraries, and models needed by the file analyzer.
     """
     # Get configured logger
@@ -710,7 +752,9 @@ def verify(
 
     console.print("\n[bold green]Vision Models:[/bold green]")
     if "error" in verification["vision_models"]:
-        console.print(f"  [red]Error checking models:[/red] {verification['vision_models']['error']}")
+        console.print(
+            f"  [red]Error checking models:[/red] {verification['vision_models']['error']}"
+        )
     else:
         for key, value in verification["vision_models"].items():
             console.print(f"  [blue]{key}:[/blue] [green]{value}[/green]")
@@ -718,16 +762,22 @@ def verify(
     console.print("\n[bold]Verification complete.[/bold]")
 
     # Check if all required tools are present
-    missing_tools = [key for key, value in verification["external_tools"].items()
-                  if "Not found" in value or "Error" in value]
+    missing_tools = [
+        key
+        for key, value in verification["external_tools"].items()
+        if "Not found" in value or "Error" in value
+    ]
 
     if missing_tools:
-        console.print("\n[yellow]Warning: The following external tools are missing:[/yellow]")
+        console.print(
+            "\n[yellow]Warning: The following external tools are missing:[/yellow]"
+        )
         for tool in missing_tools:
             console.print(f"  - {tool}")
         console.print("\nSome analyzer functionality may be limited.")
 
     return 0
+
 
 def _setup_logging(verbose: bool):
     """Setup logging configuration for analysis."""
@@ -739,6 +789,7 @@ def _setup_logging(verbose: bool):
 def _validate_file_path(file_path: str) -> str:
     """Validate and expand file path. Returns error message if invalid, empty string if valid."""
     import os
+
     file_path = os.path.expanduser(file_path)
     if not os.path.exists(file_path):
         return f"Error: File does not exist: {file_path}"
@@ -747,15 +798,10 @@ def _validate_file_path(file_path: str) -> str:
 
 def _create_analyzer_config():
     """Create analyzer configuration and options."""
-    options = create_options_dict('vision',
-                                  model_name='fastvlm',
-                                  model_size='1.5b',
-                                  model_mode='describe')
-    config = {
-        'vision': {
-            'model_size': '1.5b'
-        }
-    }
+    options = create_options_dict(
+        "vision", model_name="fastvlm", model_size="1.5b", model_mode="describe"
+    )
+    config = {"vision": {"model_size": "1.5b"}}
     return options, config
 
 
@@ -809,11 +855,11 @@ def _validate_analysis_results(results: dict, verbose: bool, logger) -> tuple:
     # Extract actual error message if analysis failed
     if vision_result.get("status") != "success":
         # Get the actual error message from the result
-        actual_error = vision_result.get('error', 'unknown failure')
-        error_type = vision_result.get('error_type', 'Unknown')
+        actual_error = vision_result.get("error", "unknown failure")
+        error_type = vision_result.get("error_type", "Unknown")
 
         # If we have traceback information, include it in verbose mode
-        if verbose and 'traceback' in vision_result:
+        if verbose and "traceback" in vision_result:
             logger.error(f"Full traceback: {vision_result['traceback']}")
 
         return False, f"Model analysis failed ({error_type}): {actual_error}", None
@@ -887,13 +933,16 @@ def _validate_analysis_schema(analysis_data) -> str:
     return ""
 
 
-def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: bool = False) -> str:
+def analyze_single_file(
+    file_path: str, output_format: str = "pretty", verbose: bool = False
+) -> str:
     """
     Hardened single-file analysis function.
     Performs robust analysis with timeout, logging, subprocess validation,
     file I/O safety, and schema checking.
     """
     import os
+
     import typer
 
     from src.cli.utils.render import render_output
@@ -921,11 +970,14 @@ def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: 
         logger.error(f"Analysis failed with exception: {e}")
         if verbose:
             import traceback
+
             logger.error(f"Full traceback: {traceback.format_exc()}")
         return f"Analysis failed - unexpected error: {e}"
 
     # Validate analysis results
-    success, error_msg, output_path = _validate_analysis_results(results, verbose, logger)
+    success, error_msg, output_path = _validate_analysis_results(
+        results, verbose, logger
+    )
     if not success:
         return error_msg
 
@@ -940,6 +992,7 @@ def analyze_single_file(file_path: str, output_format: str = "pretty", verbose: 
 
     # Format and return output
     return render_output(analysis_data, output_format, file_path)
+
 
 if __name__ == "__main__":
     app()

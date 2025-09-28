@@ -40,14 +40,15 @@ app = typer.Typer(help="Manage artifact directories and outputs")
 # Add script_checks subcommand
 app.add_typer(script_checks_app, name="script-checks")
 
+
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for artifact commands and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -57,6 +58,7 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     # Update the logging configuration based on current verbose/quiet flags
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
+
 
 @app.callback()
 def callback():
@@ -68,25 +70,27 @@ def callback():
     and generating reports.
     """
 
+
 # Constants from cleanup.sh
 CONFIG_FILE = ".artifact-config.json"
 LOG_FILE = os.path.join(os.path.dirname(ARTIFACTS_ROOT), "cleanup.log")
 DEFAULT_RETENTION_DAYS = 7
 
+
 def log_message(level: str, message: str):
     """
     Log a message to the log file and console.
-    
+
     Args:
         level: Log level
         message: Message to log
     """
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] [{level}] {message}"
 
     # Append to log file
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    with open(LOG_FILE, 'a') as f:
+    with open(LOG_FILE, "a") as f:
         f.write(log_entry + "\n")
 
     # Print to console using rich
@@ -97,15 +101,16 @@ def log_message(level: str, message: str):
     else:
         console.print(message)
 
+
 def _get_config_value(config_path: str, key: str, default: Any) -> Any:
     """
     Get a value from a JSON config file.
-    
+
     Args:
         config_path: Path to config file
         key: Key to get
         default: Default value if key not found
-        
+
     Returns:
         Value from config or default
     """
@@ -119,10 +124,11 @@ def _get_config_value(config_path: str, key: str, default: Any) -> Any:
     except (OSError, json.JSONDecodeError):
         return default
 
+
 def _setup_artifact_lock():
     """
     Create a lock file to prevent concurrent cleanup operations.
-    
+
     Returns:
         Tuple[bool, str]: (success, message)
     """
@@ -143,13 +149,21 @@ def _setup_artifact_lock():
             try:
                 if platform.system() == "Windows":
                     # Windows - use tasklist with safer list arguments
-                    output = subprocess.check_output(["tasklist", "/FI", f"PID eq {pid}"])
+                    output = subprocess.check_output(
+                        ["tasklist", "/FI", f"PID eq {pid}"]
+                    )
                     if str(pid) in output.decode():
-                        return False, f"Another cleanup process is already running (PID: {pid})"
+                        return (
+                            False,
+                            f"Another cleanup process is already running (PID: {pid})",
+                        )
                 else:
                     # Unix-like - use ps
                     os.kill(pid, 0)  # This will raise OSError if process is not running
-                    return False, f"Another cleanup process is already running (PID: {pid})"
+                    return (
+                        False,
+                        f"Another cleanup process is already running (PID: {pid})",
+                    )
             except (OSError, subprocess.SubprocessError):
                 # Process not running, remove stale lock
                 log_message("WARN", "Removing stale lock file")
@@ -160,19 +174,21 @@ def _setup_artifact_lock():
             os.unlink(lock_file)
 
     # Create the lock file with current PID
-    with open(lock_file, 'w') as f:
+    with open(lock_file, "w") as f:
         f.write(str(os.getpid()))
 
     # Register cleanup handler to remove lock file on exit
     import atexit
+
     atexit.register(lambda: os.unlink(lock_file) if os.path.exists(lock_file) else None)
 
     return True, "Lock acquired"
 
+
 def clean_tmp_artifacts():
     """
     Clean only the tmp directory.
-    
+
     Returns:
         Tuple[bool, str]: (success, message)
     """
@@ -194,6 +210,7 @@ def clean_tmp_artifacts():
     except Exception as e:
         return False, f"Failed to clean temporary artifacts: {e!s}"
 
+
 # Import shared utility function
 from src.cli.artifact.utils import check_artifact_sprawl
 
@@ -201,7 +218,7 @@ from src.cli.artifact.utils import check_artifact_sprawl
 def generate_env_file() -> tuple[bool, str, str]:
     """
     Generate an artifacts.env file for sourcing in shell scripts.
-    
+
     Returns:
         Tuple[bool, str, str]: (success, file_path, message)
     """
@@ -209,11 +226,13 @@ def generate_env_file() -> tuple[bool, str, str]:
 
     try:
         # Create the file header
-        with open(env_file, 'w') as f:
+        with open(env_file, "w") as f:
             f.write("# Artifact environment variables\n")
             f.write("# Source this file to get standard artifact paths\n")
-            f.write(f"# Generated by 'fa artifact env-file' on {datetime.datetime.now()}\n\n")
-            f.write(f"export ARTIFACTS_ROOT=\"{ARTIFACTS_ROOT}\"\n")
+            f.write(
+                f"# Generated by 'fa artifact env-file' on {datetime.datetime.now()}\n\n"
+            )
+            f.write(f'export ARTIFACTS_ROOT="{ARTIFACTS_ROOT}"\n')
 
             # Add exports for each artifact type
             config_file = os.path.join(ARTIFACTS_ROOT, CONFIG_FILE)
@@ -226,19 +245,19 @@ def generate_env_file() -> tuple[bool, str, str]:
                         for dir_name, description in structure.items():
                             var_name = f"ARTIFACTS_{dir_name.upper()}"
                             dir_path = os.path.join(ARTIFACTS_ROOT, dir_name)
-                            f.write(f"export {var_name}=\"{dir_path}\" # {description}\n")
+                            f.write(f'export {var_name}="{dir_path}" # {description}\n')
                     except json.JSONDecodeError:
                         # If config file is invalid, just add default directories
                         for dir_name in ARTIFACT_TYPES:
                             var_name = f"ARTIFACTS_{dir_name.upper()}"
                             dir_path = os.path.join(ARTIFACTS_ROOT, dir_name)
-                            f.write(f"export {var_name}=\"{dir_path}\"\n")
+                            f.write(f'export {var_name}="{dir_path}"\n')
             else:
                 # No config file, just add default directories
                 for dir_name in ARTIFACT_TYPES:
                     var_name = f"ARTIFACTS_{dir_name.upper()}"
                     dir_path = os.path.join(ARTIFACTS_ROOT, dir_name)
-                    f.write(f"export {var_name}=\"{dir_path}\"\n")
+                    f.write(f'export {var_name}="{dir_path}"\n')
 
             # Add helper functions
             f.write("""
@@ -273,6 +292,7 @@ clean_tmp_artifacts() {
     except Exception as e:
         return False, "", f"Failed to generate environment file: {e!s}"
 
+
 @app.command()
 def setup(
     verbose: bool = typer.Option(
@@ -303,11 +323,11 @@ def setup(
                     "vision": "Vision model analysis outputs",
                     "benchmark": "Performance benchmark results",
                     "json": "JSON validation results",
-                    "tmp": "Temporary files (cleared on every run)"
-                }
+                    "tmp": "Temporary files (cleared on every run)",
+                },
             }
 
-            with open(config_file, 'w') as f:
+            with open(config_file, "w") as f:
                 json.dump(config, f, indent=2)
 
         # Create .gitignore in each directory
@@ -315,23 +335,24 @@ def setup(
             type_dir = os.path.join(ARTIFACTS_ROOT, artifact_type)
             gitignore_file = os.path.join(type_dir, ".gitignore")
             if not os.path.exists(gitignore_file):
-                with open(gitignore_file, 'w') as f:
+                with open(gitignore_file, "w") as f:
                     f.write("*\n")
 
-        console.print(f"[green]Artifact directory structure created at:[/green] {ARTIFACTS_ROOT}")
+        console.print(
+            f"[green]Artifact directory structure created at:[/green] {ARTIFACTS_ROOT}"
+        )
         return 0
     except Exception as e:
         console.print(f"[red]Failed to set up artifact structure:[/red] {e!s}")
         return 1
+
 
 @app.command()
 def path(
     type_name: str = typer.Argument(
         ..., help="Artifact type (analysis, vision, test, benchmark, json, tmp)"
     ),
-    name: str = typer.Argument(
-        ..., help="Artifact context name/description"
-    ),
+    name: str = typer.Argument(..., help="Artifact context name/description"),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
     ),
@@ -356,6 +377,7 @@ def path(
     except Exception as e:
         console.print(f"[red]Failed to create artifact path:[/red] {e!s}")
         return 1
+
 
 @app.command("clean")
 def clean_artifacts(
@@ -387,18 +409,25 @@ def clean_artifacts(
 
         # Get default retention policy
         config_file = os.path.join(ARTIFACTS_ROOT, CONFIG_FILE)
-        config_retention = _get_config_value(config_file, "retention_days", DEFAULT_RETENTION_DAYS)
+        config_retention = _get_config_value(
+            config_file, "retention_days", DEFAULT_RETENTION_DAYS
+        )
 
         # Use specified retention days or config value
         retention = retention_days or config_retention
 
-        log_message("INFO", f"Cleaning artifacts based on retention policies (default: {retention} days)...")
+        log_message(
+            "INFO",
+            f"Cleaning artifacts based on retention policies (default: {retention} days)...",
+        )
         log_message("INFO", "Using per-manifest retention days when available")
 
         # Use the cleanup function from artifact_guard
         count = cleanup_artifact_dirs(retention, artifact_type)
 
-        console.print(f"[green]Cleaned up {count} artifact{'s' if count != 1 else ''}[/green]")
+        console.print(
+            f"[green]Cleaned up {count} artifact{'s' if count != 1 else ''}[/green]"
+        )
         log_message("INFO", f"Cleaned up {count} artifact{'s' if count != 1 else ''}")
 
         # Always clean tmp directory
@@ -408,6 +437,7 @@ def clean_artifacts(
     except Exception as e:
         console.print(f"[red]Failed to clean artifacts:[/red] {e!s}")
         return 1
+
 
 @app.command("clean-tmp")
 def clean_tmp(
@@ -438,6 +468,7 @@ def clean_tmp(
     except Exception as e:
         console.print(f"[red]Failed to clean temporary artifacts:[/red] {e!s}")
         return 1
+
 
 @app.command()
 def report(
@@ -481,7 +512,7 @@ def report(
                         ["du", "-sk", dir_path],
                         capture_output=True,
                         text=True,
-                        check=True
+                        check=True,
                     )
                     # Parse the output - first field is size in KB
                     dir_size_kb = int(result.stdout.strip().split()[0])
@@ -490,7 +521,9 @@ def report(
                     for root, dirs, files in os.walk(dir_path):
                         for file in files:
                             file_path = os.path.join(root, file)
-                            if os.path.exists(file_path) and not os.path.islink(file_path):
+                            if os.path.exists(file_path) and not os.path.islink(
+                                file_path
+                            ):
                                 dir_size_kb += os.path.getsize(file_path) // 1024
             except (subprocess.SubprocessError, ValueError, IndexError):
                 # Fallback to Python implementation if du fails
@@ -510,8 +543,14 @@ def report(
                 size_str = f"{dir_size_kb} KB"
 
             # Count artifacts
-            artifact_count = len([d for d in os.listdir(dir_path)
-                               if os.path.isdir(os.path.join(dir_path, d)) and not d.startswith('.')])
+            artifact_count = len(
+                [
+                    d
+                    for d in os.listdir(dir_path)
+                    if os.path.isdir(os.path.join(dir_path, d))
+                    and not d.startswith(".")
+                ]
+            )
 
             # Add to table
             table.add_row(artifact_type, size_str, f"{artifact_count} items")
@@ -542,7 +581,7 @@ def report(
 
             for item in os.listdir(type_dir):
                 item_path = os.path.join(type_dir, item)
-                if os.path.isdir(item_path) and not item.startswith('.'):
+                if os.path.isdir(item_path) and not item.startswith("."):
                     # Calculate size efficiently
                     size_kb = 0
                     try:
@@ -552,7 +591,7 @@ def report(
                                 ["du", "-sk", item_path],
                                 capture_output=True,
                                 text=True,
-                                check=True
+                                check=True,
                             )
                             # Parse the output - first field is size in KB
                             size_kb = int(result.stdout.strip().split()[0])
@@ -561,7 +600,9 @@ def report(
                             for root, dirs, files in os.walk(item_path):
                                 for file in files:
                                     file_path = os.path.join(root, file)
-                                    if os.path.exists(file_path) and not os.path.islink(file_path):
+                                    if os.path.exists(file_path) and not os.path.islink(
+                                        file_path
+                                    ):
                                         size_kb += os.path.getsize(file_path) // 1024
                     except (subprocess.SubprocessError, ValueError, IndexError):
                         # Fallback to Python implementation if du fails
@@ -569,7 +610,9 @@ def report(
                         for root, dirs, files in os.walk(item_path):
                             for file in files:
                                 file_path = os.path.join(root, file)
-                                if os.path.exists(file_path) and not os.path.islink(file_path):
+                                if os.path.exists(file_path) and not os.path.islink(
+                                    file_path
+                                ):
                                     size_kb += os.path.getsize(file_path) // 1024
 
                     largest_dirs.append((item_path, size_kb))
@@ -592,11 +635,10 @@ def report(
         console.print(f"[red]Failed to generate artifact report:[/red] {e!s}")
         return 1
 
+
 @app.command()
 def check(
-    path: str = typer.Argument(
-        ".", help="Directory to check for artifact sprawl"
-    ),
+    path: str = typer.Argument(".", help="Directory to check for artifact sprawl"),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
     ),
@@ -622,17 +664,22 @@ def check(
         else:
             console.print("\n[red][bold]Artifact Sprawl Detected[/bold][/red]")
             console.print("=======================")
-            console.print("[yellow]The following directories outside the canonical artifact structure were found:[/yellow]")
+            console.print(
+                "[yellow]The following directories outside the canonical artifact structure were found:[/yellow]"
+            )
             for sprawl_path in sprawl_paths:
                 console.print(sprawl_path)
 
-            log_message("WARN", f"Artifact sprawl detected: {len(sprawl_paths)} directories")
+            log_message(
+                "WARN", f"Artifact sprawl detected: {len(sprawl_paths)} directories"
+            )
             return 1
 
         return 0
     except Exception as e:
         console.print(f"[red]Failed to check for artifact sprawl:[/red] {e!s}")
         return 1
+
 
 @app.command()
 def env(
@@ -665,7 +712,9 @@ def env(
                     for dir_name, description in structure.items():
                         var_name = f"ARTIFACTS_{dir_name.upper()}"
                         dir_path = os.path.join(ARTIFACTS_ROOT, dir_name)
-                        console.print(f"[blue]{var_name}[/blue]={dir_path} [yellow]# {description}[/yellow]")
+                        console.print(
+                            f"[blue]{var_name}[/blue]={dir_path} [yellow]# {description}[/yellow]"
+                        )
             except json.JSONDecodeError:
                 # If config file is invalid, just print the directories
                 for artifact_type in ARTIFACT_TYPES:
@@ -686,6 +735,7 @@ def env(
     except Exception as e:
         console.print(f"[red]Failed to print environment variables:[/red] {e!s}")
         return 1
+
 
 @app.command("env-file")
 def env_file(
@@ -716,6 +766,7 @@ def env_file(
         console.print(f"[red]Failed to generate environment file:[/red] {e!s}")
         return 1
 
+
 @app.command("validate")
 def validate(
     path: str = typer.Argument(..., help="Path to validate"),
@@ -737,44 +788,74 @@ def validate(
         is_valid = validate_artifact_path(path)
 
         if is_valid:
-            console.print("[green]Path IS valid according to artifact discipline.[/green]")
+            console.print(
+                "[green]Path IS valid according to artifact discipline.[/green]"
+            )
             return 0
         else:
             # Get absolute path for better checking
-            project_root = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+            project_root = os.path.abspath(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                )
+            )
             abs_path = os.path.abspath(path)
 
             # Provide more specific reasons why the path is invalid
-            console.print("[red]Path is NOT valid according to artifact discipline:[/red]")
+            console.print(
+                "[red]Path is NOT valid according to artifact discipline:[/red]"
+            )
 
             # Check if it's a system directory
-            if path.startswith('/tmp') or path.startswith('/var/tmp'):
-                console.print("[red]ERROR:[/red] Path is a system temporary directory. Use canonical artifact paths instead.")
-                console.print("  Use: get_canonical_artifact_path(\"tmp\", \"your_context\") for temporary files.")
+            if path.startswith("/tmp") or path.startswith("/var/tmp"):
+                console.print(
+                    "[red]ERROR:[/red] Path is a system temporary directory. Use canonical artifact paths instead."
+                )
+                console.print(
+                    '  Use: get_canonical_artifact_path("tmp", "your_context") for temporary files.'
+                )
 
             # Check if it's attempting path traversal
-            elif '..' in path:
-                console.print("[red]ERROR:[/red] Path contains parent directory references (..) which is not allowed.")
-                console.print("  Use absolute paths within the canonical artifact structure.")
+            elif ".." in path:
+                console.print(
+                    "[red]ERROR:[/red] Path contains parent directory references (..) which is not allowed."
+                )
+                console.print(
+                    "  Use absolute paths within the canonical artifact structure."
+                )
 
             # Check if it's outside project directory
-            elif not path.startswith('/') and not abs_path.startswith(project_root):
-                console.print("[red]ERROR:[/red] Path is outside the project directory structure.")
+            elif not path.startswith("/") and not abs_path.startswith(project_root):
+                console.print(
+                    "[red]ERROR:[/red] Path is outside the project directory structure."
+                )
 
             # Check if it's using a legacy pattern
-            elif any(pattern in path for pattern in ['analysis_results', 'vision_results']):
-                console.print("[red]ERROR:[/red] Path uses a legacy pattern that is not compatible with artifact discipline.")
+            elif any(
+                pattern in path for pattern in ["analysis_results", "vision_results"]
+            ):
+                console.print(
+                    "[red]ERROR:[/red] Path uses a legacy pattern that is not compatible with artifact discipline."
+                )
                 console.print("  Replace legacy paths with canonical artifact paths.")
 
             # Check if it's in artifacts directory but not following canonical structure
-            elif path.startswith(ARTIFACTS_ROOT) and not any(f"/{t}/" in path for t in ARTIFACT_TYPES):
-                console.print("[red]ERROR:[/red] Path is in artifacts directory but doesn't follow canonical type structure.")
-                console.print(f"  Canonical paths must include a valid type: {', '.join(ARTIFACT_TYPES)}")
+            elif path.startswith(ARTIFACTS_ROOT) and not any(
+                f"/{t}/" in path for t in ARTIFACT_TYPES
+            ):
+                console.print(
+                    "[red]ERROR:[/red] Path is in artifacts directory but doesn't follow canonical type structure."
+                )
+                console.print(
+                    f"  Canonical paths must include a valid type: {', '.join(ARTIFACT_TYPES)}"
+                )
 
             # General guidance
             console.print("\n[yellow]Valid paths must be within:[/yellow]")
             console.print(f"1. {ARTIFACTS_ROOT} and follow canonical naming")
-            console.print(f"2. {project_root}/src, {project_root}/tools, {project_root}/tests")
+            console.print(
+                f"2. {project_root}/src, {project_root}/tools, {project_root}/tests"
+            )
             console.print("3. Standard files in project root directory")
 
             console.print("\n[yellow]Example of valid canonical path:[/yellow]")
@@ -785,6 +866,7 @@ def validate(
     except Exception as e:
         console.print(f"[red]Failed to validate path:[/red] {e!s}")
         return 1
+
 
 @app.command("info")
 def info(
@@ -803,12 +885,18 @@ def info(
 
     try:
         # Get project root directory
-        project_root = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+        project_root = os.path.abspath(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        )
 
         # Display project structure
         console.print("\n[bold green]Project Structure:[/bold green]")
-        console.print("  ├── [green]src/[/green]      - Core Python modules and libraries")
-        console.print("  ├── [green]tools/[/green]    - Command-line tools and utilities")
+        console.print(
+            "  ├── [green]src/[/green]      - Core Python modules and libraries"
+        )
+        console.print(
+            "  ├── [green]tools/[/green]    - Command-line tools and utilities"
+        )
         console.print("  ├── [green]tests/[/green]    - Test scripts and validation")
         console.print("  └── [green]artifacts/[/green] - Canonical output storage")
         console.print("      ├── analysis/   - Analysis results")
@@ -819,23 +907,33 @@ def info(
 
         # Warn about artifact discipline
         console.print("\n[bold yellow]Artifact Discipline Warning:[/bold yellow]")
-        console.print("Remember that while artifact_guard.py provides protection via PathGuard and decorators,")
+        console.print(
+            "Remember that while artifact_guard.py provides protection via PathGuard and decorators,"
+        )
         console.print("direct file operations may bypass this protection.")
         console.print("")
-        console.print("For full artifact discipline, ensure all files are created within canonical directories")
+        console.print(
+            "For full artifact discipline, ensure all files are created within canonical directories"
+        )
         console.print("obtained via [bold]get_canonical_artifact_path()[/bold].")
 
         console.print("\n[bold]Example:[/bold]")
         console.print("  # Get a canonical artifact path")
-        console.print("  from src.core.artifact_guard import get_canonical_artifact_path, PathGuard")
+        console.print(
+            "  from src.core.artifact_guard import get_canonical_artifact_path, PathGuard"
+        )
         console.print("  ")
         console.print("  # Create canonical path")
-        console.print("  artifact_dir = get_canonical_artifact_path(\"test\", \"my_test_context\")")
+        console.print(
+            '  artifact_dir = get_canonical_artifact_path("test", "my_test_context")'
+        )
         console.print("  ")
         console.print("  # Use PathGuard to enforce discipline")
         console.print("  with PathGuard(artifact_dir):")
-        console.print("      with open(os.path.join(artifact_dir, \"output.txt\"), \"w\") as f:")
-        console.print("          f.write(\"Test output\")")
+        console.print(
+            '      with open(os.path.join(artifact_dir, "output.txt"), "w") as f:'
+        )
+        console.print('          f.write("Test output")')
 
         # Print artifact types and root
         console.print(f"\n[bold]Artifact types:[/bold] {', '.join(ARTIFACT_TYPES)}")
@@ -845,6 +943,7 @@ def info(
     except Exception as e:
         console.print(f"[red]Failed to display information:[/red] {e!s}")
         return 1
+
 
 if __name__ == "__main__":
     app()

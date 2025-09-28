@@ -21,6 +21,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
+# Import configuration system
+from src.config.manager import ConfigManager
+from src.config.paths import PathManager
+
 # Import artifact discipline components
 from src.core.artifact_guard import (
     PathGuard,
@@ -28,18 +32,17 @@ from src.core.artifact_guard import (
     validate_artifact_path,
 )
 
-# Import configuration system
-from src.config.manager import ConfigManager
-from src.config.paths import PathManager
-
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Default model paths
 DEFAULT_MODEL_DIR = os.path.expanduser("~/.local/share/file_analyzer/models")
 MODEL_TYPES = ["vision", "text"]
+
 
 class ModelInterface(ABC):
     """Abstract base class for all models in the system."""
@@ -61,6 +64,7 @@ class ModelInterface(ABC):
         """Check if the model supports the given input type."""
         return False
 
+
 class ModelManager:
     """Central manager for all models in the system."""
 
@@ -68,11 +72,11 @@ class ModelManager:
         """Initialize the model manager."""
         self.models = {}
         self.adapters = {}
-        
+
         # Use ConfigManager for centralized configuration
         self.config_manager = ConfigManager()
         self.path_manager = PathManager()
-        
+
         # Legacy model configs for compatibility
         self.model_configs = {}
         self._load_model_configs()
@@ -82,17 +86,18 @@ class ModelManager:
         """Load model configurations from config files."""
         # Get vision config from ConfigManager
         vision_config = {
-            'default_model': self.config_manager.get('vision.default_model', 'fastvlm'),
-            'model_size': self.config_manager.get('vision.model_size'),
-            'default_mode': self.config_manager.get('vision.default_mode', 'describe'),
-            'max_images': self.config_manager.get('vision.max_images', 10),
-            'output_format': self.config_manager.get('vision.output_format', 'json')
+            "default_model": self.config_manager.get("vision.default_model", "fastvlm"),
+            "model_size": self.config_manager.get("vision.model_size"),
+            "default_mode": self.config_manager.get("vision.default_mode", "describe"),
+            "max_images": self.config_manager.get("vision.max_images", 10),
+            "output_format": self.config_manager.get("vision.output_format", "json"),
         }
         self.model_configs["vision"] = vision_config
-        
+
         # Legacy compatibility: Load from model_config.py if it exists
         try:
             from src.models.config import MODEL_CONFIGS
+
             # Merge legacy configs (ConfigManager takes precedence)
             for key, legacy_config in MODEL_CONFIGS.items():
                 if key not in self.model_configs:
@@ -111,6 +116,7 @@ class ModelManager:
         try:
             # Try importing FastVLM adapter
             from src.models.fastvlm.adapter import FastVLMAdapter, create_adapter
+
             self.adapters["fastvlm"] = FastVLMAdapter
             logger.debug("Registered FastVLM adapter")
         except ImportError:
@@ -121,11 +127,11 @@ class ModelManager:
     def get_adapter(self, model_type: str, model_name: str) -> ModelInterface | None:
         """
         Get an appropriate adapter for the specified model type and name.
-        
+
         Args:
             model_type: Type of model (vision, text, etc.)
             model_name: Name/ID of the model (fastvlm, bakllava, etc.)
-            
+
         Returns:
             ModelInterface or None if no adapter is available
         """
@@ -144,15 +150,20 @@ class ModelManager:
             logger.warning(f"No adapter found for {model_name}")
 
         return None
-        
-    def _get_model_path(self, model_name: str, model_size: str | None = None, custom_path: str | None = None) -> str | None:
+
+    def _get_model_path(
+        self,
+        model_name: str,
+        model_size: str | None = None,
+        custom_path: str | None = None,
+    ) -> str | None:
         """Get model path with environment variable and config support."""
         # Check environment variables first
         if model_name == "fastvlm":
-            env_path = os.getenv('FA_MODEL_VISION_PATH')
+            env_path = os.getenv("FA_MODEL_VISION_PATH")
             if env_path:
                 return env_path
-                
+
         # Use custom path if provided
         if custom_path:
             # Use PathManager to resolve the path
@@ -160,33 +171,37 @@ class ModelManager:
             if resolved_path:
                 return resolved_path
             return custom_path
-            
+
         # Get from configuration based on model name and size
         config_key = f"models.{model_name}.path"
         if model_size:
             size_specific_key = f"models.{model_name}.sizes.{model_size}.path"
-            config_path = self.config_manager.get(size_specific_key) or self.config_manager.get(config_key)
+            config_path = self.config_manager.get(
+                size_specific_key
+            ) or self.config_manager.get(config_key)
         else:
             config_path = self.config_manager.get(config_key)
-            
+
         if config_path:
             resolved_path = self.path_manager.get_model_path(model_name, config_path)
             if resolved_path:
                 return resolved_path
             return config_path
-            
+
         return None
 
-    def create_model(self, model_type: str, model_name: str, model_size: str | None = None, **kwargs) -> ModelInterface | None:
+    def create_model(
+        self, model_type: str, model_name: str, model_size: str | None = None, **kwargs
+    ) -> ModelInterface | None:
         """
         Create a model instance with the appropriate adapter.
-        
+
         Args:
             model_type: Type of model (vision, text, etc.)
             model_name: Name/ID of the model
             model_size: Size variant of the model (0.5b, 1.5b, 7b, etc.)
             **kwargs: Additional parameters to pass to the adapter
-            
+
         Returns:
             ModelInterface instance or None if creation fails
         """
@@ -198,10 +213,12 @@ class ModelManager:
 
         try:
             # Get model path with our path resolution system
-            model_path = self._get_model_path(model_name, model_size, kwargs.get('model_path'))
+            model_path = self._get_model_path(
+                model_name, model_size, kwargs.get("model_path")
+            )
             if model_path:
-                kwargs['model_path'] = model_path
-                
+                kwargs["model_path"] = model_path
+
             # Create the model instance
             model = adapter_func(model_type=model_name, model_size=model_size, **kwargs)
             return model
@@ -209,13 +226,15 @@ class ModelManager:
             logger.error(f"Error creating model {model_name}: {e}")
             return None
 
-    def get_available_models(self, model_type: str | None = None) -> dict[str, list[str]]:
+    def get_available_models(
+        self, model_type: str | None = None
+    ) -> dict[str, list[str]]:
         """
         Get a dictionary of available models and their sizes.
-        
+
         Args:
             model_type: Optional filter for model type
-            
+
         Returns:
             Dictionary mapping model names to available sizes
         """
@@ -234,13 +253,20 @@ class ModelManager:
 
         return available_models
 
-    def analyze_file(self, file_path: str, model_type: str = "vision",
-                   model_name: str = "fastvlm", model_size: str | None = None,
-                   prompt: str | None = None, mode: str = "describe",
-                   output_path: str | None = None, **kwargs) -> dict[str, Any]:
+    def analyze_file(
+        self,
+        file_path: str,
+        model_type: str = "vision",
+        model_name: str = "fastvlm",
+        model_size: str | None = None,
+        prompt: str | None = None,
+        mode: str = "describe",
+        output_path: str | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         Analyze a file with the specified model.
-        
+
         Args:
             file_path: Path to the file to analyze
             model_type: Type of model (vision, text, etc.)
@@ -250,7 +276,7 @@ class ModelManager:
             mode: Analysis mode (describe, detect, document, etc.)
             output_path: Optional path to save the results
             **kwargs: Additional parameters for the model
-            
+
         Returns:
             Dictionary with analysis results
         """
@@ -272,7 +298,9 @@ class ModelManager:
             # Add timing metadata if not present
             if isinstance(result, dict) and "metadata" in result:
                 if "execution_time" not in result["metadata"]:
-                    result["metadata"]["execution_time"] = (end_time - start_time).total_seconds()
+                    result["metadata"]["execution_time"] = (
+                        end_time - start_time
+                    ).total_seconds()
 
             # Save results if output path is specified
             if output_path:
@@ -286,18 +314,26 @@ class ModelManager:
                 "metadata": {
                     "model": f"{model_name}_{model_size or 'default'}",
                     "execution_time": (datetime.now() - start_time).total_seconds(),
-                    "timestamp": datetime.now().isoformat()
-                }
+                    "timestamp": datetime.now().isoformat(),
+                },
             }
 
-    def batch_analyze(self, input_dir: str, model_type: str = "vision",
-                     model_name: str = "fastvlm", model_size: str | None = None,
-                     prompt: str | None = None, mode: str = "describe",
-                     output_dir: str | None = None, max_files: int = 10,
-                     file_extensions: list[str] | None = None, **kwargs) -> dict[str, dict[str, Any]]:
+    def batch_analyze(
+        self,
+        input_dir: str,
+        model_type: str = "vision",
+        model_name: str = "fastvlm",
+        model_size: str | None = None,
+        prompt: str | None = None,
+        mode: str = "describe",
+        output_dir: str | None = None,
+        max_files: int = 10,
+        file_extensions: list[str] | None = None,
+        **kwargs,
+    ) -> dict[str, dict[str, Any]]:
         """
         Analyze multiple files in a directory.
-        
+
         Args:
             input_dir: Directory containing files to analyze
             model_type: Type of model (vision, text, etc.)
@@ -309,7 +345,7 @@ class ModelManager:
             max_files: Maximum number of files to process
             file_extensions: List of file extensions to process
             **kwargs: Additional parameters for the model
-            
+
         Returns:
             Dictionary mapping file paths to analysis results
         """
@@ -326,7 +362,9 @@ class ModelManager:
         if output_dir:
             if not validate_artifact_path(output_dir):
                 # Use canonical path instead
-                output_dir = get_canonical_artifact_path(model_type, f"batch_{model_name}_{mode}")
+                output_dir = get_canonical_artifact_path(
+                    model_type, f"batch_{model_name}_{mode}"
+                )
                 logger.info(f"Using canonical artifact path: {output_dir}")
             os.makedirs(output_dir, exist_ok=True)
 
@@ -361,8 +399,8 @@ class ModelManager:
                     "error": f"Analysis failed: {e!s}",
                     "metadata": {
                         "model": f"{model_name}_{model_size or 'default'}",
-                        "timestamp": datetime.now().isoformat()
-                    }
+                        "timestamp": datetime.now().isoformat(),
+                    },
                 }
 
         # Write batch summary if output directory is specified
@@ -374,22 +412,23 @@ class ModelManager:
                 "failed": sum(1 for r in results.values() if "error" in r),
                 "model": f"{model_name}_{model_size or 'default'}",
                 "mode": mode,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
             self._save_result(batch_summary, summary_path)
 
         return results
 
-    def _get_files(self, directory: str, extensions: list[str] | None = None,
-                 max_files: int = 10) -> list[str]:
+    def _get_files(
+        self, directory: str, extensions: list[str] | None = None, max_files: int = 10
+    ) -> list[str]:
         """
         Get a list of files in a directory with the specified extensions.
-        
+
         Args:
             directory: Directory to search
             extensions: List of file extensions to include
             max_files: Maximum number of files to return
-            
+
         Returns:
             List of file paths
         """
@@ -410,7 +449,7 @@ class ModelManager:
     def _save_result(self, result: dict[str, Any], output_path: str) -> None:
         """
         Save analysis result to a file.
-        
+
         Args:
             result: Analysis result
             output_path: Path to save the result
@@ -420,7 +459,7 @@ class ModelManager:
 
         # Use PathGuard for artifact discipline
         with PathGuard(os.path.dirname(output_path)):
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 json.dump(result, f, indent=2)
 
 
@@ -437,8 +476,12 @@ if __name__ == "__main__":
     parser.add_argument("--file", help="File to analyze")
     parser.add_argument("--model", default="fastvlm", help="Model to use")
     parser.add_argument("--size", help="Model size")
-    parser.add_argument("--mode", default="describe", choices=["describe", "detect", "document"],
-                       help="Analysis mode")
+    parser.add_argument(
+        "--mode",
+        default="describe",
+        choices=["describe", "detect", "document"],
+        help="Analysis mode",
+    )
     parser.add_argument("--output", help="Output file or directory")
 
     args = parser.parse_args()
@@ -451,7 +494,7 @@ if __name__ == "__main__":
             model_name=args.model,
             model_size=args.size,
             mode=args.mode,
-            output_path=args.output
+            output_path=args.output,
         )
 
         print(json.dumps(result, indent=2))

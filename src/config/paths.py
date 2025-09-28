@@ -44,10 +44,12 @@ try:
     from src.core.artifact_guard import (
         get_canonical_artifact_path,
     )
+
     ARTIFACT_DISCIPLINE_AVAILABLE = True
 except ImportError:
     ARTIFACT_DISCIPLINE_AVAILABLE = False
     logger.debug("Artifact discipline not available, using fallback paths")
+
 
 class PathManager:
     """
@@ -148,7 +150,9 @@ class PathManager:
                 logger.debug(f"Found model at alternative path: {alt_path}")
                 return alt_path
 
-        logger.warning(f"Model {model_type} {model_size} not found in any search location")
+        logger.warning(
+            f"Model {model_type} {model_size} not found in any search location"
+        )
         return None
 
     def _validate_model_directory(self, model_path: Path) -> bool:
@@ -208,7 +212,7 @@ class PathManager:
                     logger.warning(f"Artifact discipline failed: {e}, using fallback")
 
             # Fallback: create timestamped path in artifacts directory
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             safe_context = sanitize_filename_safe(context)
             safe_artifact_type = sanitize_filename_safe(artifact_type)
 
@@ -219,7 +223,9 @@ class PathManager:
 
             # Create artifact path
             artifact_name = f"{safe_context}_{timestamp}"
-            artifact_path = get_safe_path(artifacts_base, safe_artifact_type, artifact_name)
+            artifact_path = get_safe_path(
+                artifacts_base, safe_artifact_type, artifact_name
+            )
 
             logger.debug(f"Created artifact path: {artifact_path}")
             return artifact_path
@@ -228,6 +234,7 @@ class PathManager:
             # Ultimate fallback: temporary directory
             logger.error(f"Could not create artifact path: {e}")
             import tempfile
+
             temp_dir = Path(tempfile.mkdtemp(prefix=f"fa_{artifact_type}_"))
             logger.warning(f"Using temporary directory: {temp_dir}")
             return temp_dir
@@ -251,16 +258,12 @@ class PathManager:
         search_patterns = [
             # Standard: schemas/type/version/schema.json
             self.settings.schemas_dir / schema_type / version / "schema.json",
-
             # Alternative: schemas/version/type/schema.json
             self.settings.schemas_dir / version / schema_type / "schema.json",
-
             # Type-specific: schemas/type/type.json
             self.settings.schemas_dir / schema_type / f"{schema_type}.json",
-
             # Direct: schemas/type_version.json
             self.settings.schemas_dir / f"{schema_type}_{version}.json",
-
             # Simple: schemas/schema.json (for single schema projects)
             self.settings.schemas_dir / "schema.json",
         ]
@@ -323,7 +326,11 @@ class PathManager:
         Returns:
             Safe path under logs directory
         """
-        logs_dir = self.settings.artifacts_dir / "logs" if self.settings.artifacts_dir else self.settings.project_root / "logs"
+        logs_dir = (
+            self.settings.artifacts_dir / "logs"
+            if self.settings.artifacts_dir
+            else self.settings.project_root / "logs"
+        )
         return get_safe_path(logs_dir, *parts)
 
     def list_models(self, model_type: str | None = None) -> dict[str, list[str]]:
@@ -369,15 +376,18 @@ class PathManager:
             "artifact_discipline": ARTIFACT_DISCIPLINE_AVAILABLE,
         }
 
+
 # Create global path manager instance
 # Note: This will be initialized when the module is imported
 def _create_path_manager():
     """Create the global path manager instance."""
     try:
         from .settings import settings
+
         return PathManager(settings.path)
     except ImportError as e:
         logger.error(f"Could not initialize path manager: {e}")
         return None
+
 
 paths = _create_path_manager()

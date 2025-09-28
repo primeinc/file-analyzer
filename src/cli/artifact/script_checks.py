@@ -30,25 +30,27 @@ ALLOWED_UNSOURCED = [
     "artifacts.env",
     "scripts/check_all_scripts.sh",
     "scripts/install.sh",
-    "scripts/artifact_guard_py_adapter.sh"
+    "scripts/artifact_guard_py_adapter.sh",
 ]
 
 # Initialize console
 console = Console()
 logger = logging.getLogger("file-analyzer")
 
+
 def get_project_root() -> Path:
     """Get the project root directory."""
     # Assuming this file is in src/cli/artifact/script_checks.py
     return Path(__file__).parent.parent.parent.parent.absolute()
 
+
 def check_script(script_path: str) -> tuple[bool, str]:
     """
     Check if a shell script properly sources artifact_guard_py_adapter.sh.
-    
+
     Args:
         script_path: Path to the shell script to check
-        
+
     Returns:
         Tuple[bool, str]: (pass_status, message)
     """
@@ -63,19 +65,25 @@ def check_script(script_path: str) -> tuple[bool, str]:
         return True, f"EXEMPT: {script_path} (in libs/ directory - external library)"
 
     # Look for any sourcing of artifact_guard.sh or artifact_guard_py_adapter.sh in the script
-    with open(script_path, encoding='utf-8') as f:
+    with open(script_path, encoding="utf-8") as f:
         content = f.read()
 
     # Regular expression to match source or . command for artifact_guard(_py_adapter)?.sh
-    if re.search(r'^(source|\.) +.*artifact_guard(_py_adapter)?\.sh', content, re.MULTILINE):
+    if re.search(
+        r"^(source|\.) +.*artifact_guard(_py_adapter)?\.sh", content, re.MULTILINE
+    ):
         return True, f"PASS: {script_path}"
     else:
-        return False, f"FAIL: {script_path} (does not source artifact_guard.sh or artifact_guard_py_adapter.sh)"
+        return (
+            False,
+            f"FAIL: {script_path} (does not source artifact_guard.sh or artifact_guard_py_adapter.sh)",
+        )
+
 
 def find_all_scripts() -> list[str]:
     """
     Find all shell scripts in the project.
-    
+
     Returns:
         List[str]: List of shell script paths
     """
@@ -83,18 +91,21 @@ def find_all_scripts() -> list[str]:
     all_scripts = []
 
     # Use glob to find all .sh files
-    for script_path in sorted(glob.glob(str(project_root) + "/**/*.sh", recursive=True)):
+    for script_path in sorted(
+        glob.glob(str(project_root) + "/**/*.sh", recursive=True)
+    ):
         all_scripts.append(script_path)
 
     return all_scripts
 
+
 def check_multiple_scripts(scripts: list[str]) -> tuple[int, int, list[str]]:
     """
     Check multiple scripts for artifact discipline.
-    
+
     Args:
         scripts: List of script paths to check
-        
+
     Returns:
         Tuple[int, int, List[str]]: (total, failures, failure_messages)
     """
@@ -115,7 +126,7 @@ def check_multiple_scripts(scripts: list[str]) -> tuple[int, int, list[str]]:
         project_root = str(get_project_root())
         rel_path = script
         if script.startswith(project_root):
-            rel_path = script[len(project_root):].lstrip('/')
+            rel_path = script[len(project_root) :].lstrip("/")
 
         if passed:
             if "EXEMPT" in message:
@@ -127,7 +138,9 @@ def check_multiple_scripts(scripts: list[str]) -> tuple[int, int, list[str]]:
             failures += 1
             failure_messages.append(message)
 
-        table.add_row(status_style, rel_path, message.split(": ", 1)[1] if ": " in message else "")
+        table.add_row(
+            status_style, rel_path, message.split(": ", 1)[1] if ": " in message else ""
+        )
         total += 1
 
     # Print the table
@@ -140,19 +153,22 @@ def check_multiple_scripts(scripts: list[str]) -> tuple[int, int, list[str]]:
 
     return total, failures, failure_messages
 
+
 @app.callback()
 def callback():
     """
     Check shell scripts for proper artifact discipline.
-    
+
     Enforces the requirement that all shell scripts must source
     artifact_guard_py_adapter.sh for proper artifact path discipline.
     """
 
+
 @app.command("check")
 def check_scripts(
     scripts: list[str] | None = typer.Argument(
-        None, help="List of shell scripts to check. If not provided, all scripts will be checked."
+        None,
+        help="List of shell scripts to check. If not provided, all scripts will be checked.",
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
@@ -163,7 +179,7 @@ def check_scripts(
 ):
     """
     Check shell scripts for proper artifact discipline.
-    
+
     Validates that all shell scripts source artifact_guard_py_adapter.sh
     to ensure proper artifact path discipline is enforced.
     """
@@ -182,33 +198,46 @@ def check_scripts(
                     script = os.path.join(os.getcwd(), script)
 
                 # Verify it's a shell script
-                if not os.path.isfile(script) or not script.endswith('.sh'):
-                    console.print(f"[red]Error:[/red] {script} is not a shell script or does not exist.")
+                if not os.path.isfile(script) or not script.endswith(".sh"):
+                    console.print(
+                        f"[red]Error:[/red] {script} is not a shell script or does not exist."
+                    )
                     continue
 
                 scripts_to_check.append(script)
         else:
             # Otherwise check all scripts
-            console.print("[bold]Checking all shell scripts for artifact_guard_py_adapter.sh sourcing:[/bold]")
+            console.print(
+                "[bold]Checking all shell scripts for artifact_guard_py_adapter.sh sourcing:[/bold]"
+            )
             scripts_to_check = find_all_scripts()
 
         # Perform the checks
         total, failures, failure_messages = check_multiple_scripts(scripts_to_check)
 
         if failures > 0:
-            console.print("\n[red][bold]ERROR:[/bold][/red] Some scripts do not conform to artifact discipline requirements.")
-            console.print("Each script must source artifact_guard_py_adapter.sh immediately after the shebang line.")
+            console.print(
+                "\n[red][bold]ERROR:[/bold][/red] Some scripts do not conform to artifact discipline requirements."
+            )
+            console.print(
+                "Each script must source artifact_guard_py_adapter.sh immediately after the shebang line."
+            )
             console.print("Example:")
             console.print("#!/bin/bash")
-            console.print('source "$(dirname "${BASH_SOURCE[0]}")/artifact_guard_py_adapter.sh"')
+            console.print(
+                'source "$(dirname "${BASH_SOURCE[0]}")/artifact_guard_py_adapter.sh"'
+            )
             return 1
         else:
-            console.print("\n[green][bold]SUCCESS:[/bold][/green] All scripts conform to artifact discipline requirements.")
+            console.print(
+                "\n[green][bold]SUCCESS:[/bold][/green] All scripts conform to artifact discipline requirements."
+            )
             return 0
 
     except Exception as e:
         console.print(f"[red]Error during script check:[/red] {e!s}")
         return 1
+
 
 @app.command("all")
 def check_all_scripts(
@@ -221,7 +250,7 @@ def check_all_scripts(
 ):
     """
     Check all scripts in src, tools, and tests directories.
-    
+
     Equivalent to the check_all_scripts.sh functionality.
     """
     # Setup logging
@@ -229,7 +258,9 @@ def check_all_scripts(
     logging.basicConfig(level=log_level)
 
     try:
-        console.print("[bold]Checking all scripts in src, tools, and tests directories...[/bold]")
+        console.print(
+            "[bold]Checking all scripts in src, tools, and tests directories...[/bold]"
+        )
 
         # Get paths to check
         project_root = get_project_root()
@@ -251,15 +282,20 @@ def check_all_scripts(
         total, failures, failure_messages = check_multiple_scripts(scripts_to_check)
 
         if failures > 0:
-            console.print("\n[red][bold]ERROR:[/bold][/red] Some scripts do not conform to artifact discipline requirements.")
+            console.print(
+                "\n[red][bold]ERROR:[/bold][/red] Some scripts do not conform to artifact discipline requirements."
+            )
             return 1
         else:
-            console.print("\n[green][bold]SUCCESS:[/bold][/green] All critical scripts conform to artifact discipline requirements!")
+            console.print(
+                "\n[green][bold]SUCCESS:[/bold][/green] All critical scripts conform to artifact discipline requirements!"
+            )
             return 0
 
     except Exception as e:
         console.print(f"[red]Error during script check:[/red] {e!s}")
         return 1
+
 
 if __name__ == "__main__":
     app()

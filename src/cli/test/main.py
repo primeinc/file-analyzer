@@ -30,10 +30,11 @@ console = Console()
 # Add hook subcommand
 app.add_typer(hook_app, name="hook")
 
+
 class TestRegistry:
     """
     Registry for test plugins.
-    
+
     This class maintains a registry of test plugins and provides
     methods for registering and retrieving tests.
     """
@@ -50,7 +51,8 @@ class TestRegistry:
         # Discover tests from entry points
         try:
             from importlib.metadata import entry_points
-            discovered_tests = entry_points(group='fa.tests')
+
+            discovered_tests = entry_points(group="fa.tests")
 
             for entry in discovered_tests:
                 try:
@@ -85,7 +87,9 @@ class TestRegistry:
                     if hasattr(module, "TESTS"):
                         for test_name, test_func in module.TESTS.items():
                             self.register(f"{file_path.stem}.{test_name}", test_func)
-                            logging.debug(f"Registered test from module: {file_path.stem}.{test_name}")
+                            logging.debug(
+                                f"Registered test from module: {file_path.stem}.{test_name}"
+                            )
                 except Exception as e:
                     logging.error(f"Failed to load test module '{file_path.stem}': {e}")
         except Exception as e:
@@ -94,7 +98,7 @@ class TestRegistry:
     def register(self, name: str, test_func: callable):
         """
         Register a test function.
-        
+
         Args:
             name: Test name
             test_func: Test function
@@ -104,10 +108,10 @@ class TestRegistry:
     def get_test(self, name: str) -> callable | None:
         """
         Get a test function by name.
-        
+
         Args:
             name: Test name
-            
+
         Returns:
             Test function or None if not found
         """
@@ -116,24 +120,27 @@ class TestRegistry:
     def get_all_tests(self) -> dict[str, callable]:
         """
         Get all registered tests.
-        
+
         Returns:
             Dictionary mapping test names to test functions
         """
         return self.tests.copy()
 
+
 # Create global test registry
 test_registry = TestRegistry()
+
 
 @app.callback()
 def callback():
     """
     Run tests on File Analyzer components.
-    
+
     The test command provides a framework for running tests on the
     File Analyzer components, including FastVLM model tests,
     JSON output validation, and more.
     """
+
 
 @app.command()
 def list():
@@ -163,6 +170,7 @@ def list():
         table.add_row(name, description)
 
     console.print(table)
+
 
 @app.command()
 def run(
@@ -234,7 +242,9 @@ def run(
 
             # Check result
             if not result or not isinstance(result, dict):
-                console.print(f"[red]Error:[/red] Test '{test_name}' returned invalid result")
+                console.print(
+                    f"[red]Error:[/red] Test '{test_name}' returned invalid result"
+                )
                 raise typer.Exit(code=1)
 
             # Print result
@@ -242,7 +252,9 @@ def run(
             if success:
                 console.print(f"[green]Test '{test_name}' passed[/green]")
             else:
-                console.print(f"[red]Test '{test_name}' failed:[/red] {result.get('message', 'No error message')}")
+                console.print(
+                    f"[red]Test '{test_name}' failed:[/red] {result.get('message', 'No error message')}"
+                )
                 raise typer.Exit(code=1)
         except Exception as e:
             console.print(f"[red]Error running test '{test_name}':[/red] {e!s}")
@@ -265,7 +277,7 @@ def run(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
-            console=console
+            console=console,
         ) as progress:
             task = progress.add_task("[green]Running tests...", total=len(tests))
 
@@ -294,7 +306,7 @@ def run(
                         result = {
                             "name": name,
                             "success": False,
-                            "message": "Invalid test result"
+                            "message": "Invalid test result",
                         }
                     else:
                         result["name"] = name
@@ -306,11 +318,9 @@ def run(
                         progress.update(task, completed=len(tests))
                         break
                 except Exception as e:
-                    results.append({
-                        "name": name,
-                        "success": False,
-                        "message": f"Error: {e!s}"
-                    })
+                    results.append(
+                        {"name": name, "success": False, "message": f"Error: {e!s}"}
+                    )
 
                     # Check for failure with fail_fast
                     if fail_fast:
@@ -346,20 +356,26 @@ def run(
         # Save results to output file if specified
         if output_dir:
             import json
+
             results_file = os.path.join(output_dir, "test_results.json")
             with open(results_file, "w") as f:
-                json.dump({
-                    "total": len(results),
-                    "passed": passed,
-                    "failed": failed,
-                    "results": results
-                }, f, indent=2)
+                json.dump(
+                    {
+                        "total": len(results),
+                        "passed": passed,
+                        "failed": failed,
+                        "results": results,
+                    },
+                    f,
+                    indent=2,
+                )
 
             console.print(f"Results saved to: {results_file}")
 
         # Exit with error code if any tests failed
         if failed > 0:
             raise typer.Exit(code=1)
+
 
 @app.command()
 def fastvlm(
@@ -418,15 +434,20 @@ def fastvlm(
         if success:
             console.print("[green]FastVLM test passed[/green]")
         else:
-            console.print(f"[red]FastVLM test failed:[/red] {result.get('message', 'No error message')}")
+            console.print(
+                f"[red]FastVLM test failed:[/red] {result.get('message', 'No error message')}"
+            )
             raise typer.Exit(code=1)
     except ImportError:
         console.print("[red]Error:[/red] FastVLM test module not found")
-        console.print("Please ensure that fastvlm_tests.py is present in src/cli/test directory")
+        console.print(
+            "Please ensure that fastvlm_tests.py is present in src/cli/test directory"
+        )
         raise typer.Exit(code=1)
     except Exception as e:
         console.print(f"[red]Error running FastVLM test:[/red] {e!s}")
         raise typer.Exit(code=1)
+
 
 @app.command()
 def json(
@@ -485,15 +506,20 @@ def json(
         if success:
             console.print("[green]JSON test passed[/green]")
         else:
-            console.print(f"[red]JSON test failed:[/red] {result.get('message', 'No error message')}")
+            console.print(
+                f"[red]JSON test failed:[/red] {result.get('message', 'No error message')}"
+            )
             raise typer.Exit(code=1)
     except ImportError:
         console.print("[red]Error:[/red] JSON test module not found")
-        console.print("Please ensure that json_tests.py is present in src/cli/test directory")
+        console.print(
+            "Please ensure that json_tests.py is present in src/cli/test directory"
+        )
         raise typer.Exit(code=1)
     except Exception as e:
         console.print(f"[red]Error running JSON test:[/red] {e!s}")
         raise typer.Exit(code=1)
+
 
 if __name__ == "__main__":
     app()

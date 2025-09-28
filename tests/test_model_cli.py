@@ -29,12 +29,15 @@ from src.cli.model.main import MODEL_INFO, app, calculate_md5, get_model_dir
 # Create a CLI test runner
 runner = CliRunner()
 
+
 class TestModelCLIUtils:
     """Tests for utility functions in the model CLI module"""
 
     def test_get_model_dir(self):
         """Test get_model_dir function"""
-        with patch('src.cli.model.main.get_project_root', return_value="/fake/project/root"):
+        with patch(
+            "src.cli.model.main.get_project_root", return_value="/fake/project/root"
+        ):
             model_dir = get_model_dir()
             assert model_dir == "/fake/project/root/libs/ml-fastvlm/checkpoints"
 
@@ -47,10 +50,15 @@ class TestModelCLIUtils:
 
         try:
             # Calculate the expected MD5 using hashlib directly
-            expected_md5 = hashlib.md5(b"This is a test file with known content").hexdigest()
+            expected_md5 = hashlib.md5(
+                b"This is a test file with known content"
+            ).hexdigest()
 
             # Use the function to calculate MD5
-            with patch('builtins.open', mock_open(read_data=b"This is a test file with known content")):
+            with patch(
+                "builtins.open",
+                mock_open(read_data=b"This is a test file with known content"),
+            ):
                 calculated_md5 = calculate_md5("/fake/path")
 
             # Verify the calculated MD5 matches the expected value
@@ -59,11 +67,12 @@ class TestModelCLIUtils:
             # Clean up the temporary file
             os.unlink(tmp_path)
 
+
 class TestListModelsCommand:
     """Tests for the list models command"""
 
-    @patch('src.cli.model.main.get_model_dir')
-    @patch('src.cli.model.main.os.path.exists')
+    @patch("src.cli.model.main.get_model_dir")
+    @patch("src.cli.model.main.os.path.exists")
     def test_list_models_none_installed(self, mock_exists, mock_get_model_dir):
         """Test listing models when none are installed"""
         # Setup mocks
@@ -85,8 +94,8 @@ class TestListModelsCommand:
         # Verify model directory is shown
         assert "Model directory: /fake/model/dir" in result.stdout
 
-    @patch('src.cli.model.main.get_model_dir')
-    @patch('src.cli.model.main.os.path.exists')
+    @patch("src.cli.model.main.get_model_dir")
+    @patch("src.cli.model.main.os.path.exists")
     def test_list_models_some_installed(self, mock_exists, mock_get_model_dir):
         """Test listing models when some are installed"""
         # Setup mocks
@@ -95,7 +104,12 @@ class TestListModelsCommand:
         # Mock exists to return True only for specific paths
         def mock_exists_side_effect(path):
             # Return True for 0.5b model directory and safetensors file
-            if path == "/fake/model/dir/llava-fastvithd_0.5b_stage3" or path == "/fake/model/dir/llava-fastvithd_0.5b_stage3/model.safetensors" or path == "/fake/model/dir/llava-fastvithd_1.5b_stage3":
+            if (
+                path == "/fake/model/dir/llava-fastvithd_0.5b_stage3"
+                or path
+                == "/fake/model/dir/llava-fastvithd_0.5b_stage3/model.safetensors"
+                or path == "/fake/model/dir/llava-fastvithd_1.5b_stage3"
+            ):
                 return True
             else:
                 return False
@@ -113,7 +127,7 @@ class TestListModelsCommand:
         assert "1.5b" in result.stdout and "Incomplete" in result.stdout
         assert "7b" in result.stdout and "Not Installed" in result.stdout
 
-    @patch('src.cli.model.main.get_model_dir')
+    @patch("src.cli.model.main.get_model_dir")
     def test_list_models_with_error(self, mock_get_model_dir):
         """Test list models command with an error"""
         # Setup mock to raise an exception
@@ -127,20 +141,31 @@ class TestListModelsCommand:
         # since the exception is caught and a return code is set manually
         assert "Error listing models: Test error" in result.stdout
 
+
 class TestDownloadModelCommand:
     """Tests for the download model command"""
 
-    @patch('src.cli.model.main.get_model_dir')
-    @patch('src.cli.model.main.os.path.exists')
-    @patch('src.cli.model.main.download_file')
-    @patch('src.cli.model.main.calculate_md5')
-    @patch('src.cli.model.main.extract_zip')
-    @patch('src.cli.model.main.os.makedirs')
-    @patch('src.cli.model.main.shutil.rmtree')
-    @patch('src.cli.model.main.tempfile.NamedTemporaryFile')
-    @patch('src.cli.model.main.os.remove')
-    def test_download_model_success(self, mock_remove, mock_tempfile, mock_rmtree, mock_makedirs,
-                                   mock_extract, mock_md5, mock_download, mock_exists, mock_get_model_dir):
+    @patch("src.cli.model.main.get_model_dir")
+    @patch("src.cli.model.main.os.path.exists")
+    @patch("src.cli.model.main.download_file")
+    @patch("src.cli.model.main.calculate_md5")
+    @patch("src.cli.model.main.extract_zip")
+    @patch("src.cli.model.main.os.makedirs")
+    @patch("src.cli.model.main.shutil.rmtree")
+    @patch("src.cli.model.main.tempfile.NamedTemporaryFile")
+    @patch("src.cli.model.main.os.remove")
+    def test_download_model_success(
+        self,
+        mock_remove,
+        mock_tempfile,
+        mock_rmtree,
+        mock_makedirs,
+        mock_extract,
+        mock_md5,
+        mock_download,
+        mock_exists,
+        mock_get_model_dir,
+    ):
         """Test successful model download"""
         # Setup mocks
         mock_get_model_dir.return_value = "/fake/model/dir"
@@ -160,18 +185,21 @@ class TestDownloadModelCommand:
 
         # Check that the functions were called with the right arguments
         mock_download.assert_called_once()
-        mock_extract.assert_called_once_with("/tmp/fake_temp_file.zip",
-                                           "/fake/model/dir/llava-fastvithd_0.5b_stage3")
+        mock_extract.assert_called_once_with(
+            "/tmp/fake_temp_file.zip", "/fake/model/dir/llava-fastvithd_0.5b_stage3"
+        )
 
         # Check for expected message patterns in the output
         assert "Downloading model llava-fastvithd_0.5b_stage3" in result.stdout
         assert "Verifying download integrity" in result.stdout
         assert "Extracting model files" in result.stdout
 
-    @patch('src.cli.model.main.get_model_dir')
-    @patch('src.cli.model.main.os.path.exists')
-    @patch('src.cli.model.main.os.makedirs')
-    def test_download_model_already_exists(self, mock_makedirs, mock_exists, mock_get_model_dir):
+    @patch("src.cli.model.main.get_model_dir")
+    @patch("src.cli.model.main.os.path.exists")
+    @patch("src.cli.model.main.os.makedirs")
+    def test_download_model_already_exists(
+        self, mock_makedirs, mock_exists, mock_get_model_dir
+    ):
         """Test download when model already exists"""
         # Setup mocks
         mock_get_model_dir.return_value = "/fake/model/dir"
@@ -180,7 +208,7 @@ class TestDownloadModelCommand:
         def mock_exists_side_effect(path):
             if path in [
                 "/fake/model/dir/llava-fastvithd_0.5b_stage3",
-                "/fake/model/dir/llava-fastvithd_0.5b_stage3/model.safetensors"
+                "/fake/model/dir/llava-fastvithd_0.5b_stage3/model.safetensors",
             ]:
                 return True
             else:
@@ -195,12 +223,13 @@ class TestDownloadModelCommand:
         assert "Model llava-fastvithd_0.5b_stage3 is already installed" in result.stdout
 
         # Test with force flag - using additional patches
-        with patch('src.cli.model.main.download_file') as mock_download, \
-             patch('src.cli.model.main.tempfile.NamedTemporaryFile') as mock_tempfile, \
-             patch('src.cli.model.main.shutil.rmtree'), \
-             patch('src.cli.model.main.extract_zip'), \
-             patch('src.cli.model.main.os.remove'):
-
+        with (
+            patch("src.cli.model.main.download_file") as mock_download,
+            patch("src.cli.model.main.tempfile.NamedTemporaryFile") as mock_tempfile,
+            patch("src.cli.model.main.shutil.rmtree"),
+            patch("src.cli.model.main.extract_zip"),
+            patch("src.cli.model.main.os.remove"),
+        ):
             # Setup tempfile mock
             mock_tmp_file = MagicMock()
             mock_tmp_file.name = "/tmp/fake_temp_file.zip"
@@ -232,15 +261,23 @@ class TestDownloadModelCommand:
         assert result.exit_code == 0
         assert "Invalid model size: 9999b" in result.stdout
 
-    @patch('src.cli.model.main.get_model_dir')
-    @patch('src.cli.model.main.os.path.exists')
-    @patch('src.cli.model.main.download_file')
-    @patch('src.cli.model.main.calculate_md5')
-    @patch('src.cli.model.main.os.remove')
-    @patch('src.cli.model.main.tempfile.NamedTemporaryFile')
-    @patch('src.cli.model.main.os.makedirs')
-    def test_download_md5_mismatch(self, mock_makedirs, mock_tempfile, mock_remove, mock_md5,
-                                 mock_download, mock_exists, mock_get_model_dir):
+    @patch("src.cli.model.main.get_model_dir")
+    @patch("src.cli.model.main.os.path.exists")
+    @patch("src.cli.model.main.download_file")
+    @patch("src.cli.model.main.calculate_md5")
+    @patch("src.cli.model.main.os.remove")
+    @patch("src.cli.model.main.tempfile.NamedTemporaryFile")
+    @patch("src.cli.model.main.os.makedirs")
+    def test_download_md5_mismatch(
+        self,
+        mock_makedirs,
+        mock_tempfile,
+        mock_remove,
+        mock_md5,
+        mock_download,
+        mock_exists,
+        mock_get_model_dir,
+    ):
         """Test handling MD5 checksum mismatch"""
         # Setup mocks
         mock_get_model_dir.return_value = "/fake/model/dir"
@@ -264,16 +301,25 @@ class TestDownloadModelCommand:
         # Verify temp file is removed
         mock_remove.assert_called_once_with("/tmp/fake_temp_file.zip")
 
-    @patch('src.cli.model.main.get_model_dir')
-    @patch('src.cli.model.main.os.path.exists')
-    @patch('src.cli.model.main.download_file')
-    @patch('src.cli.model.main.calculate_md5')
-    @patch('src.cli.model.main.extract_zip')
-    @patch('src.cli.model.main.os.makedirs')
-    @patch('src.cli.model.main.os.remove')
-    @patch('src.cli.model.main.tempfile.NamedTemporaryFile')
-    def test_download_extraction_failure(self, mock_tempfile, mock_remove, mock_makedirs,
-                                       mock_extract, mock_md5, mock_download, mock_exists, mock_get_model_dir):
+    @patch("src.cli.model.main.get_model_dir")
+    @patch("src.cli.model.main.os.path.exists")
+    @patch("src.cli.model.main.download_file")
+    @patch("src.cli.model.main.calculate_md5")
+    @patch("src.cli.model.main.extract_zip")
+    @patch("src.cli.model.main.os.makedirs")
+    @patch("src.cli.model.main.os.remove")
+    @patch("src.cli.model.main.tempfile.NamedTemporaryFile")
+    def test_download_extraction_failure(
+        self,
+        mock_tempfile,
+        mock_remove,
+        mock_makedirs,
+        mock_extract,
+        mock_md5,
+        mock_download,
+        mock_exists,
+        mock_get_model_dir,
+    ):
         """Test handling extraction failure"""
         # Setup mocks
         mock_get_model_dir.return_value = "/fake/model/dir"
@@ -296,6 +342,7 @@ class TestDownloadModelCommand:
 
         # Verify temp file is removed
         mock_remove.assert_called_once_with("/tmp/fake_temp_file.zip")
+
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

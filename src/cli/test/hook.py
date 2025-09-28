@@ -6,7 +6,6 @@ This module implements the functionality previously in test_hook.sh,
 providing a simple hook for testing and CI integration.
 """
 
-
 import typer
 from rich.console import Console
 
@@ -17,14 +16,15 @@ app = typer.Typer(help="Test hook for pre-commit and CI integration")
 # Initialize console for rich output
 console = Console()
 
+
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for test hook and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -35,14 +35,16 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
 
+
 @app.callback()
 def callback():
     """
     Test hook for pre-commit and CI integration.
-    
+
     This command provides a simple hook for testing and CI integration,
     implementing the functionality previously in test_hook.sh.
     """
+
 
 @app.command()
 def run(
@@ -55,7 +57,7 @@ def run(
 ):
     """
     Run the test hook.
-    
+
     Executes a simple test to verify the hook system is working properly.
     """
     # Get configured logger
@@ -66,6 +68,7 @@ def run(
     console.print("Hello World")
 
     return 0
+
 
 if __name__ == "__main__":
     app()

@@ -50,13 +50,13 @@ class TestEndToEnd(unittest.TestCase):
 
         # Analyze a file with a simple option
         options = {
-            'metadata': True,
-            'vision': False,
-            'duplicates': False,
-            'ocr': False,
-            'virus': False,
-            'search': False,
-            'binary': False
+            "metadata": True,
+            "vision": False,
+            "duplicates": False,
+            "ocr": False,
+            "virus": False,
+            "search": False,
+            "binary": False,
         }
 
         # Run the analysis
@@ -84,7 +84,9 @@ class TestEndToEnd(unittest.TestCase):
         os.makedirs(os.path.join(project_root, "src", "analyzer"), exist_ok=True)
 
         # Create a simple test file in the subdirectory
-        test_file_path = os.path.join(project_root, "src", "analyzer", "test_discipline.py")
+        test_file_path = os.path.join(
+            project_root, "src", "analyzer", "test_discipline.py"
+        )
 
         # Write a test script that uses the artifact discipline system
         with open(test_file_path, "w") as f:
@@ -119,7 +121,9 @@ if __name__ == "__main__":
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         # Check the command succeeded
-        self.assertEqual(result.returncode, 0, f"Command failed with error: {result.stderr}")
+        self.assertEqual(
+            result.returncode, 0, f"Command failed with error: {result.stderr}"
+        )
 
         # Verify output mentions the artifact directory
         self.assertIn("Artifact directory:", result.stdout)

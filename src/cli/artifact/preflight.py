@@ -34,14 +34,15 @@ app = typer.Typer(
     help="Perform preflight checks for artifact discipline and repository state"
 )
 
+
 def get_logger(verbose: bool = False, quiet: bool = False):
     """
     Get the logger for preflight commands and update log level if needed.
-    
+
     Args:
         verbose: Enable verbose output
         quiet: Suppress all output except errors
-        
+
     Returns:
         Logger instance
     """
@@ -52,10 +53,12 @@ def get_logger(verbose: bool = False, quiet: bool = False):
     _, logger = setup_logging(verbose=verbose, quiet=quiet)
     return logger
 
+
 def get_project_root() -> Path:
     """Get the project root directory."""
     # Assuming this file is in src/cli/artifact/preflight.py
     return Path(__file__).parent.parent.parent.parent.absolute()
+
 
 # Import shared utility function
 from src.cli.artifact.utils import check_artifact_sprawl
@@ -64,7 +67,7 @@ from src.cli.artifact.utils import check_artifact_sprawl
 def check_scripts_conformity() -> tuple[bool, list[str]]:
     """
     Check shell scripts for proper artifact discipline.
-    
+
     Returns:
         Tuple[bool, List[str]]: (all_conforming, failures)
     """
@@ -75,7 +78,7 @@ def check_scripts_conformity() -> tuple[bool, list[str]]:
         "install.sh",
         "check_script_conformity.sh",
         "check_all_scripts.sh",
-        "test_hook.sh"
+        "test_hook.sh",
     ]
 
     # Find all shell scripts
@@ -100,6 +103,7 @@ def check_scripts_conformity() -> tuple[bool, list[str]]:
 
     return len(failures) == 0, failures
 
+
 # Import functions from main module
 from src.cli.artifact.main import clean_tmp_artifacts as main_clean_tmp_artifacts
 
@@ -107,7 +111,7 @@ from src.cli.artifact.main import clean_tmp_artifacts as main_clean_tmp_artifact
 def clean_tmp_artifacts():
     """
     Clean only the tmp directory.
-    
+
     Returns:
         Tuple[bool, str]: (success, message)
     """
@@ -118,6 +122,7 @@ def clean_tmp_artifacts():
     except Exception as e:
         return False, f"Failed to clean temporary artifacts: {e!s}"
 
+
 # Also import generate_env_file
 from src.cli.artifact.main import generate_env_file as main_generate_env_file
 
@@ -125,7 +130,7 @@ from src.cli.artifact.main import generate_env_file as main_generate_env_file
 def generate_env_file():
     """
     Generate an artifacts.env file for sourcing in shell scripts.
-    
+
     Returns:
         Tuple[bool, str]: (success, message)
     """
@@ -136,14 +141,16 @@ def generate_env_file():
     except Exception as e:
         return False, f"Failed to generate artifacts.env file: {e!s}"
 
+
 @app.callback()
 def callback():
     """
     Perform preflight checks for artifact discipline and repository state.
-    
+
     The preflight command validates the repository state before test execution,
     enforcing canonical artifact structure and clean state requirements.
     """
+
 
 @app.command()
 def run(
@@ -162,7 +169,7 @@ def run(
 ):
     """
     Run all preflight checks to ensure repository is in a valid state.
-    
+
     Validates the repository state before test execution:
     1. Enforces canonical artifact structure
     2. Detects and reports rogue artifacts outside canonical paths
@@ -176,10 +183,9 @@ def run(
     clean_tmp = not no_tmp_clean
 
     # Print header
-    console.print(Panel.fit(
-        "[bold]File Analyzer Preflight Checks[/bold]",
-        border_style="blue"
-    ))
+    console.print(
+        Panel.fit("[bold]File Analyzer Preflight Checks[/bold]", border_style="blue")
+    )
 
     # Ensure artifact directory structure exists
     if not os.path.isdir(ARTIFACTS_ROOT):
@@ -194,20 +200,28 @@ def run(
             console.print(f"[red]Error:[/red] {message}")
 
     # Check for scripts without artifact_guard_py_adapter.sh sourcing
-    console.print("\n[bold]Checking scripts for artifact_guard_py_adapter.sh sourcing:[/bold]")
+    console.print(
+        "\n[bold]Checking scripts for artifact_guard_py_adapter.sh sourcing:[/bold]"
+    )
     all_scripts_conforming, failing_scripts = check_scripts_conformity()
 
     if all_scripts_conforming:
-        console.print("[green][bold]SUCCESS:[/bold][/green] All scripts conform to artifact discipline requirements.")
+        console.print(
+            "[green][bold]SUCCESS:[/bold][/green] All scripts conform to artifact discipline requirements."
+        )
     else:
-        console.print(f"[red][bold]ERROR:[/bold][/red] Found {len(failing_scripts)} scripts without artifact_guard_py_adapter.sh sourcing!")
+        console.print(
+            f"[red][bold]ERROR:[/bold][/red] Found {len(failing_scripts)} scripts without artifact_guard_py_adapter.sh sourcing!"
+        )
 
         # Print the failing scripts
         for script in failing_scripts:
             console.print(f"[red]✗[/red] {script}")
 
         if enforce:
-            console.print("[red][bold]ERROR: Scripts must be updated to use artifact_guard_py_adapter.sh[/bold][/red]")
+            console.print(
+                "[red][bold]ERROR: Scripts must be updated to use artifact_guard_py_adapter.sh[/bold][/red]"
+            )
             return 1
 
     # Check for artifact sprawl
@@ -223,7 +237,9 @@ def run(
     else:
         console.print("\n[red][bold]Artifact Sprawl Detected[/bold][/red]")
         console.print("=======================")
-        console.print("[yellow]The following directories outside the canonical artifact structure were found:[/yellow]")
+        console.print(
+            "[yellow]The following directories outside the canonical artifact structure were found:[/yellow]"
+        )
         for sprawl_path in sprawl_paths:
             console.print(sprawl_path)
 
@@ -241,16 +257,25 @@ def run(
         console.print("[green]✓ artifacts.env file exists[/green]")
 
     # Success message
-    console.print("\n[green][bold]Preflight check completed successfully.[/bold][/green]")
+    console.print(
+        "\n[green][bold]Preflight check completed successfully.[/bold][/green]"
+    )
     console.print("[bold]IMPORTANT:[/bold] All scripts must:")
-    console.print("1. Source [yellow]artifact_guard_py_adapter.sh[/yellow] or import [yellow]src.core.artifact_guard[/yellow]")
-    console.print("2. Use [yellow]get_canonical_artifact_path <type> \"context\"[/yellow] for generating paths")
+    console.print(
+        "1. Source [yellow]artifact_guard_py_adapter.sh[/yellow] or import [yellow]src.core.artifact_guard[/yellow]"
+    )
+    console.print(
+        '2. Use [yellow]get_canonical_artifact_path <type> "context"[/yellow] for generating paths'
+    )
     console.print("3. Write all files in canonical locations with manifests")
     console.print("4. NOT bypass the artifact guard with manual paths")
     console.print("")
-    console.print("Run [bold]python -m src.cli.artifact.main --help[/bold] for more options.")
+    console.print(
+        "Run [bold]python -m src.cli.artifact.main --help[/bold] for more options."
+    )
 
     return 0
+
 
 if __name__ == "__main__":
     app()

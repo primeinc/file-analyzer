@@ -13,6 +13,7 @@ try:
     # Try importing from src.cli.benchmark.samples
     from src.cli.benchmark.samples import download_test_images, find_test_images
     from src.cli.benchmark.utils import run_benchmark
+
     BENCHMARK_AVAILABLE = True
 except ImportError:
     try:
@@ -22,16 +23,21 @@ except ImportError:
             find_test_images,
             run_benchmark,
         )
+
         BENCHMARK_AVAILABLE = True
     except ImportError:
         BENCHMARK_AVAILABLE = False
-        print("Warning: Failed to import benchmark_fastvlm module. Skipping real image tests.")
+        print(
+            "Warning: Failed to import benchmark_fastvlm module. Skipping real image tests."
+        )
+
 
 class MockAnalyzer:
     """Mock analyzer for testing without real FastVLM model."""
+
     def __init__(self):
-        self.model_info = {'name': 'MockModel'}
-        self.model_path = '/mock/path'
+        self.model_info = {"name": "MockModel"}
+        self.model_path = "/mock/path"
 
     def analyze_image(self, path, prompt=None):
         """Simulate analyzing an image."""
@@ -39,11 +45,9 @@ class MockAnalyzer:
         return {
             "description": f"Mock analysis of {os.path.basename(path)}",
             "tags": ["mock", "test", "real_image"],
-            "metadata": {
-                "model": "MockModel",
-                "time": 0.1
-            }
+            "metadata": {"model": "MockModel", "time": 0.1},
         }
+
 
 def main():
     """Main test function."""
@@ -55,6 +59,7 @@ def main():
     # Try to use artifact paths for outputs if available
     try:
         from src.core.artifact_guard import get_canonical_artifact_path
+
         ARTIFACTS_AVAILABLE = True
         artifact_dir = get_canonical_artifact_path("test", "benchmark_test")
     except ImportError:
@@ -87,7 +92,9 @@ def main():
             # Download test images
             try:
                 if ARTIFACTS_AVAILABLE:
-                    temp_dir = get_canonical_artifact_path("tmp", "download_test_images")
+                    temp_dir = get_canonical_artifact_path(
+                        "tmp", "download_test_images"
+                    )
                 else:
                     temp_dir = tempfile.mkdtemp()
 
@@ -97,13 +104,19 @@ def main():
 
                 # Run benchmark with downloaded images
                 if downloaded_images:
-                    downloaded_output_file = os.path.join(artifact_dir, "benchmark_downloaded_images.json")
-                    downloaded_results = run_benchmark(mock_analyzer, downloaded_images, downloaded_output_file)
+                    downloaded_output_file = os.path.join(
+                        artifact_dir, "benchmark_downloaded_images.json"
+                    )
+                    downloaded_results = run_benchmark(
+                        mock_analyzer, downloaded_images, downloaded_output_file
+                    )
 
                     print("\nDownloaded images test completed")
                     print(f"Results saved to: {downloaded_output_file}")
                 else:
-                    print("\nWARNING: No images were downloaded, skipping this part of the test")
+                    print(
+                        "\nWARNING: No images were downloaded, skipping this part of the test"
+                    )
             except Exception as e:
                 print(f"Error downloading test images: {e!s}")
                 downloaded_images = []
@@ -115,13 +128,18 @@ def main():
             print(f"Combined test set contains {len(all_images)} images")
 
             # Run benchmark with all images
-            combined_output_file = os.path.join(artifact_dir, "benchmark_combined_images.json")
-            combined_results = run_benchmark(mock_analyzer, all_images, combined_output_file)
+            combined_output_file = os.path.join(
+                artifact_dir, "benchmark_combined_images.json"
+            )
+            combined_results = run_benchmark(
+                mock_analyzer, all_images, combined_output_file
+            )
 
             print("\nCombined images test completed")
             print(f"Results saved to: {combined_output_file}")
     except Exception as e:
         print(f"Error during benchmark test: {e!s}")
+
 
 if __name__ == "__main__":
     main()
